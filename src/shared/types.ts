@@ -62,10 +62,17 @@ export interface FeedbackTypeConfig {
   enabled: boolean;     // Whether to include in analysis
 }
 
+// AI interaction mode:
+// - 'coach' (default): the AI asks questions the writer answers themselves — it never drafts content
+// - 'generate': legacy behavior — the AI drafts insertable content
+export type AIMode = 'coach' | 'generate';
+
 // Prompt configuration
 export interface PromptConfig {
-  systemPrompt: string;           // The main system prompt template
+  systemPrompt: string;           // The main system prompt template (used in 'generate' mode and for "Draft it for me")
   feedbackTypes: FeedbackTypeConfig[];  // Configurable feedback types
+  mode?: AIMode;                  // Defaults to 'coach'
+  coachSystemPrompt?: string;     // System prompt template used in 'coach' mode
 }
 
 export interface AISettings {
@@ -105,6 +112,35 @@ export interface FeedbackItem {
   relevantText?: string;
   status: 'active' | 'accepted' | 'rejected';
   sectionId?: string;
+  // Coaching extensions (all optional — legacy items remain valid)
+  mode?: AIMode;         // 'coach' items carry a question instead of insertable prose
+  question?: string;     // The Socratic question the writer answers in their own words
+  hint?: string;         // Optional nudge that points where to look without giving the answer
+  userResponse?: string; // What the writer wrote in response (their words, inserted verbatim)
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COACHING — persisted interactions (userData/coaching/<noteId>.json)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// 'question': writer answered a coach question in their own words (human-authored)
+// 'draft':    writer explicitly requested an AI draft (AI-authored — provenance record)
+// 'chat':     a thinking-partner dialogue turn
+// 'scaffold': a metacognitive prompt (plan/monitor/evaluate) the writer engaged with
+export type CoachInteractionKind = 'question' | 'draft' | 'chat' | 'scaffold';
+
+export interface CoachInteraction {
+  id: string;
+  noteId: string;
+  sectionId?: string;
+  kind: CoachInteractionKind;
+  type: string;          // Feedback type id (gap, mece, ...) or chat stance
+  question: string;      // The question/prompt that was posed
+  userResponse?: string; // The writer's own words (human-authored)
+  aiDraft?: string;      // Exact AI-authored text inserted, when kind === 'draft' (provenance)
+  resolved: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface AIResponse {
@@ -503,3 +539,75 @@ Example of a BAD response (do NOT do this):
 {"feedback":[{"type":"structure","text":"Needs better organization.","suggestion":"Add a section header. Include subsection A and B."}]}
 
 Provide 2-4 feedback items based on content complexity. Output ONLY valid JSON:`;
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COACH MODE — question stems and system prompt
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Curated question stem per feedback type. In coach mode the model selects and
+// lightly adapts one of these — it does not invent Socratic questions from
+// scratch (small local models are unreliable at that). Also used as the
+// fallback question when the model omits one.
+export const COACH_QUESTION_STEMS: Record<string, string> = {
+  // Core
+  gap: 'What evidence or perspective would a skeptic say is missing here?',
+  mece: 'Could any of these categories overlap or leave something out — which, and why?',
+  source: 'Which claim here would a reviewer ask you to cite, and what kind of source would satisfy them?',
+  structure: 'What single claim is this section making — and does its current order help a reader follow it?',
+  // Academic
+  literature_gap: 'What body of literature bears on this that you have not engaged with yet?',
+  methodology: 'What is the biggest threat to validity in this design, and how would you counter it?',
+  argument: 'Which step in this argument would be easiest for a critic to attack — and why?',
+  bias: 'What would someone who disagrees with you say you are overlooking?',
+  so_what: 'If this is true, what changes — who should care, and why?',
+  alternatives: 'What alternative explanation could account for the same observation?',
+  operationalization: 'How exactly would you measure or test this concept?',
+  // Strategy
+  assumptions: 'What must be true for this to hold — and how confident are you in each assumption?',
+  second_order: 'If this happens, what happens next — which second-order effects follow?',
+  stakeholder: 'How would a customer, competitor, or regulator read this differently?',
+  implementation: 'What is the hardest practical barrier to executing this?',
+  quantify: 'Which vague claim here could you replace with a number — and what is your estimate?',
+  risk: 'What is the most plausible way this goes wrong?',
+  synthesis: 'If you had one sentence for a decision-maker, what would it say?',
+  // Cross-cutting
+  steel_man: 'What is the strongest version of the opposing view?',
+  red_team: 'Where would a determined critic strike first?',
+  simplify: 'How would you explain this to a smart 12-year-old?',
+  action_items: 'What is the concrete next step, who owns it, and by when?',
+  // Meeting
+  decisions: 'What exactly was decided here — can you state it in one sentence?',
+  follow_ups: 'Which action item still lacks an owner or a deadline?',
+  attendee_alignment: 'Where might attendees walk away with different interpretations?',
+  parking_lot: 'Which deferred topic most needs a scheduled follow-up?',
+  timeline: 'Which dates or milestones conflict or are missing?',
+};
+
+// Default coach-mode system prompt. Inverts the generate-mode contract:
+// the model asks questions the writer answers — it never writes content.
+export const DEFAULT_COACH_SYSTEM_PROMPT = `You are a research thinking coach for notes on "{{topic}}".
+Current section: "{{section}}"
+Other sections in the document: {{otherSections}}
+
+Your role: help the WRITER think and remember better. You NEVER write content for them. You ask short, specific questions that make the writer produce the answer themselves.
+
+Available feedback types (use ONLY ids from this list; each shows an example question style):
+{{feedbackTypes}}
+
+RULES:
+1. Every item must contain a QUESTION the writer can answer by writing. Never provide finished paragraphs, facts, statistics, or example content of your own.
+2. Anchor each question to something specific: quote a short phrase from the notes in "relevantText".
+3. Be humble — you may be misreading the notes. Phrase observations as questions, not verdicts.
+4. Optionally add a short "hint" that points WHERE to look without giving the answer.
+5. Prioritize reasoning, evidence, and structure over wording and polish.
+
+Output format — ONLY valid JSON:
+{"feedback":[{"type":"<id>","text":"<one sentence: why this matters>","question":"<the question the writer should answer>","hint":"<optional nudge>","relevantText":"<short quote from the notes>"}]}
+
+Example of a GOOD response:
+{"feedback":[{"type":"gap","text":"The section claims productivity improved but offers no evidence.","question":"What evidence would a skeptic demand for the claim that productivity 'rose sharply' — and where could you find it?","hint":"Re-read the productivity sentence: is there a study, number, or source behind it?","relevantText":"productivity rose sharply"},{"type":"structure","text":"The section mixes two distinct arguments.","question":"What single claim is this section making — could the second half belong under its own heading?","relevantText":"communication patterns"}]}
+
+Example of a BAD response (do NOT do this — never write content for the writer):
+{"feedback":[{"type":"gap","text":"Missing economic analysis.","suggestion":"The economic impact of this development includes rising costs of supply chain restructuring, estimated at $500B globally..."}]}
+
+Provide 2-4 feedback items. Output ONLY valid JSON:`;

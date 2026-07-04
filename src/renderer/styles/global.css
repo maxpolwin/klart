@@ -1947,3 +1947,264 @@ input::placeholder, textarea::placeholder {
     max-width: 100%;
   }
 }
+
+/* ===================== COACHING (Stage 1) ===================== */
+
+/* The coach's question — the most prominent element of a feedback card */
+.feedback-item-question {
+  font-size: var(--font-size-sm);
+  color: var(--text-primary);
+  font-weight: 600;
+  line-height: 1.6;
+}
+
+/* Secondary "why this matters" line under the question */
+.feedback-item-why {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  margin-top: var(--space-1);
+  line-height: 1.5;
+}
+
+/* Revealed hint */
+.feedback-item-hint {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--warning-color, #fbbf24);
+  font-style: italic;
+}
+
+/* Inline respond composer — the writer answers in their own words */
+.feedback-respond-area {
+  margin-top: var(--space-3);
+}
+
+.feedback-respond-area textarea,
+.feedback-draft-gate textarea {
+  width: 100%;
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--accent-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+  font-family: inherit;
+  line-height: 1.5;
+  resize: vertical;
+}
+
+.feedback-respond-area textarea:focus,
+.feedback-draft-gate textarea:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-glow);
+}
+
+.feedback-respond-actions {
+  display: flex;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.feedback-respond-actions .btn {
+  font-size: var(--font-size-xs);
+  padding: var(--space-2) var(--space-3);
+}
+
+/* Demoted "Draft it for me" — a quiet text link, never a filled button */
+.feedback-draft-link {
+  display: block;
+  margin-top: var(--space-2);
+  padding: 2px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: var(--text-muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.feedback-draft-link:hover {
+  color: var(--text-secondary);
+}
+
+/* Commit-first draft gate */
+.feedback-draft-gate {
+  margin-top: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-primary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-sm);
+}
+
+.feedback-draft-gate-label {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-bottom: var(--space-2);
+  line-height: 1.5;
+}
+
+.feedback-drafting {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+}
+
+.feedback-drafting .spin {
+  animation: spin 1s linear infinite;
+}
+
+/* Metacognitive scaffold bar — deterministic, dismissible */
+.scaffold-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-4);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-left: 3px solid var(--accent-color);
+  border-radius: var(--radius-sm);
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+}
+
+.scaffold-bar svg {
+  color: var(--accent-color);
+  flex-shrink: 0;
+}
+
+.scaffold-bar span {
+  flex: 1;
+}
+
+.scaffold-dismiss {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 2px;
+  display: flex;
+}
+
+.scaffold-dismiss:hover {
+  color: var(--text-primary);
+}
+
+/* Deterministic offline checks panel */
+.rule-checks-panel {
+  margin-top: var(--space-4);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+}
+
+.rule-checks-header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-xs);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin-bottom: var(--space-2);
+}
+
+.rule-check-item {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-2);
+  padding: var(--space-1) 0;
+}
+
+.rule-check-badge {
+  flex-shrink: 0;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.rule-check-message {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.rule-check-excerpt {
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+/* Coaching history (memory) */
+.coach-history {
+  margin-top: var(--space-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.coach-history-item {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+}
+
+.coach-history-kind {
+  flex-shrink: 0;
+  align-self: flex-start;
+  padding: 1px 6px;
+  border-radius: var(--radius-sm);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.coach-history-kind.draft {
+  color: var(--warning-color, #fbbf24);
+  border-color: var(--warning-color, #fbbf24);
+}
+
+.coach-history-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.coach-history-question {
+  font-size: var(--font-size-xs);
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+
+.coach-history-response {
+  font-size: var(--font-size-xs);
+  color: var(--text-primary);
+  margin-top: var(--space-1);
+  line-height: 1.5;
+}
+
+.coach-history-draft {
+  font-size: var(--font-size-xs);
+  color: var(--text-muted);
+  margin-top: var(--space-1);
+  font-style: italic;
+  line-height: 1.5;
+}

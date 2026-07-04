@@ -17,111 +17,30 @@ import {
   migrateApiKeyFromSettings,
   isEncryptionAvailable,
 } from './secureStorage';
-
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  excludedSections: string[];
-}
-
-interface FeedbackTypeConfig {
-  id: string;
-  label: string;
-  description: string;
-  color: string;
-  enabled: boolean;
-}
-
-interface PromptConfig {
-  systemPrompt: string;
-  feedbackTypes: FeedbackTypeConfig[];
-}
-
-interface SttSettings {
-  sttProvider: 'mistral-cloud' | 'mistral-local' | 'qwen-edge';
-  localSttUrl: string;
-  qwenSttUrl: string;
-  sttTimestamps: boolean;
-  sttDiarize: boolean;
-  sttLanguage: string;
-}
-
-interface AISettings {
-  provider: 'builtin' | 'ollama' | 'mistral';
-  ollamaModel: string;
-  ollamaUrl: string;
-  mistralApiKey: string;
-  spellcheckEnabled: boolean;
-  spellcheckLanguages: string[];
-  chunkingThresholdMs: number;
-  llmContextSize: number;
-  llmMaxTokens: number;
-  llmBatchSize: number;
-  promptConfig: PromptConfig;
-  stt: SttSettings;
-}
-
-// Default feedback types
-const DEFAULT_FEEDBACK_TYPES: FeedbackTypeConfig[] = [
-  {
-    id: 'gap',
-    label: 'Gap',
-    description: 'Missing information, perspectives, or analysis that should be added',
-    color: '#60a5fa',
-    enabled: true,
-  },
-  {
-    id: 'mece',
-    label: 'MECE',
-    description: 'Categories that are not mutually exclusive or collectively exhaustive',
-    color: '#c084fc',
-    enabled: true,
-  },
-  {
-    id: 'source',
-    label: 'Source',
-    description: 'Missing citations, references, or empirical evidence',
-    color: '#4ade80',
-    enabled: true,
-  },
-  {
-    id: 'structure',
-    label: 'Structure',
-    description: 'Organization, flow, or formatting improvements needed',
-    color: '#fbbf24',
-    enabled: true,
-  },
-];
-
-// Default system prompt template
-const DEFAULT_SYSTEM_PROMPT = `You are a research assistant helping improve academic notes on "{{topic}}".
-Current section: "{{section}}"
-Other sections in the document: {{otherSections}}
-
-Your task: Analyze the notes and provide SPECIFIC, ACTIONABLE feedback with DETAILED suggestions.
-
-Feedback types:
-{{feedbackTypes}}
-
-IMPORTANT: Your suggestions must contain ACTUAL CONTENT that can be directly inserted into the notes. Do NOT write generic placeholders like "Add more details" or "Include subsection A". Instead, write the actual paragraphs, analysis, or content.
-
-Example of a GOOD response:
-{"feedback":[{"type":"gap","text":"The analysis lacks discussion of economic implications.","suggestion":"The economic impact of this development includes rising costs of supply chain restructuring, estimated at $500B globally. Companies are diversifying manufacturing to Vietnam, India, and Mexico, though this 'friend-shoring' approach increases production costs by 15-20%. The long-term economic equilibrium remains uncertain as nations balance security concerns against efficiency."}]}
-
-Example of a BAD response (do NOT do this):
-{"feedback":[{"type":"structure","text":"Needs better organization.","suggestion":"Add a section header. Include subsection A and B."}]}
-
-Provide 2-3 feedback items. Output ONLY valid JSON:`;
+import {
+  DEFAULT_FEEDBACK_TYPES,
+  DEFAULT_SYSTEM_PROMPT,
+  DEFAULT_COACH_SYSTEM_PROMPT,
+  COACH_QUESTION_STEMS,
+} from '../shared/types';
+import type {
+  Note,
+  FeedbackTypeConfig,
+  AISettings,
+  AIMode,
+  CoachInteraction,
+  SttSettings,
+} from '../shared/types';
 
 const NOTES_DIR = path.join(app.getPath('userData'), 'notes');
+const COACHING_DIR = path.join(app.getPath('userData'), 'coaching');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 
 function ensureDirectories() {
-  if (!fs.existsSync(NOTES_DIR)) {
-    fs.mkdirSync(NOTES_DIR, { recursive: true });
+  for (const dir of [NOTES_DIR, COACHING_DIR]) {
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
   }
 }
 
@@ -140,6 +59,8 @@ function getDefaultSettings(): AISettings {
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      mode: 'coach',
+      coachSystemPrompt: DEFAULT_COACH_SYSTEM_PROMPT,
     },
     stt: {
       sttProvider: 'mistral-cloud',
@@ -166,6 +87,16 @@ function loadSettings(): AISettings {
 
       // Inject the API key from secure storage
       raw.mistralApiKey = getMistralApiKey();
+
+      // Non-destructive migration for pre-coach settings: default to coach
+      // mode and seed the coach prompt. The user's existing systemPrompt is
+      // preserved untouched — it simply becomes the drafting prompt.
+      if (raw.promptConfig) {
+        raw.promptConfig.mode = raw.promptConfig.mode ?? 'coach';
+        raw.promptConfig.coachSystemPrompt =
+          raw.promptConfig.coachSystemPrompt ?? DEFAULT_COACH_SYSTEM_PROMPT;
+      }
+
       return raw as AISettings;
     }
   } catch (error) {
@@ -455,7 +386,7 @@ ipcMain.handle('spellcheck:getCurrentLanguages', async () => {
 });
 
 // Helper function for Mistral API calls (used as fallback)
-async function callMistralAPI(apiKey: string, systemPrompt: string, userPrompt: string) {
+async function callMistralAPI(apiKey: string, systemPrompt: string, userPrompt: string, mode: AIMode = 'generate') {
   try {
     const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
       method: 'POST',
@@ -479,7 +410,7 @@ async function callMistralAPI(apiKey: string, systemPrompt: string, userPrompt: 
 
     const data = await response.json() as { choices: { message: { content: string } }[] };
     const parsed = JSON.parse(data.choices[0].message.content);
-    return ensureSuggestions(parsed);
+    return finalizeFeedback(parsed, mode);
   } catch (error) {
     console.error('[AI] Mistral API fallback failed:', error);
     return { feedback: [], error: 'Mistral API fallback failed' };
@@ -490,16 +421,29 @@ async function callMistralAPI(apiKey: string, systemPrompt: string, userPrompt: 
 let useAdaptiveChunking = false;
 let lastResponseTime = 0;
 
+// Resolve the active AI mode ('coach' is the default)
+function getAIMode(settings: AISettings): AIMode {
+  return settings.promptConfig?.mode ?? 'coach';
+}
+
 // Generate system prompt from template and settings
 function generateSystemPrompt(
   template: string,
   ctx: { h1: string; h2: string; allH2s: string[] },
-  feedbackTypes: FeedbackTypeConfig[]
+  feedbackTypes: FeedbackTypeConfig[],
+  mode: AIMode = 'generate'
 ): string {
-  // Build feedback types description
+  // Build feedback types description. In coach mode, include the curated
+  // question stem so the model selects/adapts a stem instead of inventing
+  // Socratic questions from scratch (unreliable on small local models).
   const enabledTypes = feedbackTypes.filter(t => t.enabled);
   const feedbackTypesStr = enabledTypes
-    .map(t => `- "${t.id}": ${t.description}`)
+    .map(t => {
+      const stem = mode === 'coach' ? COACH_QUESTION_STEMS[t.id] : undefined;
+      return stem
+        ? `- "${t.id}": ${t.description}. Ask like: "${stem}"`
+        : `- "${t.id}": ${t.description}`;
+    })
     .join('\n');
 
   // Replace template variables
@@ -521,11 +465,11 @@ function getPromptConfig(settings: AISettings) {
         systemPrompt: DEFAULT_SYSTEM_PROMPT,
         feedbackTypes: DEFAULT_FEEDBACK_TYPES,
       };
-      return generateSystemPrompt(
-        promptConfig.systemPrompt,
-        ctx,
-        promptConfig.feedbackTypes
-      );
+      const mode = getAIMode(settings);
+      const template = mode === 'coach'
+        ? (promptConfig.coachSystemPrompt || DEFAULT_COACH_SYSTEM_PROMPT)
+        : promptConfig.systemPrompt;
+      return generateSystemPrompt(template, ctx, promptConfig.feedbackTypes, mode);
     },
   };
 }
@@ -553,6 +497,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
 
   // Get prompt configuration from settings
   const isSmallModel = settings.provider === 'builtin';
+  const mode = getAIMode(settings);
   const promptConfig = getPromptConfig(settings);
 
   // Adaptive chunking for built-in model:
@@ -615,7 +560,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         // Graceful fallback: if Mistral API key exists, try that
         if (settings.mistralApiKey) {
           console.log('[AI] Falling back to Mistral API...');
-          return await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${content}`);
+          return await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${content}`, mode);
         }
         return { feedback: [], error: result.error };
       }
@@ -667,7 +612,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
             });
           }
 
-          return ensureSuggestions(parsed);
+          return finalizeFeedback(parsed, mode);
         }
         console.warn('[AI] No JSON found in response:', responseText.slice(0, 200));
         return { feedback: [] };
@@ -694,7 +639,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
       const data = await response.json() as { response: string };
       try {
         const parsed = JSON.parse(data.response);
-        return ensureSuggestions(parsed);
+        return finalizeFeedback(parsed, mode);
       } catch {
         return { feedback: [] };
       }
@@ -723,7 +668,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
       const data = await response.json() as { choices: { message: { content: string } }[] };
       try {
         const parsed = JSON.parse(data.choices[0].message.content);
-        return ensureSuggestions(parsed);
+        return finalizeFeedback(parsed, mode);
       } catch {
         return { feedback: [] };
       }
@@ -733,6 +678,51 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
     return { feedback: [], error: 'AI analysis failed. Check your settings.' };
   }
 });
+
+// Shape of raw feedback items parsed from model output
+interface RawFeedbackItem {
+  type: string;
+  text: string;
+  suggestion?: string;
+  question?: string;
+  hint?: string;
+  relevantText?: string;
+  mode?: AIMode;
+}
+
+// Route parsed model output through the mode-appropriate post-processor.
+// coach → questions only (never fabricates insertable prose)
+// generate → legacy behavior (backfills insertable suggestions)
+function finalizeFeedback(response: { feedback?: RawFeedbackItem[] }, mode: AIMode) {
+  return mode === 'coach' ? ensureCoachPrompts(response) : ensureSuggestions(response);
+}
+
+// Coach mode: guarantee every item carries a question the writer can answer,
+// and strip any insertable prose the model produced anyway. This is the
+// inverse of ensureSuggestions — it must NEVER fabricate content.
+function ensureCoachPrompts(response: { feedback?: RawFeedbackItem[] }) {
+  if (!response.feedback || !Array.isArray(response.feedback)) {
+    return { feedback: [] };
+  }
+
+  response.feedback = response.feedback.map((item) => {
+    if (!item.question || item.question.trim() === '') {
+      // Fall back to the curated stem for this type, else phrase the
+      // observation itself as a question.
+      const stem = COACH_QUESTION_STEMS[item.type];
+      item.question = stem
+        ?? (item.text.trim().endsWith('?')
+          ? item.text.trim()
+          : `${item.text.trim().replace(/\.+$/, '')} — how would you address this in your own words?`);
+    }
+    // Never carry insertable prose in coach mode
+    delete item.suggestion;
+    item.mode = 'coach';
+    return item;
+  });
+
+  return response;
+}
 
 // Helper function to ensure all feedback items have suggestions
 function ensureSuggestions(response: { feedback?: Array<{ type: string; text: string; suggestion?: string }> }) {
@@ -757,6 +747,150 @@ function ensureSuggestions(response: { feedback?: Array<{ type: string; text: st
 
   return response;
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// COACHING — interaction log (persistent memory) + explicit drafting
+// ═══════════════════════════════════════════════════════════════════════════
+
+function coachLogPath(noteId: string): string | null {
+  const safe = String(noteId).replace(/[^\w.-]/g, '');
+  if (!safe) return null;
+  return path.join(COACHING_DIR, `${safe}.json`);
+}
+
+function readCoachLog(noteId: string): CoachInteraction[] {
+  const filePath = coachLogPath(noteId);
+  if (!filePath || !fs.existsSync(filePath)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('[Coach] Failed to read coaching log:', error);
+    return [];
+  }
+}
+
+ipcMain.handle('coach:getLog', async (_, noteId: string) => {
+  return readCoachLog(noteId);
+});
+
+ipcMain.handle('coach:appendInteraction', async (_, noteId: string, interaction: Partial<CoachInteraction>) => {
+  const filePath = coachLogPath(noteId);
+  if (!filePath) return null;
+
+  const now = new Date().toISOString();
+  const entry: CoachInteraction = {
+    id: interaction.id || uuidv4(),
+    noteId,
+    sectionId: interaction.sectionId,
+    kind: interaction.kind || 'question',
+    type: interaction.type || 'gap',
+    question: interaction.question || '',
+    userResponse: interaction.userResponse,
+    aiDraft: interaction.aiDraft,
+    resolved: interaction.resolved ?? true,
+    createdAt: interaction.createdAt || now,
+    updatedAt: now,
+  };
+
+  const log = readCoachLog(noteId);
+  log.push(entry);
+  fs.writeFileSync(filePath, JSON.stringify(log, null, 2));
+  return entry;
+});
+
+// Freeform (non-JSON) generation across all three providers.
+// Used by explicit drafting ("Draft it for me") and the thinking partner.
+async function generateFreeform(
+  settings: AISettings,
+  systemPrompt: string,
+  userPrompt: string
+): Promise<{ text?: string; error?: string }> {
+  try {
+    if (settings.provider === 'builtin') {
+      const availability = await checkLocalLLMAvailable();
+      if (!availability.available) return { error: availability.error };
+      const initResult = await initializeLocalLLM();
+      if (!initResult.success) return { error: initResult.error };
+      const result = await generateLocalResponse(systemPrompt, userPrompt, {
+        contextSize: settings.llmContextSize || 2048,
+        maxTokens: settings.llmMaxTokens || 1024,
+        batchSize: settings.llmBatchSize || 512,
+      });
+      if (result.error) return { error: result.error };
+      return { text: (result.response || '').trim() };
+    } else if (settings.provider === 'ollama') {
+      const response = await fetch(`${settings.ollamaUrl}/api/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: settings.ollamaModel,
+          prompt: `${systemPrompt}\n\nUser: ${userPrompt}`,
+          stream: false,
+        }),
+      });
+      if (!response.ok) throw new Error('Ollama request failed');
+      const data = await response.json() as { response: string };
+      return { text: (data.response || '').trim() };
+    } else {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.mistralApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'mistral-small-latest',
+          messages: [
+            { role: 'system', content: systemPrompt },
+            { role: 'user', content: userPrompt },
+          ],
+        }),
+      });
+      if (!response.ok) throw new Error('Mistral request failed');
+      const data = await response.json() as { choices: { message: { content: string } }[] };
+      return { text: (data.choices[0].message.content || '').trim() };
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Generation failed';
+    console.error('[AI] Freeform generation failed:', msg);
+    return { error: msg };
+  }
+}
+
+// Explicit, deliberate drafting — the ONLY path that produces AI-authored
+// prose in coach mode. The renderer gates it behind a commit-first step
+// (the writer states their own take first) and logs the result as
+// AI-authored in the coaching store (provenance).
+ipcMain.handle('ai:draft', async (_, payload: {
+  content: string;
+  context: { h1: string; h2: string; allH2s: string[] };
+  item: { type: string; text: string; question?: string; relevantText?: string };
+  userTake: string;
+}) => {
+  const settings = loadSettings();
+  const { content, context, item, userTake } = payload;
+
+  // A dedicated drafting prompt: plain prose, epistemically honest — the
+  // model must never invent facts; unverified evidence becomes a TODO.
+  const systemPrompt = `You are a writing assistant. The writer of research notes on "${context.h1 || 'their topic'}" has EXPLICITLY asked you to draft a short passage they will edit and take ownership of. Write clear, plain prose in a neutral academic register. Never invent citations, statistics, or specific facts — where evidence is needed, write [TODO: verify]. Output plain text only — no JSON, no preamble, no commentary.`;
+
+  const truncated = truncateToTokenBudget(content, settings.provider === 'builtin' ? 1000 : 1800);
+  const userPrompt = [
+    `Feedback being addressed: ${item.text}`,
+    item.question ? `Question being addressed: ${item.question}` : '',
+    `The writer's own take (build on it, keep their intent): ${userTake}`,
+    item.relevantText ? `Relevant excerpt from the notes: ${item.relevantText}` : '',
+    '',
+    'Notes:',
+    truncated,
+    '',
+    'Write a concise draft (1-2 short paragraphs) the writer can edit.',
+  ].filter(Boolean).join('\n');
+
+  const result = await generateFreeform(settings, systemPrompt, userPrompt);
+  return { draft: result.text, error: result.error };
+});
 
 ipcMain.handle('ai:checkConnection', async () => {
   const settings = loadSettings();

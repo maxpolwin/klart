@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 import SettingsModal from './components/SettingsModal';
 import EmptyState from './components/EmptyState';
-import { Note, AISettings, FeedbackItem, SpellcheckLanguage, TranscriptionResult } from '../shared/types';
+import { Note, AISettings, FeedbackItem, CoachInteraction, SpellcheckLanguage, TranscriptionResult } from '../shared/types';
 
 declare global {
   interface Window {
@@ -22,8 +22,18 @@ declare global {
       };
       ai: {
         analyze: (content: string, context: { h1: string; h2: string; allH2s: string[] }) => Promise<{ feedback: Omit<FeedbackItem, 'id' | 'status'>[]; error?: string }>;
+        draft: (payload: {
+          content: string;
+          context: { h1: string; h2: string; allH2s: string[] };
+          item: { type: string; text: string; question?: string; relevantText?: string };
+          userTake: string;
+        }) => Promise<{ draft?: string; error?: string }>;
         checkConnection: () => Promise<boolean>;
         getStatus: () => Promise<{ provider: string; localLLM: { initialized: boolean; initializing: boolean; error: string | null; gpuAcceleration: { enabled: boolean; type: string; layers: number } }; modelPath: string | null }>;
+      };
+      coach: {
+        getLog: (noteId: string) => Promise<CoachInteraction[]>;
+        appendInteraction: (noteId: string, interaction: Partial<CoachInteraction>) => Promise<CoachInteraction | null>;
       };
       spellcheck: {
         getAvailableLanguages: () => Promise<SpellcheckLanguage[]>;

@@ -3,9 +3,33 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Heading from '@tiptap/extension-heading';
-import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle } from 'lucide-react';
-import { Note, FeedbackItem, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
+import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, History, Compass, X, ShieldCheck } from 'lucide-react';
+import { Note, FeedbackItem, CoachInteraction, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
+import { runRuleChecks, RuleFinding } from '../../shared/ruleChecks';
 import FeedbackPanel from './FeedbackPanel';
+
+// Metacognitive scaffolds: short, canned plan/monitor/evaluate prompts keyed
+// to how far along the note is. Deterministic — no model involved.
+const SCAFFOLDS: { id: string; minLen: number; maxLen: number; text: string }[] = [
+  {
+    id: 'plan',
+    minLen: 0,
+    maxLen: 120,
+    text: 'Before you write: what is your thesis in one line? What should this note establish?',
+  },
+  {
+    id: 'monitor',
+    minLen: 1200,
+    maxLen: 2500,
+    text: 'Pause: is the current section actually answering the question your title poses?',
+  },
+  {
+    id: 'evaluate',
+    minLen: 2500,
+    maxLen: Infinity,
+    text: 'Which claim here would you defend least confidently? Consider strengthening or flagging it.',
+  },
+];
 
 interface EditorProps {
   note: Note;
@@ -58,6 +82,18 @@ function Editor({
   const [lastContent, setLastContent] = useState(note.content);
   const analysisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const checksTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Coaching state
+  const [respondingId, setRespondingId] = useState<string | null>(null);
+  const [draftingId, setDraftingId] = useState<string | null>(null);
+  const [coachLog, setCoachLog] = useState<CoachInteraction[]>([]);
+  const [showCoachHistory, setShowCoachHistory] = useState(false);
+  const [dismissedScaffolds, setDismissedScaffolds] = useState<Set<string>>(new Set());
+  const [ruleFindings, setRuleFindings] = useState<RuleFinding[]>([]);
+  const [contentLength, setContentLength] = useState(
+    note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
+  );
 
   // Drag-and-drop transcription state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -107,6 +143,34 @@ function Editor({
     }
   }, [note.id, editor]);
 
+  // Load coaching memory + reset coaching UI when switching notes
+  useEffect(() => {
+    setRespondingId(null);
+    setDraftingId(null);
+    setShowCoachHistory(false);
+    setDismissedScaffolds(new Set());
+    setRuleFindings(runRuleChecks(note.content));
+    setContentLength(note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length);
+    window.api.coach
+      .getLog(note.id)
+      .then(setCoachLog)
+      .catch(() => setCoachLog([]));
+  }, [note.id]);
+
+  const appendToCoachLog = useCallback(
+    async (interaction: Partial<CoachInteraction>) => {
+      try {
+        const saved = await window.api.coach.appendInteraction(note.id, interaction);
+        if (saved) {
+          setCoachLog((prev) => [...prev, saved]);
+        }
+      } catch (error) {
+        console.error('Failed to persist coaching interaction:', error);
+      }
+    },
+    [note.id]
+  );
+
   const handleContentChange = useCallback(
     (html: string) => {
       // Auto-save after 1 second of inactivity
@@ -128,6 +192,16 @@ function Editor({
           analyzeContent(html);
         }, 2000);
       }
+
+      // Deterministic offline checks + scaffold sizing (no model involved,
+      // works even when AI is disconnected)
+      if (checksTimeoutRef.current) {
+        clearTimeout(checksTimeoutRef.current);
+      }
+      checksTimeoutRef.current = setTimeout(() => {
+        setRuleFindings(runRuleChecks(html));
+        setContentLength(html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length);
+      }, 1200);
 
       setLastContent(html);
     },
@@ -170,9 +244,161 @@ function Editor({
     setIsAnalyzing(false);
   };
 
+  // Convert lightweight markdown to HTML for insertion
+  const convertToHtml = (text: string): string => {
+    const lines = text.split('\n');
+    let html = '';
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('### ')) {
+        html += `<h3>${trimmed.substring(4)}</h3>`;
+      } else if (trimmed.startsWith('## ')) {
+        html += `<h2>${trimmed.substring(3)}</h2>`;
+      } else if (trimmed.startsWith('# ')) {
+        html += `<h1>${trimmed.substring(2)}</h1>`;
+      } else if (trimmed.startsWith('- ')) {
+        html += `<li>${trimmed.substring(2)}</li>`;
+      } else if (trimmed.startsWith('* ')) {
+        html += `<li>${trimmed.substring(2)}</li>`;
+      } else if (trimmed === '') {
+        continue;
+      } else {
+        html += `<p>${trimmed}</p>`;
+      }
+    }
+    return html;
+  };
+
+  // Insert content right after the block containing relevantText,
+  // falling back to the end of the document.
+  const insertNearRelevantText = (htmlContent: string, relevantText?: string) => {
+    if (!editor) return;
+
+    if (relevantText) {
+      const cleaned = relevantText
+        .replace(/\.\.\.$/g, '')
+        .replace(/^["']|["']$/g, '')
+        .trim();
+      const searchText = cleaned.substring(0, 50);
+
+      if (searchText.length >= 8 && editor.getText().includes(searchText)) {
+        const doc = editor.state.doc;
+        let insertPos = -1;
+
+        doc.descendants((node, pos) => {
+          if (insertPos >= 0) return false;
+          if (node.isText && node.text?.includes(searchText)) {
+            const $pos = doc.resolve(pos);
+            insertPos = $pos.after($pos.depth); // position right after the parent block
+            return false;
+          }
+        });
+
+        if (insertPos >= 0) {
+          try {
+            editor.chain().focus().insertContentAt(insertPos, htmlContent).run();
+            return;
+          } catch {
+            // fall through to end-of-document insertion
+          }
+        }
+      }
+    }
+
+    editor.commands.focus('end');
+    editor.commands.insertContent(htmlContent);
+  };
+
+  // Coach mode primary action: the WRITER answers the question, and their
+  // own words are inserted into the note (generation effect — the human
+  // produces the content, the AI only prompted it).
+  const handleRespond = (feedbackId: string, userText: string) => {
+    const feedbackItem = feedback.find((f) => f.id === feedbackId);
+    if (!feedbackItem || !editor || !userText.trim()) return;
+
+    setFeedback((prev) =>
+      prev.map((f) =>
+        f.id === feedbackId ? { ...f, status: 'accepted', userResponse: userText } : f
+      )
+    );
+
+    insertNearRelevantText(convertToHtml(userText.trim()), feedbackItem.relevantText);
+
+    // Persist to the coaching log (human-authored — counts toward skill signal)
+    appendToCoachLog({
+      kind: 'question',
+      type: feedbackItem.type,
+      sectionId: feedbackItem.sectionId,
+      question: feedbackItem.question || feedbackItem.text,
+      userResponse: userText.trim(),
+      resolved: true,
+    });
+
+    setRespondingId(null);
+  };
+
+  // Explicit AI drafting — the only path that inserts AI-authored prose in
+  // coach mode. Gated behind the writer committing their own take first;
+  // the exact inserted text is logged as AI-authored (provenance).
+  const handleDraftForMe = async (feedbackId: string, userTake: string) => {
+    const feedbackItem = feedback.find((f) => f.id === feedbackId);
+    if (!feedbackItem || !editor) return;
+
+    setDraftingId(feedbackId);
+    try {
+      const html = editor.getHTML();
+      const { h1, h2s } = extractHeadings(html);
+      const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+      const result = await window.api.ai.draft({
+        content: plainText,
+        context: { h1, h2: h2s[h2s.length - 1] || '', allH2s: h2s },
+        item: {
+          type: feedbackItem.type,
+          text: feedbackItem.text,
+          question: feedbackItem.question,
+          relevantText: feedbackItem.relevantText,
+        },
+        userTake,
+      });
+
+      if (result.error || !result.draft) {
+        console.error('Draft generation failed:', result.error);
+        return;
+      }
+
+      setFeedback((prev) =>
+        prev.map((f) => (f.id === feedbackId ? { ...f, status: 'accepted' } : f))
+      );
+
+      insertNearRelevantText(convertToHtml(result.draft), feedbackItem.relevantText);
+
+      // Provenance: record the exact AI-authored text that entered the note
+      appendToCoachLog({
+        kind: 'draft',
+        type: feedbackItem.type,
+        sectionId: feedbackItem.sectionId,
+        question: feedbackItem.question || feedbackItem.text,
+        userResponse: userTake,
+        aiDraft: result.draft,
+        resolved: true,
+      });
+    } finally {
+      setDraftingId(null);
+    }
+  };
+
+  // Legacy generate-mode accept: inserts the AI-written suggestion
   const handleAcceptFeedback = (feedbackId: string) => {
     const feedbackItem = feedback.find((f) => f.id === feedbackId);
     if (!feedbackItem || !editor) return;
+
+    // Coach items have no insertable prose — route to the respond composer
+    if (feedbackItem.mode === 'coach' || (!feedbackItem.suggestion && feedbackItem.question)) {
+      setRespondingId(feedbackId);
+      return;
+    }
 
     setFeedback((prev) =>
       prev.map((f) => (f.id === feedbackId ? { ...f, status: 'accepted' } : f))
@@ -182,32 +408,6 @@ function Editor({
     const processedSuggestion = (feedbackItem.suggestion || feedbackItem.text)
       .replace(/\\n/g, '\n')
       .trim();
-
-    // Convert markdown to HTML
-    const convertToHtml = (text: string): string => {
-      const lines = text.split('\n');
-      let html = '';
-
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed.startsWith('### ')) {
-          html += `<h3>${trimmed.substring(4)}</h3>`;
-        } else if (trimmed.startsWith('## ')) {
-          html += `<h2>${trimmed.substring(3)}</h2>`;
-        } else if (trimmed.startsWith('# ')) {
-          html += `<h1>${trimmed.substring(2)}</h1>`;
-        } else if (trimmed.startsWith('- ')) {
-          html += `<li>${trimmed.substring(2)}</li>`;
-        } else if (trimmed.startsWith('* ')) {
-          html += `<li>${trimmed.substring(2)}</li>`;
-        } else if (trimmed === '') {
-          continue;
-        } else {
-          html += `<p>${trimmed}</p>`;
-        }
-      }
-      return html;
-    };
 
     const htmlContent = convertToHtml(processedSuggestion);
 
@@ -262,6 +462,13 @@ function Editor({
     );
   };
 
+  // Move a rejected item back into the active queue for reconsideration
+  const handleReconsiderFeedback = (feedbackId: string) => {
+    setFeedback((prev) =>
+      prev.map((f) => (f.id === feedbackId ? { ...f, status: 'active' } : f))
+    );
+  };
+
   const handleDeleteConfirm = () => {
     if (window.confirm('Are you sure you want to delete this note?')) {
       onDelete();
@@ -284,14 +491,16 @@ function Editor({
         }
       }
 
-      // Cmd/Ctrl + Enter to accept first active feedback
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && activeFeedback.length > 0) {
+      // Cmd/Ctrl + Enter: respond to (coach) or accept (generate) the first
+      // active feedback. Skipped while a respond composer is open — its own
+      // textarea handles submission.
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter' && activeFeedback.length > 0 && !respondingId) {
         e.preventDefault();
         handleAcceptFeedback(activeFeedback[0].id);
       }
 
       // Cmd/Ctrl + Backspace to reject first active feedback
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace' && activeFeedback.length > 0) {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'Backspace' && activeFeedback.length > 0 && !respondingId) {
         e.preventDefault();
         handleRejectFeedback(activeFeedback[0].id);
       }
@@ -299,7 +508,15 @@ function Editor({
 
     document.addEventListener('keydown', handleKeyDown);
     return () => document.removeEventListener('keydown', handleKeyDown);
-  }, [editor, note, activeFeedback, onSave]);
+  }, [editor, note, activeFeedback, onSave, respondingId]);
+
+  // Pick the first applicable, not-yet-dismissed metacognitive scaffold
+  const activeScaffold = SCAFFOLDS.find(
+    (s) =>
+      contentLength >= s.minLen &&
+      contentLength < s.maxLen &&
+      !dismissedScaffolds.has(s.id)
+  );
 
   // ═══════════════════════════════════════════════════════════════════════
   // DRAG-AND-DROP AUDIO TRANSCRIPTION
@@ -489,13 +706,56 @@ function Editor({
 
         <EditorContent editor={editor} />
 
+        {/* Metacognitive scaffold — deterministic, dismissible */}
+        {activeScaffold && (
+          <div className="scaffold-bar">
+            <Compass size={14} />
+            <span>{activeScaffold.text}</span>
+            <button
+              className="scaffold-dismiss"
+              onClick={() =>
+                setDismissedScaffolds((prev) => new Set(prev).add(activeScaffold.id))
+              }
+              title="Dismiss"
+            >
+              <X size={12} />
+            </button>
+          </div>
+        )}
+
         {activeFeedback.length > 0 && (
           <FeedbackPanel
             feedback={activeFeedback}
             onAccept={handleAcceptFeedback}
             onReject={handleRejectFeedback}
-            title="AI Suggestions"
+            onRespond={handleRespond}
+            onDraft={handleDraftForMe}
+            respondingId={respondingId}
+            onStartRespond={setRespondingId}
+            draftingId={draftingId}
+            title="Coach"
           />
+        )}
+
+        {/* Deterministic offline checks — named rules, no LLM involved */}
+        {ruleFindings.length > 0 && (
+          <div className="rule-checks-panel">
+            <div className="rule-checks-header">
+              <ShieldCheck size={14} />
+              <span>Offline checks ({ruleFindings.length})</span>
+            </div>
+            {ruleFindings.map((finding, i) => (
+              <div key={`${finding.rule}-${i}`} className="rule-check-item">
+                <span className="rule-check-badge">{finding.label}</span>
+                <span className="rule-check-message">
+                  {finding.message}
+                  {finding.excerpt && (
+                    <span className="rule-check-excerpt"> — "{finding.excerpt}"</span>
+                  )}
+                </span>
+              </div>
+            ))}
+          </div>
         )}
 
         {rejectedFeedback.length > 0 && (
@@ -519,11 +779,52 @@ function Editor({
             {showRejected && (
               <FeedbackPanel
                 feedback={rejectedFeedback}
-                onAccept={handleAcceptFeedback}
+                onAccept={handleReconsiderFeedback}
                 onReject={() => {}}
                 title="Previously Rejected"
                 isRejectedPanel
               />
+            )}
+          </div>
+        )}
+
+        {/* Coaching memory: past questions answered on this note */}
+        {coachLog.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <button
+              className="feedback-panel-toggle"
+              onClick={() => setShowCoachHistory(!showCoachHistory)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                fontSize: '12px',
+                color: 'var(--text-muted)',
+              }}
+            >
+              <History size={14} />
+              {showCoachHistory ? 'Hide' : 'Show'} coaching history ({coachLog.length})
+            </button>
+
+            {showCoachHistory && (
+              <div className="coach-history">
+                {[...coachLog].reverse().map((entry) => (
+                  <div key={entry.id} className="coach-history-item">
+                    <span className={`coach-history-kind ${entry.kind}`}>
+                      {entry.kind === 'draft' ? 'AI DRAFT' : entry.kind.toUpperCase()}
+                    </span>
+                    <div className="coach-history-body">
+                      <p className="coach-history-question">{entry.question}</p>
+                      {entry.userResponse && (
+                        <p className="coach-history-response">You: {entry.userResponse}</p>
+                      )}
+                      {entry.aiDraft && (
+                        <p className="coach-history-draft">AI wrote: {entry.aiDraft.substring(0, 160)}{entry.aiDraft.length > 160 ? '…' : ''}</p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
             )}
           </div>
         )}
@@ -535,11 +836,11 @@ function Editor({
         </div>
         <div className="shortcut">
           <kbd>⌘</kbd><kbd>Enter</kbd>
-          <span>Accept</span>
+          <span>Respond</span>
         </div>
         <div className="shortcut">
           <kbd>⌘</kbd><kbd>⌫</kbd>
-          <span>Reject</span>
+          <span>Dismiss</span>
         </div>
       </div>
     </>

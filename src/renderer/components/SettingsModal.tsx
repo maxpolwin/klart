@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Languages, Check, Plus, Trash2, RotateCcw, MessageSquare, ChevronDown, ChevronRight, Mic, Shield, ShieldAlert } from 'lucide-react';
-import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
+import { AISettings, AIMode, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_COACH_SYSTEM_PROMPT, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -22,6 +22,8 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      mode: 'coach',
+      coachSystemPrompt: DEFAULT_COACH_SYSTEM_PROMPT,
     },
     stt: {
       sttProvider: 'mistral-cloud',
@@ -57,9 +59,11 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       llmContextSize: loaded.llmContextSize ?? 2048,
       llmMaxTokens: loaded.llmMaxTokens ?? 1536,
       llmBatchSize: loaded.llmBatchSize ?? 512,
-      promptConfig: loaded.promptConfig ?? {
-        systemPrompt: DEFAULT_SYSTEM_PROMPT,
-        feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      promptConfig: {
+        systemPrompt: loaded.promptConfig?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        feedbackTypes: loaded.promptConfig?.feedbackTypes ?? DEFAULT_FEEDBACK_TYPES,
+        mode: loaded.promptConfig?.mode ?? 'coach',
+        coachSystemPrompt: loaded.promptConfig?.coachSystemPrompt ?? DEFAULT_COACH_SYSTEM_PROMPT,
       },
       stt: loaded.stt ?? {
         sttProvider: 'mistral-cloud',
@@ -122,6 +126,26 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     });
   };
 
+  const updateCoachSystemPrompt = (prompt: string) => {
+    setSettings({
+      ...settings,
+      promptConfig: {
+        ...settings.promptConfig,
+        coachSystemPrompt: prompt,
+      },
+    });
+  };
+
+  const updateMode = (mode: AIMode) => {
+    setSettings({
+      ...settings,
+      promptConfig: {
+        ...settings.promptConfig,
+        mode,
+      },
+    });
+  };
+
   const updateFeedbackType = (id: string, updates: Partial<FeedbackTypeConfig>) => {
     setSettings({
       ...settings,
@@ -170,6 +194,8 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
         promptConfig: {
           systemPrompt: DEFAULT_SYSTEM_PROMPT,
           feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+          mode: 'coach',
+          coachSystemPrompt: DEFAULT_COACH_SYSTEM_PROMPT,
         },
       });
     }
@@ -559,26 +585,78 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                 </div>
               </div>
 
-              {/* System Prompt */}
+              {/* AI Role: coach (default) vs draft */}
               <div className="form-group">
-                <label className="form-label">System Prompt</label>
-                <textarea
-                  value={settings.promptConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT}
-                  onChange={(e) => updateSystemPrompt(e.target.value)}
-                  style={{
-                    width: '100%',
-                    minHeight: '200px',
-                    padding: '12px',
-                    background: 'var(--bg-tertiary)',
-                    border: '1px solid var(--border-color)',
-                    borderRadius: '8px',
-                    color: 'var(--text-primary)',
-                    fontSize: '12px',
-                    fontFamily: 'monospace',
-                    resize: 'vertical',
-                    lineHeight: 1.5,
-                  }}
-                />
+                <label className="form-label">AI Role</label>
+                <div style={{ display: 'flex', gap: '8px' }}>
+                  <button
+                    className={`btn ${(settings.promptConfig?.mode ?? 'coach') === 'coach' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => updateMode('coach')}
+                    style={{ flex: 1, textAlign: 'left', padding: '10px 12px' }}
+                  >
+                    <span style={{ fontWeight: 600, display: 'block' }}>Coach (recommended)</span>
+                    <span style={{ fontSize: '11px', opacity: 0.85 }}>
+                      Asks questions you answer in your own words — builds your thinking
+                    </span>
+                  </button>
+                  <button
+                    className={`btn ${settings.promptConfig?.mode === 'generate' ? 'btn-primary' : 'btn-secondary'}`}
+                    onClick={() => updateMode('generate')}
+                    style={{ flex: 1, textAlign: 'left', padding: '10px 12px' }}
+                  >
+                    <span style={{ fontWeight: 600, display: 'block' }}>Draft</span>
+                    <span style={{ fontSize: '11px', opacity: 0.85 }}>
+                      Writes insertable content for you (legacy behavior)
+                    </span>
+                  </button>
+                </div>
+                <p className="form-hint">
+                  In Coach mode you can still request a draft per suggestion via "Draft it for me" — it is logged as AI-authored.
+                </p>
+              </div>
+
+              {/* System Prompt (mode-specific) */}
+              <div className="form-group">
+                <label className="form-label">
+                  {(settings.promptConfig?.mode ?? 'coach') === 'coach' ? 'Coach System Prompt' : 'Draft System Prompt'}
+                </label>
+                {(settings.promptConfig?.mode ?? 'coach') === 'coach' ? (
+                  <textarea
+                    value={settings.promptConfig?.coachSystemPrompt || DEFAULT_COACH_SYSTEM_PROMPT}
+                    onChange={(e) => updateCoachSystemPrompt(e.target.value)}
+                    style={{
+                      width: '100%',
+                      minHeight: '200px',
+                      padding: '12px',
+                      background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                      resize: 'vertical',
+                      lineHeight: 1.5,
+                    }}
+                  />
+                ) : (
+                  <textarea
+                    value={settings.promptConfig?.systemPrompt || DEFAULT_SYSTEM_PROMPT}
+                    onChange={(e) => updateSystemPrompt(e.target.value)}
+                    style={{
+                      width: '100%',
+                      minHeight: '200px',
+                      padding: '12px',
+                      background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                      fontFamily: 'monospace',
+                      resize: 'vertical',
+                      lineHeight: 1.5,
+                    }}
+                  />
+                )}
                 <p className="form-hint">
                   Available variables: {'{{topic}}'}, {'{{section}}'}, {'{{otherSections}}'}, {'{{feedbackTypes}}'}
                 </p>

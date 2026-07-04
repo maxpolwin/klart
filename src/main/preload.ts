@@ -1,54 +1,22 @@
 import { contextBridge, ipcRenderer } from 'electron';
+// Type-only imports are erased at compile time, so the sandboxed preload
+// performs no runtime require of application code.
+import type {
+  Note,
+  AISettings,
+  AIContext,
+  FeedbackItem,
+  CoachInteraction,
+  SpellcheckLanguage,
+  TranscriptionResult,
+} from '../shared/types';
 
-interface Note {
-  id: string;
-  title: string;
-  content: string;
-  createdAt: string;
-  updatedAt: string;
-  excludedSections: string[];
-}
+// Feedback items as returned by analysis (id/status are added in the renderer)
+type AnalyzedFeedbackItem = Omit<FeedbackItem, 'id' | 'status'>;
 
-interface FeedbackTypeConfig {
-  id: string;
-  label: string;
-  description: string;
-  color: string;
-  enabled: boolean;
-}
-
-interface PromptConfig {
-  systemPrompt: string;
-  feedbackTypes: FeedbackTypeConfig[];
-}
-
-interface SttSettings {
-  sttProvider: 'mistral-cloud' | 'mistral-local' | 'qwen-edge';
-  localSttUrl: string;
-  qwenSttUrl: string;
-  sttTimestamps: boolean;
-  sttDiarize: boolean;
-  sttLanguage: string;
-}
-
-interface AISettings {
-  provider: 'builtin' | 'ollama' | 'mistral';
-  ollamaModel: string;
-  ollamaUrl: string;
-  mistralApiKey: string;
-  spellcheckEnabled: boolean;
-  spellcheckLanguages: string[];
-  chunkingThresholdMs: number;
-  llmContextSize: number;
-  llmMaxTokens: number;
-  llmBatchSize: number;
-  promptConfig: PromptConfig;
-  stt: SttSettings;
-}
-
-interface SpellcheckLanguage {
-  code: string;
-  name: string;
+interface AIResponse {
+  feedback: AnalyzedFeedbackItem[];
+  error?: string;
 }
 
 interface LLMStatus {
@@ -64,32 +32,6 @@ interface LLMStatus {
     };
   };
   modelPath: string | null;
-}
-
-interface AIContext {
-  h1: string;
-  h2: string;
-  allH2s: string[];
-}
-
-interface FeedbackItem {
-  type: string;  // Accepts custom types
-  text: string;
-  suggestion?: string;
-  relevantText?: string;
-}
-
-interface AIResponse {
-  feedback: FeedbackItem[];
-  error?: string;
-}
-
-interface TranscriptionResult {
-  text: string;
-  words?: { word: string; start: number; end: number }[];
-  segments?: { start: number; end: number; text: string; speaker?: string }[];
-  duration?: number;
-  error?: string;
 }
 
 const api = {
@@ -108,8 +50,21 @@ const api = {
   ai: {
     analyze: (content: string, context: AIContext): Promise<AIResponse> =>
       ipcRenderer.invoke('ai:analyze', content, context),
+    draft: (payload: {
+      content: string;
+      context: AIContext;
+      item: { type: string; text: string; question?: string; relevantText?: string };
+      userTake: string;
+    }): Promise<{ draft?: string; error?: string }> =>
+      ipcRenderer.invoke('ai:draft', payload),
     checkConnection: (): Promise<boolean> => ipcRenderer.invoke('ai:checkConnection'),
     getStatus: (): Promise<LLMStatus> => ipcRenderer.invoke('ai:getStatus'),
+  },
+  coach: {
+    getLog: (noteId: string): Promise<CoachInteraction[]> =>
+      ipcRenderer.invoke('coach:getLog', noteId),
+    appendInteraction: (noteId: string, interaction: Partial<CoachInteraction>): Promise<CoachInteraction | null> =>
+      ipcRenderer.invoke('coach:appendInteraction', noteId, interaction),
   },
   spellcheck: {
     getAvailableLanguages: (): Promise<SpellcheckLanguage[]> =>
