@@ -3,7 +3,7 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Heading from '@tiptap/extension-heading';
-import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, History, Compass, X, ShieldCheck, MessagesSquare } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, History, Compass, X, ShieldCheck, MessagesSquare, Brain } from 'lucide-react';
 import { Note, FeedbackItem, CoachInteraction, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
 import { runRuleChecks, RuleFinding } from '../../shared/ruleChecks';
 import FeedbackPanel from './FeedbackPanel';
@@ -40,6 +40,7 @@ interface EditorProps {
   isAnalyzing: boolean;
   setIsAnalyzing: (analyzing: boolean) => void;
   onOpenSettings: () => void;
+  onReviewCardsChanged?: () => void;
 }
 
 function extractTitle(html: string): string {
@@ -77,6 +78,7 @@ function Editor({
   isAnalyzing,
   setIsAnalyzing,
   onOpenSettings,
+  onReviewCardsChanged,
 }: EditorProps) {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [showRejected, setShowRejected] = useState(false);
@@ -93,6 +95,8 @@ function Editor({
   const [dismissedScaffolds, setDismissedScaffolds] = useState<Set<string>>(new Set());
   const [ruleFindings, setRuleFindings] = useState<RuleFinding[]>([]);
   const [showPartner, setShowPartner] = useState(false);
+  const [makingCards, setMakingCards] = useState(false);
+  const [cardsMessage, setCardsMessage] = useState<string | null>(null);
   const [contentLength, setContentLength] = useState(
     note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
   );
@@ -512,6 +516,27 @@ function Editor({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [editor, note, activeFeedback, onSave, respondingId]);
 
+  // Manual, on-demand card generation from this note (never on the debounce)
+  const handleMakeReviewCards = async () => {
+    if (makingCards) return;
+    setMakingCards(true);
+    setCardsMessage(null);
+    try {
+      const result = await window.api.review.generateCards(note.id);
+      if (result.error && result.created === 0) {
+        setCardsMessage(result.error);
+      } else {
+        setCardsMessage(`+${result.created} review card${result.created === 1 ? '' : 's'}`);
+        onReviewCardsChanged?.();
+      }
+    } catch {
+      setCardsMessage('Card generation failed');
+    } finally {
+      setMakingCards(false);
+      setTimeout(() => setCardsMessage(null), 5000);
+    }
+  };
+
   // Current-section context handed to the thinking partner on each turn
   const getNoteContext = useCallback(() => {
     const html = editor?.getHTML() || '';
@@ -686,6 +711,16 @@ function Editor({
           )}
         </div>
         <div className="editor-header-actions">
+          {cardsMessage && <span className="cards-message">{cardsMessage}</span>}
+          <button
+            className="editor-header-btn"
+            onClick={handleMakeReviewCards}
+            disabled={makingCards}
+            title="Turn this note's sections into spaced recall prompts"
+          >
+            {makingCards ? <Loader2 size={14} className="spin" /> : <Brain size={14} />}
+            {makingCards ? 'Making cards…' : 'Make review cards'}
+          </button>
           <button
             className={`editor-header-btn ${showPartner ? 'active' : ''}`}
             onClick={() => setShowPartner(!showPartner)}

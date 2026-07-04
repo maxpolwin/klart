@@ -1,4 +1,4 @@
-import { Search, Plus, Settings, FileText } from 'lucide-react';
+import { Search, Plus, Settings, FileText, Brain } from 'lucide-react';
 import { Note } from '../../shared/types';
 
 interface SidebarProps {
@@ -9,6 +9,9 @@ interface SidebarProps {
   onSelectNote: (note: Note) => void;
   onCreateNote: () => void;
   onOpenSettings: () => void;
+  onOpenReview: () => void;
+  reviewDue: number;
+  reviewActive: boolean;
 }
 
 function formatDate(dateString: string): string {
@@ -46,6 +49,9 @@ function Sidebar({
   onSelectNote,
   onCreateNote,
   onOpenSettings,
+  onOpenReview,
+  reviewDue,
+  reviewActive,
 }: SidebarProps) {
   return (
     <div className="sidebar">
@@ -89,6 +95,16 @@ function Sidebar({
         )}
       </div>
       <div className="sidebar-footer">
+        <button
+          className={`editor-header-btn ${reviewActive ? 'active' : ''}`}
+          style={{ width: '100%', justifyContent: 'center', marginBottom: '8px' }}
+          onClick={onOpenReview}
+          title="Recall your own research — spaced review"
+        >
+          <Brain size={14} />
+          Review
+          {reviewDue > 0 && <span className="review-due-badge">{reviewDue}</span>}
+        </button>
         <button
           className="editor-header-btn"
           style={{ width: '100%', justifyContent: 'center' }}

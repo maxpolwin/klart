@@ -31,14 +31,21 @@ import type {
   AIMode,
   CoachInteraction,
   SttSettings,
+  ReviewCard,
+  ReviewGradeLabel,
+  CoachGlobalStats,
 } from '../shared/types';
+import { extractH2Sections } from '../shared/ruleChecks';
+import { initialSchedule, scheduleNext, GRADE_QUALITY } from './review/scheduler';
 
 const NOTES_DIR = path.join(app.getPath('userData'), 'notes');
 const COACHING_DIR = path.join(app.getPath('userData'), 'coaching');
+const REVIEW_DIR = path.join(app.getPath('userData'), 'review');
+const REVIEW_FILE = path.join(REVIEW_DIR, 'cards.json');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 
 function ensureDirectories() {
-  for (const dir of [NOTES_DIR, COACHING_DIR]) {
+  for (const dir of [NOTES_DIR, COACHING_DIR, REVIEW_DIR]) {
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
@@ -975,6 +982,214 @@ ipcMain.handle('ai:chat', async (_, payload: {
     console.error('[AI] Chat failed:', msg);
     return { error: msg };
   }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SPACED REVIEW — active recall over the writer's OWN notes
+// ═══════════════════════════════════════════════════════════════════════════
+
+function readReviewCards(): ReviewCard[] {
+  if (!fs.existsSync(REVIEW_FILE)) return [];
+  try {
+    const parsed = JSON.parse(fs.readFileSync(REVIEW_FILE, 'utf-8'));
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('[Review] Failed to read cards:', error);
+    return [];
+  }
+}
+
+function writeReviewCards(cards: ReviewCard[]) {
+  fs.writeFileSync(REVIEW_FILE, JSON.stringify(cards, null, 2));
+}
+
+// Generate recall prompts for one section. The model only phrases the
+// QUESTIONS — the reveal is always the writer's own text (sourceExcerpt),
+// so no AI-asserted facts ever enter the review loop. Falls back to a
+// deterministic prompt when the model output is unusable.
+async function generateSectionQuestions(
+  settings: AISettings,
+  h1: string,
+  section: { title: string; text: string }
+): Promise<string[]> {
+  const fallback = [`What are the key claims you made in "${section.title}" — and what supports each one?`];
+
+  const systemPrompt = `You write short active-recall questions that test whether a writer remembers THEIR OWN research notes. Never introduce outside facts or answers. Output ONLY valid JSON: {"questions":["...","..."]}`;
+  const excerpt = truncateToTokenBudget(section.text, settings.provider === 'builtin' ? 500 : 1200);
+  const userPrompt = `Notes topic: "${h1}"\nSection: "${section.title}"\nSection content:\n${excerpt}\n\nWrite 2 short recall questions about the writer's own claims in this section. Output ONLY valid JSON: {"questions":["...","..."]}`;
+
+  const result = await generateFreeform(settings, systemPrompt, userPrompt);
+  if (result.error || !result.text) return fallback;
+
+  try {
+    const jsonMatch = result.text.replace(/```json\s*/gi, '').replace(/```\s*/g, '').match(/\{[\s\S]*\}/);
+    if (!jsonMatch) return fallback;
+    const parsed = JSON.parse(jsonMatch[0]);
+    const questions = Array.isArray(parsed.questions)
+      ? parsed.questions.filter((q: unknown): q is string => typeof q === 'string' && q.trim().length > 10)
+      : [];
+    return questions.length > 0 ? questions.slice(0, 2) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+// Manual, on-demand card generation (never on the typing debounce — this is
+// the heaviest generation task in the app).
+ipcMain.handle('review:generateCards', async (_, noteId: string) => {
+  const notePath = path.join(NOTES_DIR, `${String(noteId).replace(/[^\w.-]/g, '')}.json`);
+  if (!fs.existsSync(notePath)) return { created: 0, error: 'Note not found' };
+
+  const note: Note = JSON.parse(fs.readFileSync(notePath, 'utf-8'));
+  const settings = loadSettings();
+  const sections = extractH2Sections(note.content)
+    .filter((s) => s.text.split(/\s+/).filter(Boolean).length >= 30)
+    .slice(0, 4);
+
+  if (sections.length === 0) {
+    return { created: 0, error: 'No sections with enough content (need an H2 with 30+ words).' };
+  }
+
+  const h1Match = note.content.match(/<h1[^>]*>(.*?)<\/h1>/i);
+  const h1 = h1Match ? h1Match[1].replace(/<[^>]*>/g, '').trim() : note.title;
+
+  const cards = readReviewCards();
+  const existingQuestions = new Set(
+    cards.filter((c) => c.noteId === note.id).map((c) => c.question.toLowerCase())
+  );
+  const now = new Date();
+  let created = 0;
+
+  for (const section of sections) {
+    const questions = await generateSectionQuestions(settings, h1, section);
+    for (const question of questions) {
+      if (existingQuestions.has(question.toLowerCase())) continue;
+      cards.push({
+        id: uuidv4(),
+        noteId: note.id,
+        noteTitle: note.title,
+        sectionTitle: section.title,
+        kind: 'recall',
+        question,
+        sourceExcerpt: section.text.substring(0, 600),
+        sched: initialSchedule(now),
+        history: [],
+        createdAt: now.toISOString(),
+      });
+      existingQuestions.add(question.toLowerCase());
+      created++;
+    }
+  }
+
+  // One self-explanation (Feynman) card for the longest section
+  const longest = [...sections].sort((a, b) => b.text.length - a.text.length)[0];
+  const feynmanQuestion = `Explain "${longest.title}" in plain language, as if to a smart 12-year-old. Where does your explanation get shaky?`;
+  if (!existingQuestions.has(feynmanQuestion.toLowerCase())) {
+    cards.push({
+      id: uuidv4(),
+      noteId: note.id,
+      noteTitle: note.title,
+      sectionTitle: longest.title,
+      kind: 'self_explanation',
+      question: feynmanQuestion,
+      sourceExcerpt: longest.text.substring(0, 600),
+      sched: initialSchedule(now),
+      history: [],
+      createdAt: now.toISOString(),
+    });
+    created++;
+  }
+
+  writeReviewCards(cards);
+  return { created };
+});
+
+// Due queue, interleaved round-robin across notes (interleaving shares a
+// mechanism with spacing — avoid blocking all reviews of one topic together)
+ipcMain.handle('review:listDue', async () => {
+  const now = new Date().toISOString();
+  const due = readReviewCards()
+    .filter((c) => c.sched.dueDate <= now)
+    .sort((a, b) => a.sched.dueDate.localeCompare(b.sched.dueDate));
+
+  const byNote = new Map<string, ReviewCard[]>();
+  for (const card of due) {
+    const list = byNote.get(card.noteId) || [];
+    list.push(card);
+    byNote.set(card.noteId, list);
+  }
+
+  const interleaved: ReviewCard[] = [];
+  const queues = [...byNote.values()];
+  while (interleaved.length < due.length) {
+    for (const queue of queues) {
+      const next = queue.shift();
+      if (next) interleaved.push(next);
+    }
+  }
+  return interleaved;
+});
+
+ipcMain.handle('review:grade', async (_, cardId: string, grade: ReviewGradeLabel) => {
+  const cards = readReviewCards();
+  const card = cards.find((c) => c.id === cardId);
+  if (!card) return null;
+
+  const quality = GRADE_QUALITY[grade] ?? GRADE_QUALITY.good;
+  card.sched = scheduleNext(card.sched, quality);
+  card.history.push({ at: new Date().toISOString(), grade });
+  writeReviewCards(cards);
+  return card;
+});
+
+ipcMain.handle('review:deleteCard', async (_, cardId: string) => {
+  const cards = readReviewCards();
+  const next = cards.filter((c) => c.id !== cardId);
+  writeReviewCards(next);
+  return next.length < cards.length;
+});
+
+ipcMain.handle('review:stats', async () => {
+  const cards = readReviewCards();
+  const now = new Date();
+  const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString();
+  const nowIso = now.toISOString();
+
+  return {
+    total: cards.length,
+    due: cards.filter((c) => c.sched.dueDate <= nowIso).length,
+    reviewedToday: cards.reduce(
+      (sum, c) => sum + c.history.filter((h) => h.at >= startOfDay).length,
+      0
+    ),
+  };
+});
+
+// Aggregate coaching balance across all notes: keeps the respond-vs-draft
+// ratio visible (the honest KPI — learning, not polish)
+ipcMain.handle('coach:globalStats', async (): Promise<CoachGlobalStats> => {
+  const stats: CoachGlobalStats = { questionsAnswered: 0, draftsRequested: 0, chatExchanges: 0 };
+  try {
+    const files = fs.readdirSync(COACHING_DIR).filter((f) => f.endsWith('.json'));
+    for (const file of files) {
+      try {
+        const log: CoachInteraction[] = JSON.parse(
+          fs.readFileSync(path.join(COACHING_DIR, file), 'utf-8')
+        );
+        if (!Array.isArray(log)) continue;
+        for (const entry of log) {
+          if (entry.kind === 'question' && entry.userResponse) stats.questionsAnswered++;
+          else if (entry.kind === 'draft') stats.draftsRequested++;
+          else if (entry.kind === 'chat') stats.chatExchanges++;
+        }
+      } catch {
+        // skip unreadable log
+      }
+    }
+  } catch (error) {
+    console.error('[Coach] Failed to aggregate stats:', error);
+  }
+  return stats;
 });
 
 ipcMain.handle('ai:checkConnection', async () => {

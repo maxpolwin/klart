@@ -584,6 +584,60 @@ export const COACH_QUESTION_STEMS: Record<string, string> = {
 };
 
 // ═══════════════════════════════════════════════════════════════════════════
+// SPACED REVIEW — active recall over the writer's OWN notes
+// (userData/review/cards.json)
+// ═══════════════════════════════════════════════════════════════════════════
+
+// Day-granularity SM-2 scheduling state. Kept behind a pure scheduler module
+// (src/main/review/scheduler.ts) so a stronger algorithm (e.g. FSRS) can swap
+// in behind the same signature later.
+export interface Sm2State {
+  ease: number;         // E-factor, min 1.3
+  intervalDays: number; // current inter-repetition interval
+  reps: number;         // successful repetitions in a row
+  dueDate: string;      // ISO timestamp when the card is next due
+  lapses: number;       // times the card was forgotten
+}
+
+export type ReviewGradeLabel = 'again' | 'hard' | 'good' | 'easy';
+
+export interface ReviewGradeEntry {
+  at: string;
+  grade: ReviewGradeLabel;
+}
+
+// 'recall': retrieve the claims of a section from memory
+// 'self_explanation': explain the section in plain language (Feynman)
+export type ReviewCardKind = 'recall' | 'self_explanation';
+
+export interface ReviewCard {
+  id: string;
+  noteId: string;
+  noteTitle: string;
+  sectionTitle: string;
+  kind: ReviewCardKind;
+  question: string;      // The recall prompt (AI selects/phrases it; user-vettable)
+  sourceExcerpt: string; // The reveal — the writer's OWN words, never AI-authored content
+  sched: Sm2State;
+  history: ReviewGradeEntry[];
+  createdAt: string;
+}
+
+export interface ReviewStats {
+  total: number;
+  due: number;
+  reviewedToday: number;
+}
+
+// Aggregate coaching balance across all notes — surfaces the respond-vs-draft
+// ratio so reliance on AI drafting stays visible (measure learning, not polish)
+export interface CoachGlobalStats {
+  questionsAnswered: number;
+  draftsRequested: number;
+  chatExchanges: number;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
 // THINKING PARTNER — conversational coaching stances
 // ═══════════════════════════════════════════════════════════════════════════
 

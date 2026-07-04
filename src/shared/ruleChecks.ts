@@ -44,7 +44,7 @@ const CITATION_PATTERN = /\(\s*[A-Z][A-Za-z-]+(?:\s+(?:&|and)\s+[A-Z][A-Za-z-]+)
 // Strong empirical claims that a reviewer would want sourced
 const CLAIM_PATTERN = /\b\d+(?:\.\d+)?\s*(?:%|percent\b)|\b(?:billion|million|trillion)\b|\bsignificant(?:ly)?\s+(?:increase|decrease|higher|lower|effect|impact)\b|\b(?:most|all|no)\s+(?:researchers|studies|experts|evidence)\b|\bstudies\s+(?:show|prove|demonstrate)\b/i;
 
-function htmlToText(html: string): string {
+export function htmlToText(html: string): string {
   return html
     .replace(/<[^>]*>/g, ' ')
     .replace(/&nbsp;/g, ' ')
@@ -53,7 +53,7 @@ function htmlToText(html: string): string {
     .trim();
 }
 
-function extractH2Sections(html: string): { title: string; text: string }[] {
+export function extractH2Sections(html: string): { title: string; text: string }[] {
   const sections: { title: string; text: string }[] = [];
   const parts = html.split(/<h2[^>]*>/i);
   // parts[0] is the preamble before the first H2

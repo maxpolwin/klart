@@ -7,6 +7,10 @@ import type {
   AIContext,
   FeedbackItem,
   CoachInteraction,
+  CoachGlobalStats,
+  ReviewCard,
+  ReviewGradeLabel,
+  ReviewStats,
   SpellcheckLanguage,
   TranscriptionResult,
 } from '../shared/types';
@@ -71,6 +75,18 @@ const api = {
       ipcRenderer.invoke('coach:getLog', noteId),
     appendInteraction: (noteId: string, interaction: Partial<CoachInteraction>): Promise<CoachInteraction | null> =>
       ipcRenderer.invoke('coach:appendInteraction', noteId, interaction),
+    globalStats: (): Promise<CoachGlobalStats> =>
+      ipcRenderer.invoke('coach:globalStats'),
+  },
+  review: {
+    generateCards: (noteId: string): Promise<{ created: number; error?: string }> =>
+      ipcRenderer.invoke('review:generateCards', noteId),
+    listDue: (): Promise<ReviewCard[]> => ipcRenderer.invoke('review:listDue'),
+    grade: (cardId: string, grade: ReviewGradeLabel): Promise<ReviewCard | null> =>
+      ipcRenderer.invoke('review:grade', cardId, grade),
+    deleteCard: (cardId: string): Promise<boolean> =>
+      ipcRenderer.invoke('review:deleteCard', cardId),
+    stats: (): Promise<ReviewStats> => ipcRenderer.invoke('review:stats'),
   },
   spellcheck: {
     getAvailableLanguages: (): Promise<SpellcheckLanguage[]> =>

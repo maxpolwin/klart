@@ -3,7 +3,19 @@ import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 import SettingsModal from './components/SettingsModal';
 import EmptyState from './components/EmptyState';
-import { Note, AISettings, FeedbackItem, CoachInteraction, SpellcheckLanguage, TranscriptionResult } from '../shared/types';
+import ReviewView from './components/ReviewView';
+import {
+  Note,
+  AISettings,
+  FeedbackItem,
+  CoachInteraction,
+  CoachGlobalStats,
+  ReviewCard,
+  ReviewGradeLabel,
+  ReviewStats,
+  SpellcheckLanguage,
+  TranscriptionResult,
+} from '../shared/types';
 
 declare global {
   interface Window {
@@ -39,6 +51,14 @@ declare global {
       coach: {
         getLog: (noteId: string) => Promise<CoachInteraction[]>;
         appendInteraction: (noteId: string, interaction: Partial<CoachInteraction>) => Promise<CoachInteraction | null>;
+        globalStats: () => Promise<CoachGlobalStats>;
+      };
+      review: {
+        generateCards: (noteId: string) => Promise<{ created: number; error?: string }>;
+        listDue: () => Promise<ReviewCard[]>;
+        grade: (cardId: string, grade: ReviewGradeLabel) => Promise<ReviewCard | null>;
+        deleteCard: (cardId: string) => Promise<boolean>;
+        stats: () => Promise<ReviewStats>;
       };
       spellcheck: {
         getAvailableLanguages: () => Promise<SpellcheckLanguage[]>;
@@ -63,11 +83,23 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [aiConnected, setAiConnected] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [view, setView] = useState<'notes' | 'review'>('notes');
+  const [reviewDue, setReviewDue] = useState(0);
+
+  const refreshReviewDue = useCallback(async () => {
+    try {
+      const stats = await window.api.review.stats();
+      setReviewDue(stats.due);
+    } catch {
+      // review store not available — leave the badge at its last value
+    }
+  }, []);
 
   // Load notes on mount
   useEffect(() => {
     loadNotes();
     checkAiConnection();
+    refreshReviewDue();
   }, []);
 
   const loadNotes = async () => {
@@ -129,12 +161,31 @@ function App() {
         activeNoteId={activeNote?.id}
         searchQuery={searchQuery}
         onSearch={handleSearch}
-        onSelectNote={handleSelectNote}
-        onCreateNote={handleCreateNote}
+        onSelectNote={(note) => {
+          setView('notes');
+          handleSelectNote(note);
+        }}
+        onCreateNote={() => {
+          setView('notes');
+          handleCreateNote();
+        }}
         onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenReview={() => {
+          setView('review');
+          refreshReviewDue();
+        }}
+        reviewDue={reviewDue}
+        reviewActive={view === 'review'}
       />
       <div className="editor-area">
-        {activeNote ? (
+        {view === 'review' ? (
+          <ReviewView
+            onBack={() => {
+              setView('notes');
+              refreshReviewDue();
+            }}
+          />
+        ) : activeNote ? (
           <Editor
             note={activeNote}
             onSave={handleSaveNote}
@@ -143,6 +194,7 @@ function App() {
             isAnalyzing={isAnalyzing}
             setIsAnalyzing={setIsAnalyzing}
             onOpenSettings={() => setIsSettingsOpen(true)}
+            onReviewCardsChanged={refreshReviewDue}
           />
         ) : (
           <EmptyState onCreateNote={handleCreateNote} />
