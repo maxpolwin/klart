@@ -268,7 +268,6 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
-        <div className="modal-grabber" aria-hidden="true" />
         <div className="modal-header">
           <h2 className="modal-title">Settings</h2>
           <button className="modal-close" onClick={onClose} aria-label="Close settings">

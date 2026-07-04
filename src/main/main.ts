@@ -261,7 +261,7 @@ async function createWindow() {
     minWidth: 800,
     minHeight: 600,
     // Match the system appearance so there's no flash before the UI paints
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#f2f2f7',
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#1a1712' : '#f4efe4',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
