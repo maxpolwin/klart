@@ -6,37 +6,34 @@
     <!-- The Content-Security-Policy meta tag is injected by the Vite plugin in
          vite.config.ts so dev (HMR needs inline scripts + websockets) and
          production (no inline scripts, no network) get different policies. -->
-    <meta name="color-scheme" content="dark" />
+    <meta name="color-scheme" content="light dark" />
     <title>Noschen</title>
     <style>
+      /* Pre-paint background that follows the system appearance, so there is
+         no light/dark flash before the app stylesheet loads. */
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
+      html {
+        background: #f2f2f7;
+      }
       body {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-        background: #0f0f0f;
-        color: #e5e5e5;
+        font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+        background: #f2f2f7;
+        color: #000000;
         overflow: hidden;
+      }
+      @media (prefers-color-scheme: dark) {
+        html, body {
+          background: #000000;
+          color: #ffffff;
+        }
       }
       #root {
         height: 100vh;
         width: 100vw;
-      }
-      ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
-      }
-      ::-webkit-scrollbar-track {
-        background: #1a1a1a;
-      }
-      ::-webkit-scrollbar-thumb {
-        background: #333;
-        border-radius: 4px;
-      }
-      ::-webkit-scrollbar-thumb:hover {
-        background: #444;
       }
     </style>
   </head>

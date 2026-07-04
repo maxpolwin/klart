@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, session, Menu, MenuItem, shell } from 'electron';
+import { app, BrowserWindow, ipcMain, session, Menu, MenuItem, shell, nativeTheme } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
 import * as fsp from 'fs/promises';
@@ -260,7 +260,8 @@ async function createWindow() {
     height: 900,
     minWidth: 800,
     minHeight: 600,
-    backgroundColor: '#0f0f0f',
+    // Match the system appearance so there's no flash before the UI paints
+    backgroundColor: nativeTheme.shouldUseDarkColors ? '#000000' : '#f2f2f7',
     titleBarStyle: 'hiddenInset',
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),

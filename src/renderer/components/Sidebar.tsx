@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { Search, Plus, Settings, FileText } from 'lucide-react';
+import { Search, Plus, Settings, FileText, ChevronRight } from 'lucide-react';
 import { Note } from '../../shared/types';
 
 interface SidebarProps {
@@ -73,30 +73,35 @@ function Sidebar({
       </div>
       <div className="note-list" role="listbox" aria-label="Note list">
         {notes.length === 0 ? (
-          <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
+          <div style={{ padding: '24px 12px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 'var(--font-size-sm)' }}>
             {searchQuery ? 'No notes found' : 'No notes yet'}
           </div>
         ) : (
-          notes.map((note) => (
-            <div
-              key={note.id}
-              className={`note-item ${activeNoteId === note.id ? 'active' : ''}`}
-              onClick={() => onSelectNote(note)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                  e.preventDefault();
-                  onSelectNote(note);
-                }
-              }}
-              role="option"
-              aria-selected={activeNoteId === note.id}
-              tabIndex={0}
-            >
-              <div className="note-item-title">{note.title || 'Untitled Note'}</div>
-              <div className="note-item-date">{formatDate(note.updatedAt)}</div>
-              <div className="note-item-preview">{extractPreview(note.content)}</div>
-            </div>
-          ))
+          <div className="note-list-group">
+            {notes.map((note) => (
+              <div
+                key={note.id}
+                className={`note-item ${activeNoteId === note.id ? 'active' : ''}`}
+                onClick={() => onSelectNote(note)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onSelectNote(note);
+                  }
+                }}
+                role="option"
+                aria-selected={activeNoteId === note.id}
+                tabIndex={0}
+              >
+                <div className="note-item-title">{note.title || 'Untitled Note'}</div>
+                <div className="note-item-preview">
+                  <span className="note-item-meta">{formatDate(note.updatedAt)}</span>
+                  {extractPreview(note.content)}
+                </div>
+                <ChevronRight className="note-item-chevron" size={16} aria-hidden="true" />
+              </div>
+            ))}
+          </div>
         )}
       </div>
       <div className="sidebar-footer">
