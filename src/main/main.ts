@@ -8,9 +8,15 @@ import {
   checkLocalLLMAvailable,
   disposeLocalLLM,
   truncateToTokenBudget,
+  estimateTokens,
   LLMConfig,
   getLocalLLMStatus,
 } from './llm/localLLM';
+import {
+  compressText,
+  getCompressorStatus,
+  disposeCompressor,
+} from './llm/promptCompressor';
 import {
   getMistralApiKey,
   setMistralApiKey,
@@ -60,6 +66,7 @@ interface AISettings {
   llmContextSize: number;
   llmMaxTokens: number;
   llmBatchSize: number;
+  compressionEnabled: boolean; // Use LLMLingua-2 prompt compression to fit the token budget
   promptConfig: PromptConfig;
   stt: SttSettings;
 }
@@ -137,6 +144,7 @@ function getDefaultSettings(): AISettings {
     llmContextSize: 2048,      // Context window size
     llmMaxTokens: 1536,        // Max tokens to generate (increased for detailed responses)
     llmBatchSize: 512,         // Batch size for inference
+    compressionEnabled: true,  // LLMLingua-2 prompt compression (falls back to truncation if model missing)
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
@@ -163,6 +171,10 @@ function loadSettings(): AISettings {
         // Re-save settings without the plaintext key
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(raw, null, 2));
       }
+
+      // Merge with defaults so newly added settings (e.g. compressionEnabled)
+      // get sensible values for pre-existing settings.json files.
+      raw = { ...getDefaultSettings(), ...raw };
 
       // Inject the API key from secure storage
       raw.mistralApiKey = getMistralApiKey();
@@ -555,17 +567,26 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
   const isSmallModel = settings.provider === 'builtin';
   const promptConfig = getPromptConfig(settings);
 
-  // Adaptive chunking for built-in model:
-  // - Start with full content
-  // - Only chunk if previous response took > 2 seconds
+  // Content token budget (1200 for the small built-in model, 2000 otherwise).
+  const targetTokens = promptConfig.maxContentTokens;
+
   let analysisContent = content;
+  // Upstream context reduction: when the small model has been slow, narrow to the
+  // current section before applying the token budget.
   if (isSmallModel && useAdaptiveChunking) {
     console.log('[AI] Using adaptive chunking (previous response was slow)');
     analysisContent = extractCurrentSection(content, context.h2);
-    analysisContent = truncateToTokenBudget(analysisContent, promptConfig.maxContentTokens);
-  } else if (isSmallModel) {
-    // Use full content but with a reasonable limit for context window
-    analysisContent = truncateToTokenBudget(content, 1500);
+  }
+
+  // Token optimization: only pay the cost when content actually exceeds the budget.
+  // LLMLingua-2 semantically compresses (keeps high-value tokens); if the compressor
+  // model is disabled or unavailable it transparently falls back to truncation.
+  if (estimateTokens(analysisContent) > targetTokens) {
+    if (settings.compressionEnabled) {
+      analysisContent = await compressText(analysisContent, targetTokens);
+    } else {
+      analysisContent = truncateToTokenBudget(analysisContent, targetTokens);
+    }
   }
 
   const systemPrompt = promptConfig.generatePrompt(context);
@@ -615,7 +636,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         // Graceful fallback: if Mistral API key exists, try that
         if (settings.mistralApiKey) {
           console.log('[AI] Falling back to Mistral API...');
-          return await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${content}`);
+          return await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${analysisContent}`);
         }
         return { feedback: [], error: result.error };
       }
@@ -793,6 +814,10 @@ ipcMain.handle('ai:getStatus', async () => {
     provider: settings.provider,
     localLLM: status,
     modelPath: settings.provider === 'builtin' ? 'qwen2.5-0.5b-instruct-q4_k_m.gguf' : null,
+    compression: {
+      enabled: settings.compressionEnabled,
+      ...getCompressorStatus(),
+    },
   };
 });
 
@@ -1089,4 +1114,5 @@ ipcMain.handle('stt:checkAvailable', async (): Promise<{ available: boolean; err
 // Cleanup on app quit
 app.on('before-quit', async () => {
   await disposeLocalLLM();
+  await disposeCompressor();
 });

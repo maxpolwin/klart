@@ -19,6 +19,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     llmContextSize: 2048,
     llmMaxTokens: 1536,
     llmBatchSize: 512,
+    compressionEnabled: true,
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
@@ -57,6 +58,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       llmContextSize: loaded.llmContextSize ?? 2048,
       llmMaxTokens: loaded.llmMaxTokens ?? 1536,
       llmBatchSize: loaded.llmBatchSize ?? 512,
+      compressionEnabled: loaded.compressionEnabled ?? true,
       promptConfig: loaded.promptConfig ?? {
         systemPrompt: DEFAULT_SYSTEM_PROMPT,
         feedbackTypes: DEFAULT_FEEDBACK_TYPES,
@@ -304,6 +306,23 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                     : settings.provider === 'ollama'
                     ? 'Uses a local LLM via Ollama for privacy-first AI feedback.'
                     : 'Uses Mistral API for AI feedback. Requires internet connection.'}
+                </p>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <span>Prompt Compression (LLMLingua-2)</span>
+                  <button
+                    className={`toggle-switch ${settings.compressionEnabled ? 'active' : ''}`}
+                    onClick={() => setSettings({ ...settings, compressionEnabled: !settings.compressionEnabled })}
+                  >
+                    <span className="toggle-slider" />
+                  </button>
+                </label>
+                <p className="form-hint">
+                  Semantically compresses long notes to fit the token budget (keeps the most important content
+                  instead of cutting off the end). Runs fully on-device. Requires a one-time model download:
+                  <code> npm run download-compressor</code>. Falls back to simple truncation if the model isn't installed.
                 </p>
               </div>
 
