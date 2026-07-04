@@ -512,8 +512,25 @@ npx tsc --noEmit
 | `npm run dev` | Start development server with hot reload |
 | `npm run build` | Build for production |
 | `npm run package` | Package as desktop app |
+| `npm run download-model` | Download the built-in Qwen 0.5B model |
+| `npm run download-compressor` | Download the LLMLingua-2 prompt-compression model (optional) |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript type checking |
+
+### Prompt Compression (Token Optimization)
+
+Long notes are semantically compressed with **[LLMLingua-2](https://llmlingua.com/llmlingua2.html)** (via the
+pure-JS [`@atjsh/llmlingua-2`](https://www.npmjs.com/package/@atjsh/llmlingua-2) port) so the most important
+content fits the model's token budget instead of being truncated at the end. It applies to all providers and runs
+fully on-device (a MobileBERT ONNX model, ~99MB).
+
+```bash
+# One-time download of the compressor model
+npm run download-compressor
+```
+
+Compression is enabled by default and can be toggled in **Settings → AI Provider → Prompt Compression**. If the
+model isn't downloaded, the app silently falls back to simple truncation, so this step is optional.
 
 ---
 

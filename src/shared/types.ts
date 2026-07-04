@@ -112,6 +112,7 @@ export interface AISettings {
   llmContextSize: number;   // Context window size (default: 2048)
   llmMaxTokens: number;     // Max tokens to generate (default: 1024)
   llmBatchSize: number;     // Batch size for inference (default: 512)
+  compressionEnabled: boolean; // LLMLingua-2 prompt compression (default: true)
   // Prompt configuration
   promptConfig: PromptConfig;
   // Speech-to-text configuration

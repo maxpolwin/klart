@@ -51,6 +51,7 @@ interface AISettings {
   llmContextSize: number;
   llmMaxTokens: number;
   llmBatchSize: number;
+  compressionEnabled: boolean;
   promptConfig: PromptConfig;
   stt: SttSettings;
 }
@@ -73,6 +74,15 @@ interface LLMStatus {
     };
   };
   modelPath: string | null;
+  compression?: {
+    enabled: boolean;
+    initialized: boolean;
+    initializing: boolean;
+    error: string | null;
+    modelAvailable: boolean;
+    modelId: string;
+    modelPath: string;
+  };
 }
 
 interface AIContext {
