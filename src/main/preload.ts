@@ -57,6 +57,12 @@ const api = {
       userTake: string;
     }): Promise<{ draft?: string; error?: string }> =>
       ipcRenderer.invoke('ai:draft', payload),
+    chat: (payload: {
+      messages: { role: 'user' | 'assistant'; content: string }[];
+      stance: string;
+      noteContext?: { h1: string; section: string; sectionText: string };
+    }): Promise<{ reply?: string; error?: string }> =>
+      ipcRenderer.invoke('ai:chat', payload),
     checkConnection: (): Promise<boolean> => ipcRenderer.invoke('ai:checkConnection'),
     getStatus: (): Promise<LLMStatus> => ipcRenderer.invoke('ai:getStatus'),
   },

@@ -22,6 +22,7 @@ import {
   DEFAULT_SYSTEM_PROMPT,
   DEFAULT_COACH_SYSTEM_PROMPT,
   COACH_QUESTION_STEMS,
+  COACH_STANCES,
 } from '../shared/types';
 import type {
   Note,
@@ -890,6 +891,90 @@ ipcMain.handle('ai:draft', async (_, payload: {
 
   const result = await generateFreeform(settings, systemPrompt, userPrompt);
   return { draft: result.text, error: result.error };
+});
+
+// Thinking partner: multi-turn Socratic / devil's-advocate / hint-ladder
+// dialogue. The coach questions and challenges — it never answers for the
+// writer. History is capped (small local models lose coherence on long
+// windows); the writer always writes first, so every exchange starts from
+// their own committed thought.
+const CHAT_HISTORY_WINDOW = 6;
+
+ipcMain.handle('ai:chat', async (_, payload: {
+  messages: { role: 'user' | 'assistant'; content: string }[];
+  stance: string;
+  noteContext?: { h1: string; section: string; sectionText: string };
+}) => {
+  const settings = loadSettings();
+  const stance = COACH_STANCES[payload.stance] || COACH_STANCES.socratic;
+
+  let systemPrompt = stance.systemPrompt;
+  if (payload.noteContext) {
+    const excerpt = truncateToTokenBudget(
+      payload.noteContext.sectionText || '',
+      settings.provider === 'builtin' ? 500 : 1200
+    );
+    systemPrompt += `\n\nThe writer is working on notes about "${payload.noteContext.h1 || 'their topic'}"`;
+    if (payload.noteContext.section) {
+      systemPrompt += `, currently in the section "${payload.noteContext.section}"`;
+    }
+    if (excerpt) {
+      systemPrompt += `. Current section content:\n${excerpt}`;
+    }
+  }
+
+  const history = payload.messages.slice(-CHAT_HISTORY_WINDOW);
+  if (history.length === 0 || history[history.length - 1].role !== 'user') {
+    return { error: 'The writer must speak first.' };
+  }
+
+  try {
+    if (settings.provider === 'ollama') {
+      const response = await fetch(`${settings.ollamaUrl}/api/chat`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          model: settings.ollamaModel,
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
+          stream: false,
+        }),
+      });
+      if (!response.ok) throw new Error('Ollama request failed');
+      const data = await response.json() as { message: { content: string } };
+      return { reply: (data.message?.content || '').trim() };
+    } else if (settings.provider === 'mistral') {
+      const response = await fetch('https://api.mistral.ai/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${settings.mistralApiKey}`,
+        },
+        body: JSON.stringify({
+          model: 'mistral-small-latest',
+          messages: [{ role: 'system', content: systemPrompt }, ...history],
+        }),
+      });
+      if (!response.ok) throw new Error('Mistral request failed');
+      const data = await response.json() as { choices: { message: { content: string } }[] };
+      return { reply: (data.choices[0].message.content || '').trim() };
+    } else {
+      // Built-in small model: flatten the capped history into one prompt
+      // (multi-turn session state is unreliable on a 0.5B model).
+      const transcript = history
+        .map((m) => `${m.role === 'user' ? 'Writer' : 'Coach'}: ${m.content}`)
+        .join('\n');
+      const userPrompt = `${transcript}\n\nReply as the Coach to the writer's last message. Follow your rules exactly.`;
+      const result = await generateFreeform(settings, systemPrompt, userPrompt);
+      if (result.error) return { error: result.error };
+      // Strip a leading "Coach:" if the model echoed the transcript format
+      const reply = (result.text || '').replace(/^Coach:\s*/i, '').trim();
+      return { reply };
+    }
+  } catch (error) {
+    const msg = error instanceof Error ? error.message : 'Chat failed';
+    console.error('[AI] Chat failed:', msg);
+    return { error: msg };
+  }
 });
 
 ipcMain.handle('ai:checkConnection', async () => {

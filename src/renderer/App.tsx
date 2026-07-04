@@ -28,6 +28,11 @@ declare global {
           item: { type: string; text: string; question?: string; relevantText?: string };
           userTake: string;
         }) => Promise<{ draft?: string; error?: string }>;
+        chat: (payload: {
+          messages: { role: 'user' | 'assistant'; content: string }[];
+          stance: string;
+          noteContext?: { h1: string; section: string; sectionText: string };
+        }) => Promise<{ reply?: string; error?: string }>;
         checkConnection: () => Promise<boolean>;
         getStatus: () => Promise<{ provider: string; localLLM: { initialized: boolean; initializing: boolean; error: string | null; gpuAcceleration: { enabled: boolean; type: string; layers: number } }; modelPath: string | null }>;
       };

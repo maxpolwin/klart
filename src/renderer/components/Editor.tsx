@@ -3,10 +3,11 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Heading from '@tiptap/extension-heading';
-import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, History, Compass, X, ShieldCheck } from 'lucide-react';
+import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, History, Compass, X, ShieldCheck, MessagesSquare } from 'lucide-react';
 import { Note, FeedbackItem, CoachInteraction, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
 import { runRuleChecks, RuleFinding } from '../../shared/ruleChecks';
 import FeedbackPanel from './FeedbackPanel';
+import ThinkingPartner from './ThinkingPartner';
 
 // Metacognitive scaffolds: short, canned plan/monitor/evaluate prompts keyed
 // to how far along the note is. Deterministic — no model involved.
@@ -91,6 +92,7 @@ function Editor({
   const [showCoachHistory, setShowCoachHistory] = useState(false);
   const [dismissedScaffolds, setDismissedScaffolds] = useState<Set<string>>(new Set());
   const [ruleFindings, setRuleFindings] = useState<RuleFinding[]>([]);
+  const [showPartner, setShowPartner] = useState(false);
   const [contentLength, setContentLength] = useState(
     note.content.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().length
   );
@@ -510,6 +512,27 @@ function Editor({
     return () => document.removeEventListener('keydown', handleKeyDown);
   }, [editor, note, activeFeedback, onSave, respondingId]);
 
+  // Current-section context handed to the thinking partner on each turn
+  const getNoteContext = useCallback(() => {
+    const html = editor?.getHTML() || '';
+    const { h1, h2s } = extractHeadings(html);
+    const section = h2s[h2s.length - 1] || '';
+
+    // Take the content of the last H2 section (the one being worked on)
+    let sectionHtml = html;
+    const parts = html.split(/<h2[^>]*>/i);
+    if (parts.length > 1) {
+      sectionHtml = parts[parts.length - 1];
+    }
+    const sectionText = sectionHtml
+      .replace(/<[^>]*>/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .substring(0, 4000);
+
+    return { h1, section, sectionText };
+  }, [editor]);
+
   // Pick the first applicable, not-yet-dismissed metacognitive scaffold
   const activeScaffold = SCAFFOLDS.find(
     (s) =>
@@ -663,12 +686,28 @@ function Editor({
           )}
         </div>
         <div className="editor-header-actions">
+          <button
+            className={`editor-header-btn ${showPartner ? 'active' : ''}`}
+            onClick={() => setShowPartner(!showPartner)}
+            title="Open the thinking partner — it questions, it doesn't write"
+          >
+            <MessagesSquare size={14} />
+            Partner
+          </button>
           <button className="editor-header-btn danger" onClick={handleDeleteConfirm}>
             <Trash2 size={14} />
             Delete
           </button>
         </div>
       </div>
+
+      {showPartner && (
+        <ThinkingPartner
+          noteId={note.id}
+          getNoteContext={getNoteContext}
+          onClose={() => setShowPartner(false)}
+        />
+      )}
       <div
         className={`editor-content ${isDragOver ? 'drag-over' : ''}`}
         onDragEnter={handleDragEnter}

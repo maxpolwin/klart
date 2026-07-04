@@ -2208,3 +2208,203 @@ input::placeholder, textarea::placeholder {
   font-style: italic;
   line-height: 1.5;
 }
+
+/* ===================== THINKING PARTNER (Stage 2) ===================== */
+
+.editor-header-btn.active {
+  background: var(--accent-glow);
+  color: var(--accent-color);
+  border-color: var(--accent-color);
+}
+
+.thinking-partner {
+  position: fixed;
+  right: 20px;
+  bottom: 56px;
+  width: 380px;
+  max-width: calc(100vw - 320px);
+  height: 480px;
+  max-height: calc(100vh - 140px);
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: 0 16px 48px rgba(0, 0, 0, 0.5);
+  z-index: 60;
+}
+
+.thinking-partner-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.thinking-partner-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.thinking-partner-title svg {
+  color: var(--accent-color);
+}
+
+.thinking-partner-close {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  padding: 4px;
+  display: flex;
+  border-radius: var(--radius-sm);
+}
+
+.thinking-partner-close:hover {
+  color: var(--text-primary);
+  background: var(--bg-tertiary);
+}
+
+.thinking-partner-stances {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.stance-chip {
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.stance-chip.active {
+  background: var(--accent-glow);
+  border-color: var(--accent-color);
+  color: var(--accent-color);
+  font-weight: 600;
+}
+
+.thinking-partner-transcript {
+  flex: 1;
+  overflow-y: auto;
+  padding: var(--space-3) var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.thinking-partner-empty {
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+}
+
+.thinking-partner-lenses {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.lens-btn {
+  padding: 5px 10px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-color);
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+  text-align: left;
+}
+
+.lens-btn:hover:not(:disabled) {
+  border-color: var(--accent-color);
+  color: var(--text-primary);
+}
+
+.thinking-partner-note {
+  margin-top: var(--space-3);
+  font-style: italic;
+  font-size: 10px;
+}
+
+.chat-msg {
+  max-width: 90%;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+
+.chat-msg.user {
+  align-self: flex-end;
+  background: var(--accent-glow);
+  color: var(--text-primary);
+  border: 1px solid var(--accent-color);
+}
+
+.chat-msg.assistant {
+  align-self: flex-start;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border-subtle);
+}
+
+.chat-msg.pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--text-muted);
+}
+
+.chat-msg.pending .spin {
+  animation: spin 1s linear infinite;
+}
+
+.thinking-partner-error {
+  font-size: var(--font-size-xs);
+  color: var(--error-color, #ef4444);
+  padding: var(--space-2);
+}
+
+.thinking-partner-input {
+  display: flex;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.thinking-partner-input textarea {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--font-size-xs);
+  font-family: inherit;
+  line-height: 1.5;
+  resize: none;
+}
+
+.thinking-partner-input textarea:focus {
+  outline: none;
+  border-color: var(--accent-color);
+}
+
+.thinking-partner-send {
+  align-self: flex-end;
+  padding: var(--space-2) var(--space-3);
+}
