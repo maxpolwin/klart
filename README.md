@@ -1,8 +1,10 @@
 # Noschen
 
-**AI-Powered Research Note-Taking App**
+**AI-Coached Research Note-Taking App**
 
-Noschen is a privacy-first, local-first research note-taking application that provides live AI feedback to support academic researchers, consultants, and students. The AI analyzes your notes in real-time and suggests improvements, identifies gaps, and enhances research quality.
+Noschen is a privacy-first, local-first research note-taking application that coaches academic researchers, consultants, and students as they write. **You write it — Noschen questions it, privately, on your machine.**
+
+Instead of generating text for you, the AI (by default) asks Socratic questions that make you produce the answer yourself, challenges your reasoning on demand, and turns your own notes into spaced recall prompts so what you research actually sticks. Writing it yourself is what builds understanding (the generation effect); Noschen is built around that principle — AI as supporter, not ghostwriter. A legacy "Draft" mode and an explicit per-suggestion "Draft it for me" escape hatch remain available, always logged as AI-authored.
 
 ---
 
@@ -27,8 +29,12 @@ Noschen is a privacy-first, local-first research note-taking application that pr
 
 ### Core Features
 
-- **Local-First Privacy**: All notes are stored locally on your machine. No cloud sync, no data leaving your device.
-- **AI-Powered Feedback**: Real-time intelligent suggestions powered by local LLM (Ollama) or Mistral API.
+- **Coach Mode (default)**: The AI asks questions you answer in your own words — your answer, not AI prose, goes into the note. Hints nudge you where to look without giving answers.
+- **Thinking Partner**: A Socratic sparring panel with three stances (Socratic questioner, devil's advocate, graduated hints) and on-demand critical lenses ("Challenge my reasoning", "Reviewer 2", "Is this MECE?").
+- **Spaced Review**: Turn a note's sections into recall cards (SM-2 scheduling). The reveal is always *your own* writing — attempt first, then grade Again/Hard/Good/Easy.
+- **Offline Checks (no LLM)**: Deterministic, named heuristics flag uncited empirical claims, hedge-word density, undefined acronyms, thin sections, and overlapping section titles — even with AI disconnected.
+- **Coaching Memory & Balance**: Every answered question, AI draft (provenance-logged), and sparring exchange persists per note; a "coaching balance" insight keeps your respond-vs-draft ratio visible.
+- **Local-First Privacy**: All notes, coaching logs, and review cards are stored locally. Built-in local LLM (Qwen 0.5B), Ollama, or Mistral API.
 - **Hierarchical Note Structure**: Organize research with H1 headings (main topic) and H2 headings (sub-questions/aspects).
 - **Dark Mode Interface**: Clean, distraction-free dark theme designed for extended research sessions.
 - **Auto-Save**: Never lose your work—notes save automatically after 1 second of inactivity.
@@ -45,10 +51,11 @@ Noschen is a privacy-first, local-first research note-taking application that pr
 
 ### Additional Features
 
-- Accept/Reject workflow for AI suggestions
-- Review previously rejected suggestions
+- Respond/Dismiss workflow for coach questions (Accept/Reject in legacy Draft mode)
+- "Draft it for me" per suggestion — gated behind writing your own take first, and logged as AI-authored
+- Metacognitive scaffolds: brief plan/monitor/evaluate prompts as your note grows
+- Review previously dismissed suggestions
 - Contextual feedback aware of your document hierarchy
-- Section exclusion from AI feedback
 - Keyboard-driven workflow with Apple-appropriate shortcuts
 
 ---
@@ -214,14 +221,28 @@ Third major aspect to investigate.
 - H2 headings define the scope of analysis
 - Feedback relates primarily to the current H2 section while considering the broader context
 
-### Working with AI Suggestions
+### Working with the Coach
 
-When AI feedback appears:
+When coach feedback appears (default Coach mode):
 
-1. **Review** the suggestion in the feedback panel below your text
-2. **Accept** (✓) to add a TODO reminder in your text
-3. **Reject** (✗) to hide the suggestion
-4. **Reconsider** previously rejected suggestions by clicking "Show rejected"
+1. **Read the question** in the Coach panel below your text — each item asks something specific about what you wrote
+2. **Respond** (✎ or ⌘+Enter) — a composer opens; answer in your own words, and *your* answer is inserted near the relevant passage
+3. **Show hint** if you're stuck — a nudge that points where to look without giving the answer
+4. **Dismiss** (✗ or ⌘+⌫) to hide a question; reconsider later via "Show rejected"
+5. **Draft it for me…** (quiet link) if you truly want AI prose: write your own one-line take first (≥30 characters), then the draft builds on it and is logged as AI-authored in your coaching history
+
+In legacy **Draft mode** (Settings → Prompts → AI Role), suggestions arrive as insertable content with the old Accept/Reject flow.
+
+### Sparring with the Thinking Partner
+
+Click **Partner** in the editor header to open a floating dialogue panel. Pick a stance — Socratic, Devil's advocate, or Hints — or pull a lens: "Challenge my reasoning", "Strongest counterargument", "Is this MECE?", "Reviewer 2", "I'm stuck". You always write first; the partner questions and challenges but never writes your content. Exchanges are saved to the note's coaching history.
+
+### Reviewing What You Know
+
+1. In a note, click **Make review cards** — each substantial H2 section becomes 2 recall questions plus one "explain it simply" card
+2. Open **Review** in the sidebar (the badge shows how many cards are due)
+3. For each card: **attempt recall in writing first** — the reveal unlocks only after a genuine try — then compare against your own note excerpt and grade **Again / Hard / Good / Easy**
+4. Cards are rescheduled by an SM-2 spaced-repetition scheduler; the done screen shows your **coaching balance** (questions answered in your own words vs AI drafts requested)
 
 ### Excluding Sections from AI Feedback
 
@@ -234,6 +255,17 @@ If you want to exclude certain sections from AI analysis (e.g., personal notes, 
 
 ## AI Feedback System
 
+### Coach vs Draft
+
+| | **Coach (default)** | **Draft (legacy)** |
+|---|---|---|
+| The AI returns | Questions anchored to quoted spans, plus optional hints | Ready-to-insert prose |
+| Primary action | **Respond** — your own words are inserted | **Accept** — AI text is inserted |
+| AI-written prose | Only via the explicit, commit-gated "Draft it for me…" (provenance-logged) | Default behavior |
+| Why | Producing the answer yourself builds durable understanding (generation effect) | Faster polish, weaker learning |
+
+Switch modes in **Settings → Prompts → AI Role**. Each mode has its own editable system prompt.
+
 ### How It Works
 
 1. **Trigger**: Feedback generates after 2 seconds of typing inactivity
@@ -241,7 +273,8 @@ If you want to exclude certain sections from AI analysis (e.g., personal notes, 
    - The current H2 section you're working in
    - Relationship to other H2 sections
    - The overarching H1 topic
-3. **Display**: Colored inline badges appear in the feedback panel
+3. **Display**: Colored inline badges appear in the Coach panel
+4. **Guardrails**: In Coach mode the app strips any prose the model tries to insert and guarantees every item carries a question (curated per-type question stems keep the tiny local model reliable). Deterministic offline checks and metacognitive scaffolds run without any LLM at all.
 
 ### Feedback Types Explained
 
@@ -295,8 +328,8 @@ For best AI feedback:
 
 | Shortcut | Action |
 |----------|--------|
-| `Cmd + Enter` | Accept first active suggestion |
-| `Cmd + Delete` | Reject first active suggestion |
+| `Cmd + Enter` | Respond to first coach question (Accept in Draft mode) |
+| `Cmd + Delete` | Dismiss first active suggestion |
 
 ### Editor Shortcuts
 
@@ -388,6 +421,13 @@ Notes are stored as JSON files in your system's application data folder:
 | macOS | `~/Library/Application Support/noschen/notes/` |
 | Windows | `%APPDATA%/noschen/notes/` |
 | Linux | `~/.config/noschen/notes/` |
+
+Coaching data lives beside them, also local-only:
+
+| Data | Path | Contents |
+|------|------|----------|
+| Coaching memory | `<app data>/noschen/coaching/<noteId>.json` | Questions answered (your words), AI drafts (exact text, provenance), sparring exchanges |
+| Review cards | `<app data>/noschen/review/cards.json` | Recall prompts, SM-2 scheduling state, grade history |
 
 ### Note Format
 
@@ -521,11 +561,18 @@ npx tsc --noEmit
 
 ### Planned Features
 
+- [x] Coach mode: Socratic questions instead of generated prose
+- [x] Thinking partner with devil's-advocate and hint-ladder stances
+- [x] Counter-arguments and alternative perspectives (on-demand lenses)
+- [x] Spaced-repetition review of your own notes (SM-2)
+- [ ] FSRS scheduler upgrade (swap-in behind the same scheduler signature)
+- [ ] Local related-notes panel (on-device embeddings over your own notes)
+- [ ] Calibration loop: predict the gap before the reveal; track calibration over time
+- [ ] Per-skill profile with fading scaffolds (credit only for human-authored text)
 - [ ] Export to Markdown and PDF
 - [ ] Web search integration for concrete source recommendations
 - [ ] AI learning from rejected suggestions
 - [ ] Cross-referencing across multiple notes
-- [ ] Counter-arguments and alternative perspectives
 - [ ] Terminology clarification prompts
 - [ ] Collaborative editing (optional cloud sync)
 
