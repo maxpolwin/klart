@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Languages, Check, Plus, Trash2, RotateCcw, MessageSquare, ChevronDown, ChevronRight, Mic, Shield, ShieldAlert } from 'lucide-react';
-import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
+import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_TIP_STYLE, TIP_LANGUAGE_OPTIONS, TipStyleConfig, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -22,6 +22,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      tipStyle: DEFAULT_TIP_STYLE,
     },
     stt: {
       sttProvider: 'mistral-cloud',
@@ -57,9 +58,10 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       llmContextSize: loaded.llmContextSize ?? 2048,
       llmMaxTokens: loaded.llmMaxTokens ?? 1536,
       llmBatchSize: loaded.llmBatchSize ?? 512,
-      promptConfig: loaded.promptConfig ?? {
-        systemPrompt: DEFAULT_SYSTEM_PROMPT,
-        feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      promptConfig: {
+        systemPrompt: loaded.promptConfig?.systemPrompt ?? DEFAULT_SYSTEM_PROMPT,
+        feedbackTypes: loaded.promptConfig?.feedbackTypes ?? DEFAULT_FEEDBACK_TYPES,
+        tipStyle: { ...DEFAULT_TIP_STYLE, ...loaded.promptConfig?.tipStyle },
       },
       stt: loaded.stt ?? {
         sttProvider: 'mistral-cloud',
@@ -109,6 +111,27 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     setTestResult(null);
     const connected = await window.api.ai.checkConnection();
     setTestResult(connected ? 'success' : 'error');
+  };
+
+  // Close on Escape for keyboard accessibility
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  const tipStyle: TipStyleConfig = { ...DEFAULT_TIP_STYLE, ...settings.promptConfig?.tipStyle };
+
+  const updateTipStyle = (updates: Partial<TipStyleConfig>) => {
+    setSettings({
+      ...settings,
+      promptConfig: {
+        ...settings.promptConfig,
+        tipStyle: { ...tipStyle, ...updates },
+      },
+    });
   };
 
   // Prompt configuration helpers
@@ -170,6 +193,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
         promptConfig: {
           systemPrompt: DEFAULT_SYSTEM_PROMPT,
           feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+          tipStyle: DEFAULT_TIP_STYLE,
         },
       });
     }
@@ -243,10 +267,10 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
         <div className="modal-header">
           <h2 className="modal-title">Settings</h2>
-          <button className="modal-close" onClick={onClose}>
+          <button className="modal-close" onClick={onClose} aria-label="Close settings">
             <X size={20} />
           </button>
         </div>
@@ -510,7 +534,8 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                     >
                       console.mistral.ai
                     </a>
-                    . Your key is stored securely using OS-level encryption.
+                    . Your key is stored securely using OS-level encryption and never sent back to this window —
+                    leave the field unchanged to keep the saved key, or clear it to remove it.
                   </p>
                 </div>
               )}
@@ -556,6 +581,95 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                     <RotateCcw size={12} />
                     Reset Defaults
                   </button>
+                </div>
+              </div>
+
+              {/* Tip Style */}
+              <div className="form-group">
+                <label className="form-label">Tip Style</label>
+                <p className="form-hint" style={{ marginBottom: '12px' }}>
+                  Control how the AI writes its tips: how detailed, in what tone and language, and how many at once.
+                </p>
+
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px' }} htmlFor="tip-detail">Detail level</label>
+                    <select
+                      id="tip-detail"
+                      className="form-select"
+                      value={tipStyle.detailLevel}
+                      onChange={(e) => updateTipStyle({ detailLevel: e.target.value as TipStyleConfig['detailLevel'] })}
+                    >
+                      <option value="brief">Brief - short, scannable hints</option>
+                      <option value="standard">Standard - balanced</option>
+                      <option value="detailed">Detailed - ready-to-insert paragraphs</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px' }} htmlFor="tip-tone">Tone</label>
+                    <select
+                      id="tip-tone"
+                      className="form-select"
+                      value={tipStyle.tone}
+                      onChange={(e) => updateTipStyle({ tone: e.target.value as TipStyleConfig['tone'] })}
+                    >
+                      <option value="neutral">Neutral</option>
+                      <option value="academic">Academic</option>
+                      <option value="direct">Direct</option>
+                      <option value="encouraging">Encouraging</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px' }} htmlFor="tip-max">Tips per analysis</label>
+                    <select
+                      id="tip-max"
+                      className="form-select"
+                      value={tipStyle.maxTips}
+                      onChange={(e) => updateTipStyle({ maxTips: parseInt(e.target.value, 10) })}
+                    >
+                      {[1, 2, 3, 4, 5, 6].map((n) => (
+                        <option key={n} value={n}>{n}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '12px' }} htmlFor="tip-language">Tip language</label>
+                    <select
+                      id="tip-language"
+                      className="form-select"
+                      value={tipStyle.language}
+                      onChange={(e) => updateTipStyle({ language: e.target.value })}
+                    >
+                      {TIP_LANGUAGE_OPTIONS.map((opt) => (
+                        <option key={opt.value} value={opt.value}>{opt.label}</option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+
+                <div style={{ marginTop: '12px' }}>
+                  <label className="form-label" style={{ fontSize: '12px' }} htmlFor="tip-guidance">Custom guidance (optional)</label>
+                  <textarea
+                    id="tip-guidance"
+                    value={tipStyle.customGuidance}
+                    onChange={(e) => updateTipStyle({ customGuidance: e.target.value })}
+                    placeholder='e.g. "Always propose at least one concrete source" or "Focus on counterarguments"'
+                    style={{
+                      width: '100%',
+                      minHeight: '60px',
+                      padding: '10px 12px',
+                      background: 'var(--bg-tertiary)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '8px',
+                      color: 'var(--text-primary)',
+                      fontSize: '12px',
+                      resize: 'vertical',
+                      lineHeight: 1.5,
+                    }}
+                  />
+                  <p className="form-hint">
+                    Added to every analysis request, on top of the system prompt below.
+                  </p>
                 </div>
               </div>
 

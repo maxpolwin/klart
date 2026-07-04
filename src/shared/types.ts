@@ -62,10 +62,42 @@ export interface FeedbackTypeConfig {
   enabled: boolean;     // Whether to include in analysis
 }
 
+// How AI tips should be written (user-customizable)
+export type TipDetailLevel = 'brief' | 'standard' | 'detailed';
+export type TipTone = 'neutral' | 'academic' | 'direct' | 'encouraging';
+
+export interface TipStyleConfig {
+  detailLevel: TipDetailLevel;  // How long/deep each suggestion should be
+  tone: TipTone;                // Writing style of the feedback
+  maxTips: number;              // Maximum number of tips per analysis (1-6)
+  language: string;             // '' = match the language of the notes
+  customGuidance: string;       // Free-form extra instruction appended to the prompt
+}
+
+export const DEFAULT_TIP_STYLE: TipStyleConfig = {
+  detailLevel: 'standard',
+  tone: 'neutral',
+  maxTips: 3,
+  language: '',
+  customGuidance: '',
+};
+
+export const TIP_LANGUAGE_OPTIONS = [
+  { value: '', label: 'Match note language' },
+  { value: 'English', label: 'English' },
+  { value: 'German', label: 'German' },
+  { value: 'French', label: 'French' },
+  { value: 'Spanish', label: 'Spanish' },
+  { value: 'Italian', label: 'Italian' },
+  { value: 'Portuguese', label: 'Portuguese' },
+  { value: 'Dutch', label: 'Dutch' },
+];
+
 // Prompt configuration
 export interface PromptConfig {
   systemPrompt: string;           // The main system prompt template
   feedbackTypes: FeedbackTypeConfig[];  // Configurable feedback types
+  tipStyle?: TipStyleConfig;      // Optional for settings saved by older versions
 }
 
 export interface AISettings {

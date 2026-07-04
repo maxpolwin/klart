@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain, dialog, session, Menu, MenuItem } from 'electron';
+import { app, BrowserWindow, ipcMain, session, Menu, MenuItem, shell } from 'electron';
 import * as path from 'path';
 import * as fs from 'fs';
+import * as fsp from 'fs/promises';
 import { v4 as uuidv4 } from 'uuid';
 import {
   initializeLocalLLM,
@@ -35,9 +36,18 @@ interface FeedbackTypeConfig {
   enabled: boolean;
 }
 
+interface TipStyleConfig {
+  detailLevel: 'brief' | 'standard' | 'detailed';
+  tone: 'neutral' | 'academic' | 'direct' | 'encouraging';
+  maxTips: number;
+  language: string; // '' = match the language of the notes
+  customGuidance: string;
+}
+
 interface PromptConfig {
   systemPrompt: string;
   feedbackTypes: FeedbackTypeConfig[];
+  tipStyle?: TipStyleConfig;
 }
 
 interface SttSettings {
@@ -96,6 +106,14 @@ const DEFAULT_FEEDBACK_TYPES: FeedbackTypeConfig[] = [
   },
 ];
 
+const DEFAULT_TIP_STYLE: TipStyleConfig = {
+  detailLevel: 'standard',
+  tone: 'neutral',
+  maxTips: 3,
+  language: '',
+  customGuidance: '',
+};
+
 // Default system prompt template
 const DEFAULT_SYSTEM_PROMPT = `You are a research assistant helping improve academic notes on "{{topic}}".
 Current section: "{{section}}"
@@ -119,6 +137,16 @@ Provide 2-3 feedback items. Output ONLY valid JSON:`;
 const NOTES_DIR = path.join(app.getPath('userData'), 'notes');
 const SETTINGS_FILE = path.join(app.getPath('userData'), 'settings.json');
 
+// Sent to the renderer instead of the real API key; if it comes back unchanged
+// on save, the stored key is kept. The plaintext key never leaves the main process.
+const MASKED_API_KEY = '••••••••';
+
+const NOTE_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const MAX_NOTE_CONTENT_BYTES = 10 * 1024 * 1024; // 10 MB per note
+const MAX_AUDIO_FILE_BYTES = 250 * 1024 * 1024; // 250 MB per audio file
+const LLM_FETCH_TIMEOUT_MS = 120_000;
+const STT_FETCH_TIMEOUT_MS = 600_000;
+
 function ensureDirectories() {
   if (!fs.existsSync(NOTES_DIR)) {
     fs.mkdirSync(NOTES_DIR, { recursive: true });
@@ -140,6 +168,7 @@ function getDefaultSettings(): AISettings {
     promptConfig: {
       systemPrompt: DEFAULT_SYSTEM_PROMPT,
       feedbackTypes: DEFAULT_FEEDBACK_TYPES,
+      tipStyle: DEFAULT_TIP_STYLE,
     },
     stt: {
       sttProvider: 'mistral-cloud',
@@ -158,7 +187,7 @@ function loadSettings(): AISettings {
       let raw = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf-8'));
 
       // Migrate plaintext API key from settings.json to secure storage
-      if (raw.mistralApiKey && raw.mistralApiKey.length > 0) {
+      if (raw.mistralApiKey && raw.mistralApiKey.length > 0 && raw.mistralApiKey !== MASKED_API_KEY) {
         raw = migrateApiKeyFromSettings(raw);
         // Re-save settings without the plaintext key
         fs.writeFileSync(SETTINGS_FILE, JSON.stringify(raw, null, 2));
@@ -175,20 +204,53 @@ function loadSettings(): AISettings {
 }
 
 function saveSettings(settings: AISettings) {
-  // Extract and securely store the API key
-  const apiKey = settings.mistralApiKey || '';
-  if (apiKey) {
-    setMistralApiKey(apiKey);
-  }
+  // Store the API key only in secure storage (an empty value clears it)
+  setMistralApiKey(settings.mistralApiKey || '');
 
   // Save settings without the plaintext API key
   const settingsToSave = { ...settings, mistralApiKey: '' };
   fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settingsToSave, null, 2));
 }
 
+function maskSettingsForRenderer(settings: AISettings): AISettings {
+  return { ...settings, mistralApiKey: settings.mistralApiKey ? MASKED_API_KEY : '' };
+}
+
+// Validate user-configured endpoint URLs before fetching (http/https only)
+function sanitizeHttpBaseUrl(raw: string, fallback: string): string {
+  const candidate = (raw || fallback).trim();
+  const url = new URL(candidate);
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new Error(`Unsupported URL protocol: ${url.protocol}`);
+  }
+  return url.toString().replace(/\/+$/, '');
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 let mainWindow: BrowserWindow | null = null;
 
 const isDev = !app.isPackaged;
+
+// Only the app itself may be loaded in the window; external links go to the browser.
+function isAllowedNavigation(url: string): boolean {
+  try {
+    const parsed = new URL(url);
+    if (isDev && parsed.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(parsed.hostname)) {
+      return true;
+    }
+    return parsed.protocol === 'file:';
+  } catch {
+    return false;
+  }
+}
 
 async function createWindow() {
   const settings = loadSettings();
@@ -204,8 +266,26 @@ async function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
       spellcheck: settings.spellcheckEnabled,
     },
+  });
+
+  // Open external links in the system browser, never in-app
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (/^https:\/\//i.test(url)) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!isAllowedNavigation(url)) {
+      event.preventDefault();
+      if (/^https:\/\//i.test(url)) {
+        shell.openExternal(url);
+      }
+    }
   });
 
   // Configure spellchecker languages
@@ -282,6 +362,13 @@ async function createWindow() {
 
 app.whenReady().then(async () => {
   ensureDirectories();
+
+  // Deny all permission requests except sanitized clipboard writes (used by the
+  // copy-suggestion button); nothing else in the app needs browser permissions.
+  session.defaultSession.setPermissionRequestHandler((_wc, permission, callback) => {
+    callback(permission === 'clipboard-sanitized-write');
+  });
+
   await createWindow();
 
   app.on('activate', async () => {
@@ -297,31 +384,63 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Note operations
-ipcMain.handle('notes:list', async () => {
-  const files = fs.readdirSync(NOTES_DIR).filter(f => f.endsWith('.json'));
-  const notes: Note[] = [];
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTES (async fs + in-memory cache: the disk is only read once per session,
+// and list/search never re-read every file)
+// ═══════════════════════════════════════════════════════════════════════════
 
-  for (const file of files) {
-    try {
-      const content = fs.readFileSync(path.join(NOTES_DIR, file), 'utf-8');
-      notes.push(JSON.parse(content));
-    } catch (error) {
-      console.error(`Failed to read note ${file}:`, error);
-    }
+let notesCache: Map<string, Note> | null = null;
+
+function isValidNoteId(id: unknown): id is string {
+  return typeof id === 'string' && NOTE_ID_PATTERN.test(id);
+}
+
+function notePath(id: string): string {
+  return path.join(NOTES_DIR, `${id}.json`);
+}
+
+async function getNotesCache(): Promise<Map<string, Note>> {
+  if (notesCache) return notesCache;
+
+  const cache = new Map<string, Note>();
+  try {
+    const files = (await fsp.readdir(NOTES_DIR)).filter((f) => f.endsWith('.json'));
+    await Promise.all(
+      files.map(async (file) => {
+        try {
+          const content = await fsp.readFile(path.join(NOTES_DIR, file), 'utf-8');
+          const note = JSON.parse(content) as Note;
+          if (note && isValidNoteId(note.id)) {
+            cache.set(note.id, note);
+          }
+        } catch (error) {
+          console.error(`Failed to read note ${file}:`, error);
+        }
+      })
+    );
+  } catch (error) {
+    console.error('Failed to read notes directory:', error);
   }
 
-  return notes.sort((a, b) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  notesCache = cache;
+  return cache;
+}
+
+function sortNotes(notes: Note[]): Note[] {
+  return notes.sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
+}
+
+ipcMain.handle('notes:list', async () => {
+  const cache = await getNotesCache();
+  return sortNotes([...cache.values()]);
 });
 
 ipcMain.handle('notes:get', async (_, id: string) => {
-  const filePath = path.join(NOTES_DIR, `${id}.json`);
-  if (fs.existsSync(filePath)) {
-    return JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-  }
-  return null;
+  if (!isValidNoteId(id)) return null;
+  const cache = await getNotesCache();
+  return cache.get(id) ?? null;
 });
 
 ipcMain.handle('notes:create', async () => {
@@ -334,62 +453,77 @@ ipcMain.handle('notes:create', async () => {
     excludedSections: [],
   };
 
-  fs.writeFileSync(
-    path.join(NOTES_DIR, `${note.id}.json`),
-    JSON.stringify(note, null, 2)
-  );
+  const cache = await getNotesCache();
+  cache.set(note.id, note);
+  await fsp.writeFile(notePath(note.id), JSON.stringify(note, null, 2));
 
   return note;
 });
 
 ipcMain.handle('notes:save', async (_, note: Note) => {
-  note.updatedAt = new Date().toISOString();
-  fs.writeFileSync(
-    path.join(NOTES_DIR, `${note.id}.json`),
-    JSON.stringify(note, null, 2)
-  );
-  return note;
+  if (!note || !isValidNoteId(note.id)) {
+    throw new Error('Invalid note id');
+  }
+
+  // Rebuild the note from validated fields; never trust the renderer's shape
+  const clean: Note = {
+    id: note.id,
+    title: typeof note.title === 'string' ? note.title.slice(0, 500) : 'Untitled Note',
+    content: typeof note.content === 'string' ? note.content : '',
+    createdAt: typeof note.createdAt === 'string' ? note.createdAt : new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    excludedSections: Array.isArray(note.excludedSections)
+      ? note.excludedSections.filter((s): s is string => typeof s === 'string')
+      : [],
+  };
+
+  if (Buffer.byteLength(clean.content, 'utf-8') > MAX_NOTE_CONTENT_BYTES) {
+    throw new Error('Note content too large');
+  }
+
+  const cache = await getNotesCache();
+  cache.set(clean.id, clean);
+  await fsp.writeFile(notePath(clean.id), JSON.stringify(clean, null, 2));
+  return clean;
 });
 
 ipcMain.handle('notes:delete', async (_, id: string) => {
-  const filePath = path.join(NOTES_DIR, `${id}.json`);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
+  if (!isValidNoteId(id)) return false;
+
+  const cache = await getNotesCache();
+  cache.delete(id);
+  try {
+    await fsp.unlink(notePath(id));
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT') throw error;
   }
   return true;
 });
 
 ipcMain.handle('notes:search', async (_, query: string) => {
-  const files = fs.readdirSync(NOTES_DIR).filter(f => f.endsWith('.json'));
-  const results: Note[] = [];
+  if (typeof query !== 'string') return [];
   const lowerQuery = query.toLowerCase();
-
-  for (const file of files) {
-    try {
-      const content = fs.readFileSync(path.join(NOTES_DIR, file), 'utf-8');
-      const note: Note = JSON.parse(content);
-      if (
-        note.title.toLowerCase().includes(lowerQuery) ||
-        note.content.toLowerCase().includes(lowerQuery)
-      ) {
-        results.push(note);
-      }
-    } catch (error) {
-      console.error(`Failed to search note ${file}:`, error);
-    }
-  }
-
-  return results.sort((a, b) =>
-    new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  const cache = await getNotesCache();
+  const results = [...cache.values()].filter(
+    (note) =>
+      note.title.toLowerCase().includes(lowerQuery) ||
+      note.content.toLowerCase().includes(lowerQuery)
   );
+  return sortNotes(results);
 });
 
 // Settings operations
 ipcMain.handle('settings:get', async () => {
-  return loadSettings();
+  return maskSettingsForRenderer(loadSettings());
 });
 
-ipcMain.handle('settings:save', async (_, settings: AISettings) => {
+ipcMain.handle('settings:save', async (_, incoming: AISettings) => {
+  // If the masked placeholder comes back unchanged, keep the stored key
+  const apiKey =
+    incoming.mistralApiKey === MASKED_API_KEY
+      ? getMistralApiKey()
+      : incoming.mistralApiKey || '';
+  const settings: AISettings = { ...incoming, mistralApiKey: apiKey };
   saveSettings(settings);
 
   // Apply spellcheck settings at runtime
@@ -399,8 +533,7 @@ ipcMain.handle('settings:save', async (_, settings: AISettings) => {
     }
   }
 
-  // Return settings with the API key (from secure storage) for the renderer
-  return { ...settings, mistralApiKey: getMistralApiKey() };
+  return maskSettingsForRenderer(loadSettings());
 });
 
 // Secure storage status
@@ -471,6 +604,7 @@ async function callMistralAPI(apiKey: string, systemPrompt: string, userPrompt: 
         ],
         response_format: { type: 'json_object' },
       }),
+      signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
     });
 
     if (!response.ok) {
@@ -510,6 +644,53 @@ function generateSystemPrompt(
     .replace(/\{\{feedbackTypes\}\}/g, feedbackTypesStr);
 }
 
+function clampMaxTips(value: unknown): number {
+  const n = Math.round(Number(value));
+  if (!Number.isFinite(n)) return DEFAULT_TIP_STYLE.maxTips;
+  return Math.min(6, Math.max(1, n));
+}
+
+// Build extra prompt instructions from the user's tip-style preferences
+function buildTipStyleInstructions(tipStyle: TipStyleConfig): string {
+  const lines: string[] = [];
+
+  if (tipStyle.detailLevel === 'brief') {
+    lines.push('Keep each "text" under 20 words and each "suggestion" under 60 words.');
+  } else if (tipStyle.detailLevel === 'detailed') {
+    lines.push('Write thorough suggestions: 1-3 full paragraphs of ready-to-insert content per item.');
+  }
+
+  const toneInstructions: Record<TipStyleConfig['tone'], string> = {
+    neutral: '',
+    academic: 'Use a formal, academic tone with precise terminology.',
+    direct: 'Be blunt and direct. No hedging, no filler.',
+    encouraging: 'Use a supportive, encouraging tone; frame feedback constructively.',
+  };
+  if (toneInstructions[tipStyle.tone]) {
+    lines.push(toneInstructions[tipStyle.tone]);
+  }
+
+  const maxTips = clampMaxTips(tipStyle.maxTips);
+  lines.push(`Provide at most ${maxTips} feedback item${maxTips === 1 ? '' : 's'}.`);
+
+  if (tipStyle.language) {
+    lines.push(`Write all feedback and suggestions in ${tipStyle.language}.`);
+  } else {
+    lines.push('Write feedback in the same language as the notes.');
+  }
+
+  const custom = (tipStyle.customGuidance || '').trim();
+  if (custom) {
+    lines.push(custom);
+  }
+
+  return `\n\nSTYLE REQUIREMENTS:\n${lines.map(l => `- ${l}`).join('\n')}\n\nRemember: Output ONLY valid JSON.`;
+}
+
+function getTipStyle(settings: AISettings): TipStyleConfig {
+  return { ...DEFAULT_TIP_STYLE, ...(settings.promptConfig?.tipStyle || {}) };
+}
+
 // Get prompt configuration from settings
 function getPromptConfig(settings: AISettings) {
   const isSmallModel = settings.provider === 'builtin';
@@ -521,10 +702,12 @@ function getPromptConfig(settings: AISettings) {
         systemPrompt: DEFAULT_SYSTEM_PROMPT,
         feedbackTypes: DEFAULT_FEEDBACK_TYPES,
       };
-      return generateSystemPrompt(
-        promptConfig.systemPrompt,
-        ctx,
-        promptConfig.feedbackTypes
+      return (
+        generateSystemPrompt(
+          promptConfig.systemPrompt,
+          ctx,
+          promptConfig.feedbackTypes
+        ) + buildTipStyleInstructions(getTipStyle(settings))
       );
     },
   };
@@ -548,12 +731,32 @@ function extractCurrentSection(content: string, currentH2: string): string {
   return content.slice(-2000);
 }
 
+// Enforce the configured maximum number of tips on any provider's response
+function applyTipLimit<T extends { feedback?: unknown[] }>(response: T, maxTips: number): T {
+  if (response && Array.isArray(response.feedback)) {
+    response.feedback = response.feedback.slice(0, maxTips);
+  }
+  return response;
+}
+
 ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h2: string; allH2s: string[] }) => {
   const settings = loadSettings();
+
+  if (typeof content !== 'string') {
+    return { feedback: [], error: 'Invalid content' };
+  }
+  const ctx = {
+    h1: typeof context?.h1 === 'string' ? context.h1 : '',
+    h2: typeof context?.h2 === 'string' ? context.h2 : '',
+    allH2s: Array.isArray(context?.allH2s)
+      ? context.allH2s.filter((s): s is string => typeof s === 'string')
+      : [],
+  };
 
   // Get prompt configuration from settings
   const isSmallModel = settings.provider === 'builtin';
   const promptConfig = getPromptConfig(settings);
+  const maxTips = clampMaxTips(getTipStyle(settings).maxTips);
 
   // Adaptive chunking for built-in model:
   // - Start with full content
@@ -561,14 +764,14 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
   let analysisContent = content;
   if (isSmallModel && useAdaptiveChunking) {
     console.log('[AI] Using adaptive chunking (previous response was slow)');
-    analysisContent = extractCurrentSection(content, context.h2);
+    analysisContent = extractCurrentSection(content, ctx.h2);
     analysisContent = truncateToTokenBudget(analysisContent, promptConfig.maxContentTokens);
   } else if (isSmallModel) {
     // Use full content but with a reasonable limit for context window
     analysisContent = truncateToTokenBudget(content, 1500);
   }
 
-  const systemPrompt = promptConfig.generatePrompt(context);
+  const systemPrompt = promptConfig.generatePrompt(ctx);
   const userPrompt = `Analyze:\n\n${analysisContent}`;
 
   try {
@@ -615,7 +818,8 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         // Graceful fallback: if Mistral API key exists, try that
         if (settings.mistralApiKey) {
           console.log('[AI] Falling back to Mistral API...');
-          return await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${content}`);
+          const fallback = await callMistralAPI(settings.mistralApiKey, systemPrompt, `Analyze:\n\n${content}`);
+          return applyTipLimit(fallback, maxTips);
         }
         return { feedback: [], error: result.error };
       }
@@ -667,7 +871,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
             });
           }
 
-          return ensureSuggestions(parsed);
+          return applyTipLimit(ensureSuggestions(parsed), maxTips);
         }
         console.warn('[AI] No JSON found in response:', responseText.slice(0, 200));
         return { feedback: [] };
@@ -676,7 +880,8 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         return { feedback: [] };
       }
     } else if (settings.provider === 'ollama') {
-      const response = await fetch(`${settings.ollamaUrl}/api/generate`, {
+      const ollamaBase = sanitizeHttpBaseUrl(settings.ollamaUrl, 'http://localhost:11434');
+      const response = await fetch(`${ollamaBase}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -685,6 +890,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
           stream: false,
           format: 'json',
         }),
+        signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -694,7 +900,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
       const data = await response.json() as { response: string };
       try {
         const parsed = JSON.parse(data.response);
-        return ensureSuggestions(parsed);
+        return applyTipLimit(ensureSuggestions(parsed), maxTips);
       } catch {
         return { feedback: [] };
       }
@@ -714,6 +920,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
           ],
           response_format: { type: 'json_object' },
         }),
+        signal: AbortSignal.timeout(LLM_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -723,7 +930,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
       const data = await response.json() as { choices: { message: { content: string } }[] };
       try {
         const parsed = JSON.parse(data.choices[0].message.content);
-        return ensureSuggestions(parsed);
+        return applyTipLimit(ensureSuggestions(parsed), maxTips);
       } catch {
         return { feedback: [] };
       }
@@ -772,7 +979,10 @@ ipcMain.handle('ai:checkConnection', async () => {
       const initResult = await initializeLocalLLM();
       return initResult.success;
     } else if (settings.provider === 'ollama') {
-      const response = await fetch(`${settings.ollamaUrl}/api/tags`);
+      const ollamaBase = sanitizeHttpBaseUrl(settings.ollamaUrl, 'http://localhost:11434');
+      const response = await fetch(`${ollamaBase}/api/tags`, {
+        signal: AbortSignal.timeout(5000),
+      });
       return response.ok;
     } else {
       // For Mistral, just check if API key is set
@@ -800,22 +1010,23 @@ ipcMain.handle('ai:getStatus', async () => {
 // SPEECH-TO-TEXT (Transcription via Mistral Voxtral)
 // ═══════════════════════════════════════════════════════════════════════════
 
+const AUDIO_MIME_TYPES: Record<string, string> = {
+  '.mp3': 'audio/mpeg',
+  '.wav': 'audio/wav',
+  '.wave': 'audio/wav',
+  '.m4a': 'audio/mp4',
+  '.flac': 'audio/flac',
+  '.ogg': 'audio/ogg',
+  '.opus': 'audio/opus',
+  '.wma': 'audio/x-ms-wma',
+  '.aac': 'audio/aac',
+  '.webm': 'audio/webm',
+};
+
 // Get MIME type from file extension
 function getAudioMimeType(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
-  const mimeTypes: Record<string, string> = {
-    '.mp3': 'audio/mpeg',
-    '.wav': 'audio/wav',
-    '.wave': 'audio/wav',
-    '.m4a': 'audio/mp4',
-    '.flac': 'audio/flac',
-    '.ogg': 'audio/ogg',
-    '.opus': 'audio/opus',
-    '.wma': 'audio/x-ms-wma',
-    '.aac': 'audio/aac',
-    '.webm': 'audio/webm',
-  };
-  return mimeTypes[ext] || 'audio/mpeg';
+  return AUDIO_MIME_TYPES[ext] || 'audio/mpeg';
 }
 
 // Format seconds as MM:SS or HH:MM:SS
@@ -844,7 +1055,7 @@ async function transcribeMistral(
   apiKey: string,
   stt: SttSettings
 ): Promise<TranscriptionResult> {
-  const fileBuffer = fs.readFileSync(filePath);
+  const fileBuffer = await fsp.readFile(filePath);
   const mimeType = getAudioMimeType(filePath);
   const fileName = path.basename(filePath);
 
@@ -872,6 +1083,7 @@ async function transcribeMistral(
     method: 'POST',
     headers,
     body: formData,
+    signal: AbortSignal.timeout(STT_FETCH_TIMEOUT_MS),
   });
 
   if (!response.ok) {
@@ -898,7 +1110,7 @@ async function transcribeQwen(
   baseUrl: string,
   stt: SttSettings
 ): Promise<TranscriptionResult> {
-  const fileBuffer = fs.readFileSync(filePath);
+  const fileBuffer = await fsp.readFile(filePath);
   const mimeType = getAudioMimeType(filePath);
   const fileName = path.basename(filePath);
 
@@ -925,6 +1137,7 @@ async function transcribeQwen(
       const response = await fetch(endpoint, {
         method: 'POST',
         body: formData,
+        signal: AbortSignal.timeout(STT_FETCH_TIMEOUT_MS),
       });
 
       if (!response.ok) {
@@ -953,9 +1166,30 @@ ipcMain.handle('stt:transcribe', async (_, filePath: string): Promise<Transcript
   const settings = loadSettings();
   const stt = settings.stt || getDefaultSettings().stt;
 
-  // Validate file exists
-  if (!fs.existsSync(filePath)) {
+  // Validate the path before touching the filesystem: absolute, audio
+  // extension, regular file, bounded size
+  if (typeof filePath !== 'string' || !path.isAbsolute(filePath)) {
+    return { text: '', error: 'Invalid file path' };
+  }
+  const ext = path.extname(filePath).toLowerCase();
+  if (!(ext in AUDIO_MIME_TYPES)) {
+    return { text: '', error: `Unsupported audio format: ${ext || 'unknown'}` };
+  }
+
+  let stats: fs.Stats;
+  try {
+    stats = await fsp.stat(filePath);
+  } catch {
     return { text: '', error: `File not found: ${filePath}` };
+  }
+  if (!stats.isFile()) {
+    return { text: '', error: 'Not a file' };
+  }
+  if (stats.size > MAX_AUDIO_FILE_BYTES) {
+    return {
+      text: '',
+      error: `Audio file too large (max ${Math.round(MAX_AUDIO_FILE_BYTES / (1024 * 1024))} MB)`,
+    };
   }
 
   try {
@@ -974,7 +1208,7 @@ ipcMain.handle('stt:transcribe', async (_, filePath: string): Promise<Transcript
         stt
       );
     } else if (stt.sttProvider === 'mistral-local') {
-      const baseUrl = stt.localSttUrl.replace(/\/$/, '');
+      const baseUrl = sanitizeHttpBaseUrl(stt.localSttUrl, 'http://localhost:8000');
       result = await transcribeMistral(
         filePath,
         `${baseUrl}/v1/audio/transcriptions`,
@@ -983,7 +1217,7 @@ ipcMain.handle('stt:transcribe', async (_, filePath: string): Promise<Transcript
       );
     } else {
       // qwen-edge: Qwen3-ASR-0.6B local server
-      const baseUrl = (stt.qwenSttUrl || 'http://localhost:9000').replace(/\/$/, '');
+      const baseUrl = sanitizeHttpBaseUrl(stt.qwenSttUrl, 'http://localhost:9000');
       result = await transcribeQwen(filePath, baseUrl, stt);
     }
 
@@ -996,7 +1230,9 @@ ipcMain.handle('stt:transcribe', async (_, filePath: string): Promise<Transcript
   }
 });
 
-// Format transcription result as HTML for insertion into the editor
+// Format transcription result as HTML for insertion into the editor.
+// All transcript text is HTML-escaped: it comes from external services and
+// must never be able to inject markup into the editor.
 ipcMain.handle('stt:formatTranscript', async (_, result: TranscriptionResult, fileName: string): Promise<string> => {
   const settings = loadSettings();
   const stt = settings.stt || getDefaultSettings().stt;
@@ -1004,32 +1240,36 @@ ipcMain.handle('stt:formatTranscript', async (_, result: TranscriptionResult, fi
   let html = '';
 
   // Header
-  html += `<h3>Transcript: ${fileName.replace(/\.[^/.]+$/, '')}</h3>`;
+  const safeTitle = escapeHtml(String(fileName || 'Audio').replace(/\.[^/.]+$/, ''));
+  html += `<h3>Transcript: ${safeTitle}</h3>`;
+
+  const segments = Array.isArray(result?.segments) ? result.segments : undefined;
 
   // If we have segments with speakers (diarization enabled)
-  if (stt.sttDiarize && result.segments && result.segments.some(s => s.speaker)) {
-    for (const segment of result.segments) {
+  if (stt.sttDiarize && segments && segments.some(s => s.speaker)) {
+    for (const segment of segments) {
       const timestamp = formatTimestamp(segment.start);
-      const speaker = segment.speaker || 'Speaker';
-      html += `<p><strong>[${timestamp}] ${speaker}:</strong> ${segment.text}</p>`;
+      const speaker = escapeHtml(segment.speaker || 'Speaker');
+      html += `<p><strong>[${timestamp}] ${speaker}:</strong> ${escapeHtml(segment.text)}</p>`;
     }
   }
   // If we have segments with timestamps (no diarization)
-  else if (stt.sttTimestamps && result.segments && result.segments.length > 0) {
-    for (const segment of result.segments) {
+  else if (stt.sttTimestamps && segments && segments.length > 0) {
+    for (const segment of segments) {
       const timestamp = formatTimestamp(segment.start);
-      html += `<p><strong>[${timestamp}]</strong> ${segment.text}</p>`;
+      html += `<p><strong>[${timestamp}]</strong> ${escapeHtml(segment.text)}</p>`;
     }
   }
   // Plain text fallback
   else {
+    const text = typeof result?.text === 'string' ? result.text : '';
     // Split into paragraphs at natural breaks
-    const paragraphs = result.text.split(/\n+/).filter(p => p.trim());
+    const paragraphs = text.split(/\n+/).filter(p => p.trim());
     for (const para of paragraphs) {
-      html += `<p>${para}</p>`;
+      html += `<p>${escapeHtml(para)}</p>`;
     }
     if (paragraphs.length === 0) {
-      html += `<p>${result.text}</p>`;
+      html += `<p>${escapeHtml(text)}</p>`;
     }
   }
 
@@ -1053,7 +1293,7 @@ ipcMain.handle('stt:checkAvailable', async (): Promise<{ available: boolean; err
     return { available: true };
   } else if (stt.sttProvider === 'mistral-local') {
     try {
-      const baseUrl = stt.localSttUrl.replace(/\/$/, '');
+      const baseUrl = sanitizeHttpBaseUrl(stt.localSttUrl, 'http://localhost:8000');
       const response = await fetch(`${baseUrl}/v1/models`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000),
@@ -1064,8 +1304,8 @@ ipcMain.handle('stt:checkAvailable', async (): Promise<{ available: boolean; err
     }
   } else {
     // qwen-edge: try to reach the Qwen3-ASR server
-    const baseUrl = (stt.qwenSttUrl || 'http://localhost:9000').replace(/\/$/, '');
     try {
+      const baseUrl = sanitizeHttpBaseUrl(stt.qwenSttUrl, 'http://localhost:9000');
       // Try /health, /v1/models, or just a GET to the base URL
       const endpoints = [`${baseUrl}/health`, `${baseUrl}/v1/models`, baseUrl];
       for (const endpoint of endpoints) {
@@ -1081,7 +1321,7 @@ ipcMain.handle('stt:checkAvailable', async (): Promise<{ available: boolean; err
       }
       return { available: false, error: `Cannot reach Qwen3-ASR server at ${baseUrl}` };
     } catch {
-      return { available: false, error: `Cannot reach Qwen3-ASR server at ${baseUrl}` };
+      return { available: false, error: `Cannot reach Qwen3-ASR server at ${stt.qwenSttUrl}` };
     }
   }
 });

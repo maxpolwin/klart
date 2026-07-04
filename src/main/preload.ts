@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 interface Note {
   id: string;
@@ -17,9 +17,18 @@ interface FeedbackTypeConfig {
   enabled: boolean;
 }
 
+interface TipStyleConfig {
+  detailLevel: 'brief' | 'standard' | 'detailed';
+  tone: 'neutral' | 'academic' | 'direct' | 'encouraging';
+  maxTips: number;
+  language: string;
+  customGuidance: string;
+}
+
 interface PromptConfig {
   systemPrompt: string;
   feedbackTypes: FeedbackTypeConfig[];
+  tipStyle?: TipStyleConfig;
 }
 
 interface SttSettings {
@@ -118,6 +127,9 @@ const api = {
       ipcRenderer.invoke('spellcheck:getCurrentLanguages'),
   },
   stt: {
+    // File.path was removed from Electron's File objects; webUtils is the
+    // supported way to resolve a dropped file to a filesystem path.
+    getPathForFile: (file: File): string => webUtils.getPathForFile(file),
     transcribe: (filePath: string): Promise<TranscriptionResult> =>
       ipcRenderer.invoke('stt:transcribe', filePath),
     formatTranscript: (result: TranscriptionResult, fileName: string): Promise<string> =>

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 import SettingsModal from './components/SettingsModal';
@@ -30,6 +30,7 @@ declare global {
         getCurrentLanguages: () => Promise<string[]>;
       };
       stt: {
+        getPathForFile: (file: File) => string;
         transcribe: (filePath: string) => Promise<TranscriptionResult>;
         formatTranscript: (result: TranscriptionResult, fileName: string) => Promise<string>;
         checkAvailable: () => Promise<{ available: boolean; error?: string }>;
@@ -41,6 +42,14 @@ declare global {
   }
 }
 
+const SEARCH_DEBOUNCE_MS = 250;
+
+function sortNotes(notes: Note[]): Note[] {
+  return [...notes].sort(
+    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+  );
+}
+
 function App() {
   const [notes, setNotes] = useState<Note[]>([]);
   const [activeNote, setActiveNote] = useState<Note | null>(null);
@@ -48,10 +57,13 @@ function App() {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [aiConnected, setAiConnected] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [settings, setSettings] = useState<AISettings | null>(null);
+  const searchTimeoutRef = useRef<number | null>(null);
 
   // Load notes on mount
   useEffect(() => {
     loadNotes();
+    loadSettings();
     checkAiConnection();
   }, []);
 
@@ -60,52 +72,71 @@ function App() {
     setNotes(loadedNotes);
   };
 
+  const loadSettings = async () => {
+    const loaded = await window.api.settings.get();
+    setSettings(loaded);
+  };
+
   const checkAiConnection = async () => {
     const connected = await window.api.ai.checkConnection();
     setAiConnected(connected);
   };
 
-  const handleSearch = async (query: string) => {
+  const handleSearch = useCallback((query: string) => {
     setSearchQuery(query);
-    if (query.trim()) {
-      const results = await window.api.notes.search(query);
-      setNotes(results);
-    } else {
-      loadNotes();
+    if (searchTimeoutRef.current !== null) {
+      window.clearTimeout(searchTimeoutRef.current);
     }
-  };
+    searchTimeoutRef.current = window.setTimeout(async () => {
+      if (query.trim()) {
+        const results = await window.api.notes.search(query);
+        setNotes(results);
+      } else {
+        const loadedNotes = await window.api.notes.list();
+        setNotes(loadedNotes);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+  }, []);
 
-  const handleCreateNote = async () => {
+  const handleCreateNote = useCallback(async () => {
     const newNote = await window.api.notes.create();
-    await loadNotes();
+    setNotes((prev) => [newNote, ...prev]);
     setActiveNote(newNote);
-  };
+  }, []);
 
-  const handleSelectNote = async (note: Note) => {
+  const handleSelectNote = useCallback(async (note: Note) => {
     // Reload the note to get latest content
     const fullNote = await window.api.notes.get(note.id);
     if (fullNote) {
       setActiveNote(fullNote);
     }
-  };
+  }, []);
 
   const handleSaveNote = useCallback(async (note: Note) => {
     const savedNote = await window.api.notes.save(note);
     setActiveNote(savedNote);
-    await loadNotes();
+    // Update the list in place instead of re-fetching every note from disk
+    setNotes((prev) => {
+      const exists = prev.some((n) => n.id === savedNote.id);
+      const next = exists
+        ? prev.map((n) => (n.id === savedNote.id ? savedNote : n))
+        : [savedNote, ...prev];
+      return sortNotes(next);
+    });
   }, []);
 
-  const handleDeleteNote = async (noteId: string) => {
+  const handleDeleteNote = useCallback(async (noteId: string) => {
     await window.api.notes.delete(noteId);
-    if (activeNote?.id === noteId) {
-      setActiveNote(null);
-    }
-    await loadNotes();
-  };
+    setActiveNote((prev) => (prev?.id === noteId ? null : prev));
+    setNotes((prev) => prev.filter((n) => n.id !== noteId));
+  }, []);
 
-  const handleSettingsSaved = () => {
+  const handleOpenSettings = useCallback(() => setIsSettingsOpen(true), []);
+
+  const handleSettingsSaved = useCallback(() => {
+    loadSettings();
     checkAiConnection();
-  };
+  }, []);
 
   return (
     <div className="app">
@@ -116,7 +147,7 @@ function App() {
         onSearch={handleSearch}
         onSelectNote={handleSelectNote}
         onCreateNote={handleCreateNote}
-        onOpenSettings={() => setIsSettingsOpen(true)}
+        onOpenSettings={handleOpenSettings}
       />
       <div className="editor-area">
         {activeNote ? (
@@ -127,7 +158,8 @@ function App() {
             aiConnected={aiConnected}
             isAnalyzing={isAnalyzing}
             setIsAnalyzing={setIsAnalyzing}
-            onOpenSettings={() => setIsSettingsOpen(true)}
+            onOpenSettings={handleOpenSettings}
+            feedbackTypes={settings?.promptConfig?.feedbackTypes}
           />
         ) : (
           <EmptyState onCreateNote={handleCreateNote} />

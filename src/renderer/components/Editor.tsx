@@ -3,8 +3,8 @@ import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Placeholder from '@tiptap/extension-placeholder';
 import Heading from '@tiptap/extension-heading';
-import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle } from 'lucide-react';
-import { Note, FeedbackItem, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
+import { Trash2, Eye, EyeOff, Mic, Loader2, AlertCircle, Sparkles, Zap, ZapOff } from 'lucide-react';
+import { Note, FeedbackItem, FeedbackTypeConfig, SUPPORTED_AUDIO_EXTENSIONS } from '../../shared/types';
 import FeedbackPanel from './FeedbackPanel';
 
 interface EditorProps {
@@ -15,7 +15,10 @@ interface EditorProps {
   isAnalyzing: boolean;
   setIsAnalyzing: (analyzing: boolean) => void;
   onOpenSettings: () => void;
+  feedbackTypes?: FeedbackTypeConfig[];
 }
+
+const AUTO_ANALYZE_STORAGE_KEY = 'noschen.autoAnalyze';
 
 function extractTitle(html: string): string {
   // Try to extract H1 content as title
@@ -52,12 +55,19 @@ function Editor({
   isAnalyzing,
   setIsAnalyzing,
   onOpenSettings,
+  feedbackTypes,
 }: EditorProps) {
   const [feedback, setFeedback] = useState<FeedbackItem[]>([]);
   const [showRejected, setShowRejected] = useState(false);
   const [lastContent, setLastContent] = useState(note.content);
+  const [analysisError, setAnalysisError] = useState<string | null>(null);
+  const [autoAnalyze, setAutoAnalyze] = useState(
+    () => localStorage.getItem(AUTO_ANALYZE_STORAGE_KEY) !== 'off'
+  );
   const analysisTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Incremented per analysis request so stale responses are dropped
+  const analysisRunRef = useRef(0);
 
   // Drag-and-drop transcription state
   const [isDragOver, setIsDragOver] = useState(false);
@@ -94,6 +104,7 @@ function Editor({
       attributes: {
         class: 'prose prose-invert max-w-none',
         spellcheck: 'true',
+        'aria-label': 'Note editor',
       },
     },
   });
@@ -104,8 +115,70 @@ function Editor({
       editor.commands.setContent(note.content);
       setLastContent(note.content);
       setFeedback([]);
+      setAnalysisError(null);
     }
   }, [note.id, editor]);
+
+  const toggleAutoAnalyze = useCallback(() => {
+    setAutoAnalyze((prev) => {
+      const next = !prev;
+      localStorage.setItem(AUTO_ANALYZE_STORAGE_KEY, next ? 'on' : 'off');
+      if (!next && analysisTimeoutRef.current) {
+        clearTimeout(analysisTimeoutRef.current);
+      }
+      return next;
+    });
+  }, []);
+
+  const analyzeContent = useCallback(async (html: string) => {
+    const runId = ++analysisRunRef.current;
+    setIsAnalyzing(true);
+    setAnalysisError(null);
+
+    const { h1, h2s } = extractHeadings(html);
+    const currentH2 = h2s[h2s.length - 1] || ''; // Use last H2 as current section
+
+    // Get plain text content for analysis
+    const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
+
+    try {
+      const response = await window.api.ai.analyze(plainText, {
+        h1,
+        h2: currentH2,
+        allH2s: h2s,
+      });
+
+      // A newer analysis started while this one was running - drop this result
+      if (runId !== analysisRunRef.current) return;
+
+      if (response.error) {
+        setAnalysisError(response.error);
+      }
+
+      if (response.feedback && response.feedback.length > 0) {
+        const newFeedback: FeedbackItem[] = response.feedback.map((f, i) => ({
+          ...f,
+          id: `${Date.now()}-${i}`,
+          status: 'active' as const,
+        }));
+
+        // Merge with existing feedback, avoiding duplicates
+        setFeedback((prev) => {
+          const existing = prev.filter((p) => p.status !== 'active');
+          return [...existing, ...newFeedback];
+        });
+      }
+    } catch (error) {
+      if (runId === analysisRunRef.current) {
+        console.error('Analysis failed:', error);
+        setAnalysisError('Analysis failed. Check your AI settings.');
+      }
+    }
+
+    if (runId === analysisRunRef.current) {
+      setIsAnalyzing(false);
+    }
+  }, [setIsAnalyzing]);
 
   const handleContentChange = useCallback(
     (html: string) => {
@@ -123,7 +196,7 @@ function Editor({
         clearTimeout(analysisTimeoutRef.current);
       }
 
-      if (aiConnected && html !== lastContent && html.trim().length > 50) {
+      if (autoAnalyze && aiConnected && html !== lastContent && html.trim().length > 50) {
         analysisTimeoutRef.current = setTimeout(() => {
           analyzeContent(html);
         }, 2000);
@@ -131,46 +204,18 @@ function Editor({
 
       setLastContent(html);
     },
-    [note, onSave, aiConnected, lastContent]
+    [note, onSave, aiConnected, autoAnalyze, lastContent, analyzeContent]
   );
 
-  const analyzeContent = async (html: string) => {
-    setIsAnalyzing(true);
-
-    const { h1, h2s } = extractHeadings(html);
-    const currentH2 = h2s[h2s.length - 1] || ''; // Use last H2 as current section
-
-    // Get plain text content for analysis
-    const plainText = html.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim();
-
-    try {
-      const response = await window.api.ai.analyze(plainText, {
-        h1,
-        h2: currentH2,
-        allH2s: h2s,
-      });
-
-      if (response.feedback && response.feedback.length > 0) {
-        const newFeedback: FeedbackItem[] = response.feedback.map((f, i) => ({
-          ...f,
-          id: `${Date.now()}-${i}`,
-          status: 'active' as const,
-        }));
-
-        // Merge with existing feedback, avoiding duplicates
-        setFeedback((prev) => {
-          const existing = prev.filter((p) => p.status !== 'active');
-          return [...existing, ...newFeedback];
-        });
-      }
-    } catch (error) {
-      console.error('Analysis failed:', error);
+  const handleAnalyzeNow = useCallback(() => {
+    if (!editor || isAnalyzing) return;
+    if (analysisTimeoutRef.current) {
+      clearTimeout(analysisTimeoutRef.current);
     }
+    analyzeContent(editor.getHTML());
+  }, [editor, isAnalyzing, analyzeContent]);
 
-    setIsAnalyzing(false);
-  };
-
-  const handleAcceptFeedback = (feedbackId: string) => {
+  const handleAcceptFeedback = (feedbackId: string, editedSuggestion?: string) => {
     const feedbackItem = feedback.find((f) => f.id === feedbackId);
     if (!feedbackItem || !editor) return;
 
@@ -179,7 +224,7 @@ function Editor({
     );
 
     // Process the suggestion: convert escaped newlines
-    const processedSuggestion = (feedbackItem.suggestion || feedbackItem.text)
+    const processedSuggestion = (editedSuggestion ?? feedbackItem.suggestion ?? feedbackItem.text)
       .replace(/\\n/g, '\n')
       .trim();
 
@@ -374,8 +419,14 @@ function Editor({
 
     try {
       for (const file of audioFiles) {
-        // Electron provides a `path` property on dropped File objects
-        const filePath = (file as File & { path?: string }).path;
+        // Resolve the dropped file to a filesystem path via the preload bridge
+        // (File.path was removed from recent Electron versions)
+        let filePath = '';
+        try {
+          filePath = window.api.stt.getPathForFile(file);
+        } catch {
+          filePath = (file as File & { path?: string }).path || '';
+        }
         if (!filePath) {
           setTranscriptionError('Could not read file path. Please try again.');
           continue;
@@ -416,14 +467,23 @@ function Editor({
     }
   }, [transcriptionError]);
 
+  // Auto-dismiss analysis error after 10 seconds
+  useEffect(() => {
+    if (analysisError) {
+      const timeout = setTimeout(() => setAnalysisError(null), 10000);
+      return () => clearTimeout(timeout);
+    }
+  }, [analysisError]);
+
   return (
     <>
       <div className="editor-header">
-        <div className="ai-status">
+        <div className="ai-status" role="status" aria-live="polite">
           <div
             className={`ai-status-dot ${
               aiConnected ? (isAnalyzing ? 'analyzing' : 'connected') : ''
             }`}
+            aria-hidden="true"
           />
           <span>
             {aiConnected
@@ -446,7 +506,25 @@ function Editor({
           )}
         </div>
         <div className="editor-header-actions">
-          <button className="editor-header-btn danger" onClick={handleDeleteConfirm}>
+          <button
+            className={`editor-header-btn ${autoAnalyze ? 'toggled-on' : ''}`}
+            onClick={toggleAutoAnalyze}
+            aria-pressed={autoAnalyze}
+            title={autoAnalyze ? 'Auto-analysis is on: tips appear while you write' : 'Auto-analysis is off: use "Analyze" to get tips on demand'}
+          >
+            {autoAnalyze ? <Zap size={14} /> : <ZapOff size={14} />}
+            Auto
+          </button>
+          <button
+            className="editor-header-btn"
+            onClick={handleAnalyzeNow}
+            disabled={!aiConnected || isAnalyzing}
+            title="Analyze the note now"
+          >
+            {isAnalyzing ? <Loader2 size={14} className="spin" /> : <Sparkles size={14} />}
+            Analyze
+          </button>
+          <button className="editor-header-btn danger" onClick={handleDeleteConfirm} title="Delete this note">
             <Trash2 size={14} />
             Delete
           </button>
@@ -472,7 +550,7 @@ function Editor({
 
         {/* Transcription progress indicator */}
         {isTranscribing && (
-          <div className="transcription-progress">
+          <div className="transcription-progress" role="status">
             <Loader2 size={16} className="spin" />
             <span>Transcribing audio...</span>
           </div>
@@ -480,10 +558,19 @@ function Editor({
 
         {/* Transcription error */}
         {transcriptionError && (
-          <div className="transcription-error">
+          <div className="transcription-error" role="alert">
             <AlertCircle size={14} />
             <span>{transcriptionError}</span>
-            <button onClick={() => setTranscriptionError(null)}>&times;</button>
+            <button onClick={() => setTranscriptionError(null)} aria-label="Dismiss error">&times;</button>
+          </div>
+        )}
+
+        {/* AI analysis error */}
+        {analysisError && (
+          <div className="transcription-error" role="alert">
+            <AlertCircle size={14} />
+            <span>{analysisError}</span>
+            <button onClick={() => setAnalysisError(null)} aria-label="Dismiss error">&times;</button>
           </div>
         )}
 
@@ -495,6 +582,7 @@ function Editor({
             onAccept={handleAcceptFeedback}
             onReject={handleRejectFeedback}
             title="AI Suggestions"
+            typeConfigs={feedbackTypes}
           />
         )}
 
@@ -503,6 +591,7 @@ function Editor({
             <button
               className="feedback-panel-toggle"
               onClick={() => setShowRejected(!showRejected)}
+              aria-expanded={showRejected}
               style={{
                 display: 'flex',
                 alignItems: 'center',
@@ -523,6 +612,7 @@ function Editor({
                 onReject={() => {}}
                 title="Previously Rejected"
                 isRejectedPanel
+                typeConfigs={feedbackTypes}
               />
             )}
           </div>

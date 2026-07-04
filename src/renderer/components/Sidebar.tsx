@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import { Search, Plus, Settings, FileText } from 'lucide-react';
 import { Note } from '../../shared/types';
 
@@ -48,28 +49,29 @@ function Sidebar({
   onOpenSettings,
 }: SidebarProps) {
   return (
-    <div className="sidebar">
+    <nav className="sidebar" aria-label="Notes">
       <div className="sidebar-header">
         <div className="sidebar-title">
-          <FileText size={24} />
+          <FileText size={24} aria-hidden="true" />
           Noschen
         </div>
         <div className="search-wrapper">
-          <Search size={16} />
+          <Search size={16} aria-hidden="true" />
           <input
             type="text"
             className="search-input"
             placeholder="Search notes..."
+            aria-label="Search notes"
             value={searchQuery}
             onChange={(e) => onSearch(e.target.value)}
           />
         </div>
         <button className="new-note-btn" onClick={onCreateNote}>
-          <Plus size={16} />
+          <Plus size={16} aria-hidden="true" />
           New Note
         </button>
       </div>
-      <div className="note-list">
+      <div className="note-list" role="listbox" aria-label="Note list">
         {notes.length === 0 ? (
           <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)' }}>
             {searchQuery ? 'No notes found' : 'No notes yet'}
@@ -80,6 +82,15 @@ function Sidebar({
               key={note.id}
               className={`note-item ${activeNoteId === note.id ? 'active' : ''}`}
               onClick={() => onSelectNote(note)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  onSelectNote(note);
+                }
+              }}
+              role="option"
+              aria-selected={activeNoteId === note.id}
+              tabIndex={0}
             >
               <div className="note-item-title">{note.title || 'Untitled Note'}</div>
               <div className="note-item-date">{formatDate(note.updatedAt)}</div>
@@ -94,12 +105,12 @@ function Sidebar({
           style={{ width: '100%', justifyContent: 'center' }}
           onClick={onOpenSettings}
         >
-          <Settings size={14} />
+          <Settings size={14} aria-hidden="true" />
           AI Settings
         </button>
       </div>
-    </div>
+    </nav>
   );
 }
 
-export default Sidebar;
+export default memo(Sidebar);
