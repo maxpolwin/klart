@@ -42,6 +42,7 @@ interface SttSettings {
 
 interface AISettings {
   provider: 'builtin' | 'ollama' | 'mistral';
+  builtinModel: 'qwen2.5-0.5b' | 'phi-3-mini-128k';
   ollamaModel: string;
   ollamaUrl: string;
   mistralApiKey: string;
@@ -67,10 +68,11 @@ interface LLMStatus {
     initialized: boolean;
     initializing: boolean;
     error: string | null;
+    modelId: string | null;
+    lastContextSize: number | null;
     gpuAcceleration: {
       enabled: boolean;
       type: string;
-      layers: number;
     };
   };
   modelPath: string | null;
@@ -89,6 +91,36 @@ interface AIContext {
   h1: string;
   h2: string;
   allH2s: string[];
+}
+
+interface DownloadProgress {
+  modelId: string;
+  downloadedBytes: number;
+  totalBytes: number;
+}
+
+// Registry entry + this machine's state; matches BuiltinModelInfo in shared/types
+interface BuiltinModelInfo {
+  id: string;
+  label: string;
+  paramCount: string;
+  filename: string;
+  downloadUrl: string;
+  approxDownloadSizeMB: number;
+  exactSizeBytes: number | null;
+  sha256: string | null;
+  nativeMaxContext: number;
+  uiMaxContext: number;
+  recommendedContextSize: number;
+  recommendedMaxTokens: number;
+  recommendedBatchSize: number;
+  kvBytesPerToken: number;
+  contentBudgetTokens: number;
+  description: string;
+  effectiveMaxContext: number;
+  installed: boolean;
+  deletable: boolean;
+  download: DownloadProgress | null;
 }
 
 interface FeedbackItem {
@@ -129,6 +161,20 @@ const api = {
       ipcRenderer.invoke('ai:analyze', content, context),
     checkConnection: (): Promise<boolean> => ipcRenderer.invoke('ai:checkConnection'),
     getStatus: (): Promise<LLMStatus> => ipcRenderer.invoke('ai:getStatus'),
+    getBuiltinModels: (): Promise<BuiltinModelInfo[]> => ipcRenderer.invoke('ai:getBuiltinModels'),
+    downloadBuiltinModel: (modelId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('ai:downloadBuiltinModel', modelId),
+    cancelModelDownload: (modelId: string): Promise<boolean> =>
+      ipcRenderer.invoke('ai:cancelModelDownload', modelId),
+    deleteBuiltinModel: (modelId: string): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('ai:deleteBuiltinModel', modelId),
+    // Push-style progress events; returns an unsubscribe function so
+    // components can clean up their listener on unmount.
+    onDownloadProgress: (callback: (progress: DownloadProgress) => void): (() => void) => {
+      const listener = (_event: Electron.IpcRendererEvent, progress: DownloadProgress) => callback(progress);
+      ipcRenderer.on('ai:downloadProgress', listener);
+      return () => ipcRenderer.removeListener('ai:downloadProgress', listener);
+    },
   },
   spellcheck: {
     getAvailableLanguages: (): Promise<SpellcheckLanguage[]> =>

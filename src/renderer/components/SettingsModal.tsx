@@ -1,6 +1,11 @@
 import { useState, useEffect, useMemo } from 'react';
-import { X, Languages, Check, Plus, Trash2, RotateCcw, MessageSquare, ChevronDown, ChevronRight, Mic, Shield, ShieldAlert } from 'lucide-react';
-import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_TIP_STYLE, TIP_LANGUAGE_OPTIONS, TipStyleConfig, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
+import { X, Languages, Check, Plus, Trash2, RotateCcw, MessageSquare, ChevronDown, ChevronRight, Mic, Shield, ShieldAlert, Download } from 'lucide-react';
+import { AISettings, BuiltinModelId, BuiltinModelInfo, BUILTIN_MODELS, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_TIP_STYLE, TIP_LANGUAGE_OPTIONS, TipStyleConfig, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
+
+function formatBytes(bytes: number): string {
+  if (bytes >= 1024 ** 3) return `${(bytes / 1024 ** 3).toFixed(1)} GB`;
+  return `${Math.round(bytes / 1024 ** 2)} MB`;
+}
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -10,6 +15,7 @@ interface SettingsModalProps {
 function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   const [settings, setSettings] = useState<AISettings>({
     provider: 'builtin',
+    builtinModel: 'qwen2.5-0.5b',
     ollamaModel: 'llama3.2',
     ollamaUrl: 'http://localhost:11434',
     mistralApiKey: '',
@@ -42,17 +48,101 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   const [activeTab, setActiveTab] = useState<'ai' | 'editor' | 'prompts' | 'transcription'>('ai');
   const [encryptionAvailable, setEncryptionAvailable] = useState<boolean | null>(null);
 
+  // Built-in model registry state (installed / RAM cap / in-flight downloads)
+  const [builtinModels, setBuiltinModels] = useState<BuiltinModelInfo[]>([]);
+  const [activeDownloads, setActiveDownloads] = useState<Record<string, { downloadedBytes: number; totalBytes: number }>>({});
+  const [downloadError, setDownloadError] = useState<string | null>(null);
+
+  const refreshBuiltinModels = async () => {
+    try {
+      const models = await window.api.ai.getBuiltinModels();
+      setBuiltinModels(models);
+      // Re-attach to downloads already running in the main process
+      // (e.g. the modal was closed and reopened mid-download).
+      setActiveDownloads((prev) => {
+        const next = { ...prev };
+        for (const m of models) {
+          if (m.download) {
+            next[m.id] = { downloadedBytes: m.download.downloadedBytes, totalBytes: m.download.totalBytes };
+          }
+        }
+        return next;
+      });
+    } catch (error) {
+      console.error('[Settings] Failed to load builtin models:', error);
+    }
+  };
+
   useEffect(() => {
     loadSettings();
     loadAvailableLanguages();
     loadEncryptionStatus();
+    refreshBuiltinModels();
+    const unsubscribe = window.api.ai.onDownloadProgress((progress) => {
+      setActiveDownloads((prev) => ({
+        ...prev,
+        [progress.modelId]: { downloadedBytes: progress.downloadedBytes, totalBytes: progress.totalBytes },
+      }));
+    });
+    return unsubscribe;
   }, []);
+
+  const handleModelChange = (modelId: string) => {
+    const info = builtinModels.find((m) => m.id === modelId);
+    setTestResult(null);
+    setDownloadError(null);
+    setSettings({
+      ...settings,
+      builtinModel: modelId as BuiltinModelId,
+      // Each model needs its own tuning; carrying the previous model's values
+      // over would leave e.g. Phi-3 stuck at a Qwen-sized context.
+      ...(info
+        ? {
+            llmContextSize: Math.min(info.recommendedContextSize, info.effectiveMaxContext),
+            llmMaxTokens: info.recommendedMaxTokens,
+            llmBatchSize: info.recommendedBatchSize,
+          }
+        : {}),
+    });
+  };
+
+  const handleDownload = async (modelId: string) => {
+    setDownloadError(null);
+    setActiveDownloads((prev) => ({ ...prev, [modelId]: { downloadedBytes: 0, totalBytes: 0 } }));
+    const result = await window.api.ai.downloadBuiltinModel(modelId);
+    setActiveDownloads((prev) => {
+      const next = { ...prev };
+      delete next[modelId];
+      return next;
+    });
+    if (!result.success && result.error && result.error !== 'Download cancelled') {
+      setDownloadError(result.error);
+    }
+    await refreshBuiltinModels();
+  };
+
+  const handleCancelDownload = async (modelId: string) => {
+    await window.api.ai.cancelModelDownload(modelId);
+  };
+
+  const handleDeleteModel = async (modelId: string) => {
+    const info = builtinModels.find((m) => m.id === modelId);
+    if (!confirm(`Delete the downloaded ${info?.label ?? modelId} model file (~${info ? formatBytes(info.approxDownloadSizeMB * 1024 * 1024) : ''})?`)) {
+      return;
+    }
+    const result = await window.api.ai.deleteBuiltinModel(modelId);
+    if (!result.success && result.error) {
+      setDownloadError(result.error);
+    }
+    await refreshBuiltinModels();
+  };
 
   const loadSettings = async () => {
     const loaded = await window.api.settings.get();
     // Ensure settings exist for older configurations
     setSettings({
       ...loaded,
+      builtinModel: loaded.builtinModel ?? 'qwen2.5-0.5b',
       spellcheckEnabled: loaded.spellcheckEnabled ?? true,
       spellcheckLanguages: loaded.spellcheckLanguages ?? ['en-US'],
       chunkingThresholdMs: loaded.chunkingThresholdMs ?? 3000,
@@ -273,6 +363,21 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     return types.filter((t) => t.enabled).length;
   };
 
+  // Built-in model derived state. Until the IPC round-trip resolves, fall
+  // back to the static registry so the picker isn't empty on first paint.
+  const modelOptions: (BuiltinModelInfo | (typeof BUILTIN_MODELS)[number])[] =
+    builtinModels.length > 0 ? builtinModels : BUILTIN_MODELS;
+  const selectedModel = builtinModels.find((m) => m.id === settings.builtinModel);
+  const selectedDownload = activeDownloads[settings.builtinModel];
+  const contextCeiling = selectedModel?.effectiveMaxContext ?? 8192;
+  const selectedSpec = selectedModel ?? BUILTIN_MODELS.find((m) => m.id === settings.builtinModel);
+  const kvCostBytes = selectedSpec ? selectedSpec.kvBytesPerToken * (settings.llmContextSize || 0) : null;
+  const selectedModelMissing = selectedModel ? !selectedModel.installed : false;
+  const downloadPercent =
+    selectedDownload && selectedDownload.totalBytes > 0
+      ? Math.min(100, Math.floor((selectedDownload.downloadedBytes / selectedDownload.totalBytes) * 100))
+      : 0;
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true" aria-label="Settings">
@@ -326,13 +431,13 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                     setSettings({ ...settings, provider: e.target.value as 'builtin' | 'ollama' | 'mistral' })
                   }
                 >
-                  <option value="builtin">Built-in AI (Qwen 0.5B)</option>
+                  <option value="builtin">Built-in AI</option>
                   <option value="ollama">Ollama (Local)</option>
                   <option value="mistral">Mistral API (Cloud)</option>
                 </select>
                 <p className="form-hint">
                   {settings.provider === 'builtin'
-                    ? 'Uses bundled Qwen 0.5B model. Works offline, no setup required.'
+                    ? 'Runs a local model entirely on your device. Works offline, no external setup required.'
                     : settings.provider === 'ollama'
                     ? 'Uses a local LLM via Ollama for privacy-first AI feedback.'
                     : 'Uses Mistral API for AI feedback. Requires internet connection.'}
@@ -359,11 +464,84 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
               {settings.provider === 'builtin' && (
                 <>
                   <div className="form-group">
-                    <p className="form-hint" style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '6px' }}>
-                      The built-in AI uses Qwen2.5-0.5B, a small but capable model that runs entirely on your device.
-                      No internet connection or external setup required.
-                    </p>
+                    <label className="form-label">Built-in Model</label>
+                    <select
+                      className="form-select"
+                      value={settings.builtinModel}
+                      onChange={(e) => handleModelChange(e.target.value)}
+                    >
+                      {modelOptions.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label} — {m.paramCount} params, ~{formatBytes(m.approxDownloadSizeMB * 1024 * 1024)}
+                          {'installed' in m ? (m.installed ? '' : ' (not downloaded)') : ''}
+                        </option>
+                      ))}
+                    </select>
+                    {selectedSpec && (
+                      <p className="form-hint" style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
+                        {selectedSpec.description} Runs entirely on your device.
+                      </p>
+                    )}
                   </div>
+
+                  {/* Download flow: shown until the selected model's file exists locally */}
+                  {selectedModelMissing && selectedModel && (
+                    <div className="form-group">
+                      {selectedDownload ? (
+                        <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--text-secondary)', marginBottom: '8px' }}>
+                            <span>Downloading {selectedModel.label}…</span>
+                            <span>
+                              {formatBytes(selectedDownload.downloadedBytes)}
+                              {selectedDownload.totalBytes > 0 ? ` / ${formatBytes(selectedDownload.totalBytes)} (${downloadPercent}%)` : ''}
+                            </span>
+                          </div>
+                          <div style={{ height: '6px', background: 'var(--bg-secondary)', borderRadius: '3px', overflow: 'hidden' }}>
+                            <div style={{ height: '100%', width: `${downloadPercent}%`, background: 'var(--accent-color)', transition: 'width 0.3s ease' }} />
+                          </div>
+                          <button
+                            className="btn btn-secondary"
+                            style={{ marginTop: '10px', fontSize: '11px', padding: '6px 12px' }}
+                            onClick={() => handleCancelDownload(selectedModel.id)}
+                          >
+                            Cancel Download
+                          </button>
+                          <p className="form-hint" style={{ marginTop: '6px' }}>
+                            A cancelled or interrupted download resumes from where it stopped.
+                          </p>
+                        </div>
+                      ) : (
+                        <button
+                          className="btn btn-primary"
+                          style={{ width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '6px' }}
+                          onClick={() => handleDownload(selectedModel.id)}
+                        >
+                          <Download size={16} />
+                          Download {selectedModel.label} (~{formatBytes(selectedModel.approxDownloadSizeMB * 1024 * 1024)})
+                        </button>
+                      )}
+                      {downloadError && (
+                        <p className="form-hint" style={{ color: 'var(--error-color)', marginTop: '8px' }}>
+                          {downloadError}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Delete affordance for models downloaded into the app's data dir */}
+                  {selectedModel?.installed && selectedModel.deletable && (
+                    <div className="form-group">
+                      <button
+                        className="btn btn-secondary"
+                        style={{ fontSize: '11px', padding: '6px 12px', display: 'flex', alignItems: 'center', gap: '4px' }}
+                        onClick={() => handleDeleteModel(selectedModel.id)}
+                      >
+                        <Trash2 size={12} />
+                        Delete downloaded model file
+                      </button>
+                    </div>
+                  )}
+
                   <div className="form-group">
                     <label className="form-label">Chunking Threshold (ms)</label>
                     <input
@@ -402,31 +580,33 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                   {showAdvanced && (
                     <>
                       {/* Recommendations Box */}
-                      <div className="form-group">
-                        <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
-                          <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-color)', marginBottom: '8px' }}>
-                            Recommended for M2 MacBook (32GB RAM):
-                          </p>
-                          <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                            <div>• <strong>Context Size:</strong> 4096 tokens</div>
-                            <div>• <strong>Max Output:</strong> 2048 tokens</div>
-                            <div>• <strong>Batch Size:</strong> 1024</div>
+                      {selectedSpec && (
+                        <div className="form-group">
+                          <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
+                            <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-color)', marginBottom: '8px' }}>
+                              Recommended for {selectedSpec.label}:
+                            </p>
+                            <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
+                              <div>• <strong>Context Size:</strong> {selectedSpec.recommendedContextSize} tokens</div>
+                              <div>• <strong>Max Output:</strong> {selectedSpec.recommendedMaxTokens} tokens</div>
+                              <div>• <strong>Batch Size:</strong> {selectedSpec.recommendedBatchSize}</div>
+                            </div>
+                            <button
+                              type="button"
+                              className="btn btn-secondary"
+                              style={{ marginTop: '10px', fontSize: '11px', padding: '6px 12px' }}
+                              onClick={() => setSettings({
+                                ...settings,
+                                llmContextSize: Math.min(selectedSpec.recommendedContextSize, contextCeiling),
+                                llmMaxTokens: selectedSpec.recommendedMaxTokens,
+                                llmBatchSize: selectedSpec.recommendedBatchSize,
+                              })}
+                            >
+                              Apply Recommended Settings
+                            </button>
                           </div>
-                          <button
-                            type="button"
-                            className="btn btn-secondary"
-                            style={{ marginTop: '10px', fontSize: '11px', padding: '6px 12px' }}
-                            onClick={() => setSettings({
-                              ...settings,
-                              llmContextSize: 4096,
-                              llmMaxTokens: 2048,
-                              llmBatchSize: 1024,
-                            })}
-                          >
-                            Apply Recommended Settings
-                          </button>
                         </div>
-                      </div>
+                      )}
 
                       <div className="form-group">
                         <label className="form-label">Context Size (tokens)</label>
@@ -434,15 +614,24 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                           type="number"
                           className="form-input"
                           min="512"
-                          max="8192"
+                          max={contextCeiling}
                           step="256"
                           value={settings.llmContextSize}
                           onChange={(e) => setSettings({ ...settings, llmContextSize: parseInt(e.target.value) || 2048 })}
                           style={{ padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
                         />
                         <p className="form-hint">
-                          How much input text the model can process. Range: 512-8192. Higher = more context but slower.
+                          How much input text the model can process. Range: 512–{contextCeiling.toLocaleString()} (capped by this machine's RAM for the selected model).
+                          {kvCostBytes !== null && (
+                            <> Memory cost at the current value: ~{formatBytes(kvCostBytes)} of KV cache.</>
+                          )}
+                          {' '}Higher = more context but slower; if memory runs short at generation time, the context is automatically reduced to fit.
                         </p>
+                        {settings.llmContextSize > contextCeiling && (
+                          <p className="form-hint" style={{ color: 'var(--warning-color)' }}>
+                            Above the ~{contextCeiling.toLocaleString()}-token cap for this machine — the value will be clamped when generating.
+                          </p>
+                        )}
                       </div>
 
                       <div className="form-group">
@@ -480,8 +669,9 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                       </div>
 
                       <div className="form-group">
-                        <p className="form-hint" style={{ background: 'var(--warning-glow)', padding: '12px', borderRadius: '6px', color: 'var(--warning-color)' }}>
-                          <strong>Note:</strong> Restart the app after changing these settings for them to take effect.
+                        <p className="form-hint" style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '6px' }}>
+                          <strong>Note:</strong> Changes apply from the next analysis — no restart needed.
+                          Switching models unloads the current one and loads the new one in the background.
                         </p>
                       </div>
                     </>
@@ -569,6 +759,8 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                 <button
                   className="btn btn-secondary"
                   onClick={handleTest}
+                  disabled={settings.provider === 'builtin' && selectedModelMissing}
+                  title={settings.provider === 'builtin' && selectedModelMissing ? 'Download the selected model first' : undefined}
                   style={{ width: '100%' }}
                 >
                   Test Connection

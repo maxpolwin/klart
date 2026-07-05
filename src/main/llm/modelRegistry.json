@@ -1,0 +1,41 @@
+{
+  "$comment": "Single source of truth for the builtin local-LLM models. Imported by the main process (localLLM/modelDownloader) and re-exported for the renderer via src/shared/types.ts. exactSizeBytes/sha256 pin the download for integrity verification when set (fill from `curl -s 'https://huggingface.co/api/models/<repo>?blobs=true'` -> siblings[].size / siblings[].lfs.oid, and pin downloadUrl to the revision commit from the same response's `sha` field); when null, the downloader falls back to verifying against the server-reported Content-Length.",
+  "models": [
+    {
+      "id": "qwen2.5-0.5b",
+      "label": "Qwen2.5-0.5B",
+      "paramCount": "0.5B",
+      "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "downloadUrl": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "approxDownloadSizeMB": 400,
+      "exactSizeBytes": null,
+      "sha256": null,
+      "nativeMaxContext": 32768,
+      "uiMaxContext": 32768,
+      "recommendedContextSize": 4096,
+      "recommendedMaxTokens": 2048,
+      "recommendedBatchSize": 1024,
+      "kvBytesPerToken": 12288,
+      "contentBudgetTokens": 1200,
+      "description": "Small, fast model that runs on any hardware. Good for quick feedback loops."
+    },
+    {
+      "id": "phi-3-mini-128k",
+      "label": "Phi-3-mini-128k",
+      "paramCount": "3.8B",
+      "filename": "phi-3-mini-128k-instruct-q4_k_m.gguf",
+      "downloadUrl": "https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/resolve/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf",
+      "approxDownloadSizeMB": 2390,
+      "exactSizeBytes": null,
+      "sha256": null,
+      "nativeMaxContext": 131072,
+      "uiMaxContext": 32768,
+      "recommendedContextSize": 8192,
+      "recommendedMaxTokens": 2048,
+      "recommendedBatchSize": 512,
+      "kvBytesPerToken": 393216,
+      "contentBudgetTokens": 2000,
+      "description": "Larger, higher-quality model with real long-context support. ~2.4GB download; needs noticeably more RAM and CPU/GPU than Qwen."
+    }
+  ]
+}

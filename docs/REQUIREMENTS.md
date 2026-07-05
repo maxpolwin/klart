@@ -165,27 +165,41 @@ When AI responses exceed a time threshold:
 
 #### Built-in AI (Default)
 
+Two selectable models, defined in `src/main/llm/modelRegistry.json` (single source of truth
+for filenames, download URLs, sizes, context limits, and per-model tuning):
+
+| Model | Params | Download | Native context | Content budget |
+|-------|--------|----------|----------------|----------------|
+| Qwen2.5-0.5B-Instruct Q4_K_M (default) | 0.5B | ~400MB | 32,768 | 1,200 tokens |
+| Phi-3-mini-128k-instruct Q4_K_M | 3.8B | ~2.4GB | 131,072 (never fully exposed; see context cap) | 2,000 tokens |
+
 ```
-Model: Qwen2.5-0.5B-Instruct (Q4_K_M quantization)
-Size: ~380MB
-Runtime: node-llama-cpp (ESM)
-GPU: Metal acceleration on Apple Silicon (33 layers)
-Offline: Yes
+Runtime: node-llama-cpp (ESM), prebuilt binaries only (build: "never")
+GPU: auto-detected offload (Metal / CUDA / Vulkan / CPU fallback)
+Offline: Yes. Missing models are downloaded in-app (Settings → AI Provider)
+         with progress, cancel, resume, and size/sha256 verification when pinned.
+Model file resolution order: ./models (dev) → userData/models (in-app
+         downloads) → resources/models (packaged bundle)
 ```
 
 **Configuration Parameters:**
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
-| Context Size | 512-8192 | 2048 | Input tokens capacity |
+| Built-in Model | registry ids | `qwen2.5-0.5b` | Which local model to run |
+| Context Size | 512 – RAM-aware cap (≤32768) | 2048 | Input tokens capacity |
 | Max Tokens | 256-4096 | 1536 | Output length limit |
 | Batch Size | 128-2048 | 512 | Processing batch size |
 | Chunking Threshold | 500-10000ms | 3000ms | Time before adaptive chunking |
 
-**Recommended for M2 MacBook (32GB RAM):**
-- Context Size: 4096
-- Max Tokens: 2048
-- Batch Size: 1024
+**Context cap:** the UI ceiling is computed per machine and per model as
+`min(uiMaxContext, (totalRAM × 0.5 − modelSize) / kvBytesPerToken)`, because KV-cache cost
+differs wildly between models (~12KB/token for Qwen vs ~384KB/token for Phi-3-mini — no GQA).
+At generation time the context is additionally created with `contextSize: {max}` so it clamps
+to currently free memory instead of failing.
+
+**Recommended settings** are per-model (shown in Settings): Qwen 4096/2048/1024,
+Phi-3-mini 8192/2048/512 (context/max-output/batch).
 
 #### Ollama (Local HTTP)
 
@@ -598,6 +612,7 @@ interface FeedbackTypeConfig {
 interface AISettings {
   // Provider
   provider: 'builtin' | 'ollama' | 'mistral';
+  builtinModel: 'qwen2.5-0.5b' | 'phi-3-mini-128k'; // default 'qwen2.5-0.5b'
   ollamaModel: string;
   ollamaUrl: string;
   mistralApiKey: string;
@@ -608,17 +623,22 @@ interface AISettings {
 
   // LLM Parameters
   chunkingThresholdMs: number;   // 500-10000
-  llmContextSize: number;        // 512-8192
+  llmContextSize: number;        // 512 – RAM-aware cap (≤32768)
   llmMaxTokens: number;          // 256-4096
   llmBatchSize: number;          // 128-2048
+  compressionEnabled: boolean;   // LLMLingua-2 prompt compression
 
   // Prompts
   promptConfig: PromptConfig;
+
+  // Speech-to-text
+  stt: SttSettings;
 }
 
 interface PromptConfig {
   systemPrompt: string;          // Template with {{variables}}
   feedbackTypes: FeedbackTypeConfig[];
+  tipStyle?: TipStyleConfig;     // Detail level, tone, max tips, language
 }
 ```
 
@@ -652,7 +672,8 @@ interface PromptConfig {
 |------|------|
 | Notes | `~/.config/Noschen/notes/*.json` |
 | Settings | `~/.config/Noschen/settings.json` |
-| LLM Model | `{app}/models/qwen2.5-0.5b-instruct-q4_k_m.gguf` |
+| LLM Models (bundled) | `{app}/models/<filename from modelRegistry.json>` |
+| LLM Models (in-app downloads) | `~/.config/Noschen/models/<filename>` (+ `.partial` during download) |
 
 ---
 
@@ -664,7 +685,8 @@ interface PromptConfig {
 npm run dev          # Development mode (hot reload)
 npm run build        # Production build
 npm run package      # Create distributable installers
-npm run download-model  # Download Qwen model
+npm run download-model        # Download a built-in model for packaging (--model=<id>, default Qwen)
+npm run download-model:phi3   # Download Phi-3-mini-128k
 ```
 
 ### 9.2 Distribution Formats

@@ -144,7 +144,23 @@ ollama pull mistral
 
 Launch Noschen and click the **Settings** icon in the sidebar to configure your AI provider.
 
-#### Option 1: Ollama (Local LLM) — Recommended
+#### Option 1: Built-in AI (default)
+
+Runs a local GGUF model in-process via node-llama-cpp — fully offline, zero setup. Two models are available
+from the **Built-in Model** dropdown; models that aren't installed yet can be downloaded directly from
+Settings (with progress, cancel, and automatic resume of interrupted downloads):
+
+| Model | Params | Download | Best for |
+|-------|--------|----------|----------|
+| Qwen2.5-0.5B (default) | 0.5B | ~400 MB | Fast feedback on any hardware |
+| Phi-3-mini-128k | 3.8B | ~2.4 GB | Higher quality and genuinely long context; needs more RAM/CPU |
+
+The **Context Size** ceiling is RAM-aware: it is computed per model from your machine's memory and the
+model's KV-cache cost per token (Phi-3-mini's cache costs ~32× more per token than Qwen's). If memory runs
+short at generation time, the context is automatically reduced to fit rather than failing. GPU offload
+(Metal/CUDA/Vulkan) is auto-detected.
+
+#### Option 2: Ollama (Local LLM)
 
 Best for privacy and offline use. Runs entirely on your machine.
 
@@ -162,7 +178,7 @@ Best for privacy and offline use. Runs entirely on your machine.
 | 16GB+ RAM | `llama3.2:8b` | Higher quality |
 | 8GB RAM | `phi3` | Optimized for lower memory |
 
-#### Option 2: Mistral API (Cloud)
+#### Option 3: Mistral API (Cloud)
 
 Best for users without powerful local hardware or who prefer cloud processing.
 
@@ -512,7 +528,8 @@ npx tsc --noEmit
 | `npm run dev` | Start development server with hot reload |
 | `npm run build` | Build for production |
 | `npm run package` | Package as desktop app |
-| `npm run download-model` | Download the built-in Qwen 0.5B model |
+| `npm run download-model` | Download a built-in model into `models/` for packaging (`--model=<id>`, default Qwen 0.5B) |
+| `npm run download-model:phi3` | Download the Phi-3-mini-128k model into `models/` |
 | `npm run download-compressor` | Download the LLMLingua-2 prompt-compression model (optional) |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript type checking |

@@ -1,3 +1,5 @@
+import modelRegistryJson from '../main/llm/modelRegistry.json';
+
 export interface Note {
   id: string;
   title: string;
@@ -100,8 +102,46 @@ export interface PromptConfig {
   tipStyle?: TipStyleConfig;      // Optional for settings saved by older versions
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILT-IN LLM MODELS
+// ═══════════════════════════════════════════════════════════════════════════
+
+export type BuiltinModelId = 'qwen2.5-0.5b' | 'phi-3-mini-128k';
+
+// Static per-model facts from src/main/llm/modelRegistry.json (the single
+// source of truth, shared with the main process).
+export interface BuiltinModelSpec {
+  id: string;
+  label: string;
+  paramCount: string;
+  filename: string;
+  downloadUrl: string;
+  approxDownloadSizeMB: number;
+  exactSizeBytes: number | null;
+  sha256: string | null;
+  nativeMaxContext: number;   // architectural limit, documented but never selectable
+  uiMaxContext: number;       // hard UI ceiling; the RAM-aware cap clamps below it
+  recommendedContextSize: number;
+  recommendedMaxTokens: number;
+  recommendedBatchSize: number;
+  kvBytesPerToken: number;    // KV-cache cost per context token (f16)
+  contentBudgetTokens: number; // note-content token budget when this model analyzes
+  description: string;
+}
+
+export const BUILTIN_MODELS: BuiltinModelSpec[] = modelRegistryJson.models;
+
+// Registry entry augmented with this machine's runtime state (via ai:getBuiltinModels)
+export interface BuiltinModelInfo extends BuiltinModelSpec {
+  effectiveMaxContext: number; // RAM-aware context ceiling for this machine
+  installed: boolean;
+  deletable: boolean;          // true when the installed copy lives in userData
+  download: { modelId: string; downloadedBytes: number; totalBytes: number } | null; // in-flight download, if any
+}
+
 export interface AISettings {
   provider: 'builtin' | 'ollama' | 'mistral';
+  builtinModel: BuiltinModelId; // Which bundled/downloadable local model to use (default: 'qwen2.5-0.5b')
   ollamaModel: string;
   ollamaUrl: string;
   mistralApiKey: string;
@@ -110,7 +150,7 @@ export interface AISettings {
   chunkingThresholdMs: number; // Response time threshold for adaptive chunking (ms)
   // Built-in LLM configuration
   llmContextSize: number;   // Context window size (default: 2048)
-  llmMaxTokens: number;     // Max tokens to generate (default: 1024)
+  llmMaxTokens: number;     // Max tokens to generate (default: 1536)
   llmBatchSize: number;     // Batch size for inference (default: 512)
   compressionEnabled: boolean; // LLMLingua-2 prompt compression (default: true)
   // Prompt configuration

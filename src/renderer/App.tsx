@@ -3,7 +3,7 @@ import Sidebar from './components/Sidebar';
 import Editor from './components/Editor';
 import SettingsModal from './components/SettingsModal';
 import EmptyState from './components/EmptyState';
-import { Note, AISettings, FeedbackItem, SpellcheckLanguage, TranscriptionResult } from '../shared/types';
+import { Note, AISettings, BuiltinModelInfo, FeedbackItem, SpellcheckLanguage, TranscriptionResult } from '../shared/types';
 
 declare global {
   interface Window {
@@ -23,7 +23,12 @@ declare global {
       ai: {
         analyze: (content: string, context: { h1: string; h2: string; allH2s: string[] }) => Promise<{ feedback: Omit<FeedbackItem, 'id' | 'status'>[]; error?: string }>;
         checkConnection: () => Promise<boolean>;
-        getStatus: () => Promise<{ provider: string; localLLM: { initialized: boolean; initializing: boolean; error: string | null; gpuAcceleration: { enabled: boolean; type: string; layers: number } }; modelPath: string | null }>;
+        getStatus: () => Promise<{ provider: string; localLLM: { initialized: boolean; initializing: boolean; error: string | null; modelId: string | null; lastContextSize: number | null; gpuAcceleration: { enabled: boolean; type: string } }; modelPath: string | null }>;
+        getBuiltinModels: () => Promise<BuiltinModelInfo[]>;
+        downloadBuiltinModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
+        cancelModelDownload: (modelId: string) => Promise<boolean>;
+        deleteBuiltinModel: (modelId: string) => Promise<{ success: boolean; error?: string }>;
+        onDownloadProgress: (callback: (progress: { modelId: string; downloadedBytes: number; totalBytes: number }) => void) => () => void;
       };
       spellcheck: {
         getAvailableLanguages: () => Promise<SpellcheckLanguage[]>;

@@ -7,12 +7,30 @@ import {
   initializeLocalLLM,
   generateLocalResponse,
   checkLocalLLMAvailable,
-  disposeLocalLLM,
+  shutdownLocalLLM,
   truncateToTokenBudget,
   estimateTokens,
   LLMConfig,
   getLocalLLMStatus,
+  getModelPath,
+  getUserModelsDir,
 } from './llm/localLLM';
+import {
+  BUILTIN_MODELS,
+  DEFAULT_BUILTIN_MODEL_ID,
+  effectiveMaxContext,
+  getModelById,
+  resolveModel,
+} from './llm/modelRegistry';
+import {
+  downloadModel,
+  cancelDownload,
+  deleteDownloadedModel,
+  getDownloadSnapshot,
+  abortAllDownloads,
+  sweepStalePartials,
+  DownloadProgress,
+} from './llm/modelDownloader';
 import {
   compressText,
   getCompressorStatus,
@@ -67,6 +85,7 @@ interface SttSettings {
 
 interface AISettings {
   provider: 'builtin' | 'ollama' | 'mistral';
+  builtinModel: 'qwen2.5-0.5b' | 'phi-3-mini-128k';
   ollamaModel: string;
   ollamaUrl: string;
   mistralApiKey: string;
@@ -163,6 +182,7 @@ function ensureDirectories() {
 function getDefaultSettings(): AISettings {
   return {
     provider: 'builtin',
+    builtinModel: 'qwen2.5-0.5b',
     ollamaModel: 'llama3.2',
     ollamaUrl: 'http://localhost:11434',
     mistralApiKey: '',
@@ -204,6 +224,11 @@ function loadSettings(): AISettings {
       // Merge with defaults so newly added settings (e.g. compressionEnabled)
       // get sensible values for pre-existing settings.json files.
       raw = { ...getDefaultSettings(), ...raw };
+
+      // A hand-edited or stale builtinModel must never reach the model loader
+      if (!getModelById(raw.builtinModel)) {
+        raw.builtinModel = DEFAULT_BUILTIN_MODEL_ID;
+      }
 
       // Inject the API key from secure storage
       raw.mistralApiKey = getMistralApiKey();
@@ -383,6 +408,9 @@ app.whenReady().then(async () => {
   });
 
   await createWindow();
+
+  // Clean up model-download leftovers from a previous crash (non-blocking)
+  void sweepStalePartials();
 
   app.on('activate', async () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -706,9 +734,14 @@ function getTipStyle(settings: AISettings): TipStyleConfig {
 
 // Get prompt configuration from settings
 function getPromptConfig(settings: AISettings) {
-  const isSmallModel = settings.provider === 'builtin';
+  // Builtin models carry their own content budget in the registry (1200 for
+  // the tiny Qwen, more for larger models); other providers get the full 2000.
+  const maxContentTokens =
+    settings.provider === 'builtin'
+      ? resolveModel(settings.builtinModel).contentBudgetTokens
+      : 2000;
   return {
-    maxContentTokens: isSmallModel ? 1200 : 2000,
+    maxContentTokens,
     generatePrompt: (ctx: { h1: string; h2: string; allH2s: string[] }) => {
       // Ensure promptConfig exists (for backwards compatibility)
       const promptConfig = settings.promptConfig || {
@@ -767,17 +800,17 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
   };
 
   // Get prompt configuration from settings
-  const isSmallModel = settings.provider === 'builtin';
+  const isBuiltinProvider = settings.provider === 'builtin';
   const promptConfig = getPromptConfig(settings);
   const maxTips = clampMaxTips(getTipStyle(settings).maxTips);
 
-  // Content token budget (1200 for the small built-in model, 2000 otherwise).
+  // Content token budget (per-model from the registry for builtin, 2000 otherwise).
   const targetTokens = promptConfig.maxContentTokens;
 
   let analysisContent = content;
-  // Upstream context reduction: when the small model has been slow, narrow to the
+  // Upstream context reduction: when the local model has been slow, narrow to the
   // current section before applying the token budget.
-  if (isSmallModel && useAdaptiveChunking) {
+  if (isBuiltinProvider && useAdaptiveChunking) {
     console.log('[AI] Using adaptive chunking (previous response was slow)');
     analysisContent = extractCurrentSection(content, ctx.h2);
   }
@@ -799,13 +832,13 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
   try {
     if (settings.provider === 'builtin') {
       // Use built-in local LLM with better error handling
-      const availability = await checkLocalLLMAvailable();
+      const availability = await checkLocalLLMAvailable(settings.builtinModel);
       if (!availability.available) {
         console.error('[AI] Local model not available:', availability.error);
         return { feedback: [], error: availability.error };
       }
 
-      const initResult = await initializeLocalLLM();
+      const initResult = await initializeLocalLLM(settings.builtinModel);
       if (!initResult.success) {
         console.error('[AI] Failed to initialize local LLM:', initResult.error);
         return { feedback: [], error: initResult.error };
@@ -817,6 +850,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         contextSize: settings.llmContextSize || 2048,
         maxTokens: settings.llmMaxTokens || 1024,
         batchSize: settings.llmBatchSize || 512,
+        modelId: settings.builtinModel,
       };
       const result = await generateLocalResponse(systemPrompt, userPrompt, llmConfig);
       lastResponseTime = Date.now() - startTime;
@@ -992,13 +1026,13 @@ ipcMain.handle('ai:checkConnection', async () => {
 
   try {
     if (settings.provider === 'builtin') {
-      const availability = await checkLocalLLMAvailable();
+      const availability = await checkLocalLLMAvailable(settings.builtinModel);
       if (!availability.available) {
         console.log('[AI] Local model not available:', availability.error);
         return false;
       }
       // Try to initialize the model
-      const initResult = await initializeLocalLLM();
+      const initResult = await initializeLocalLLM(settings.builtinModel);
       return initResult.success;
     } else if (settings.provider === 'ollama') {
       const ollamaBase = sanitizeHttpBaseUrl(settings.ollamaUrl, 'http://localhost:11434');
@@ -1030,12 +1064,60 @@ ipcMain.handle('ai:getStatus', async () => {
   return {
     provider: settings.provider,
     localLLM: status,
-    modelPath: settings.provider === 'builtin' ? 'qwen2.5-0.5b-instruct-q4_k_m.gguf' : null,
+    modelPath: settings.provider === 'builtin' ? resolveModel(settings.builtinModel).filename : null,
     compression: {
       enabled: settings.compressionEnabled,
       ...getCompressorStatus(),
     },
   };
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILT-IN MODEL MANAGEMENT (registry info, in-app download, delete)
+// ═══════════════════════════════════════════════════════════════════════════
+
+function sendDownloadProgress(progress: DownloadProgress) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('ai:downloadProgress', progress);
+  }
+}
+
+// Registry entries augmented with this machine's state: the RAM-aware context
+// ceiling, whether the file is installed (and deletable = lives in userData),
+// and any in-flight download so a reopened Settings modal can re-attach.
+ipcMain.handle('ai:getBuiltinModels', async () => {
+  const userModelsDir = getUserModelsDir();
+  return Promise.all(
+    BUILTIN_MODELS.map(async (spec) => {
+      const availability = await checkLocalLLMAvailable(spec.id);
+      const resolvedPath = getModelPath(spec.id);
+      return {
+        ...spec,
+        effectiveMaxContext: effectiveMaxContext(spec),
+        installed: availability.available,
+        deletable: availability.available && resolvedPath.startsWith(userModelsDir),
+        download: getDownloadSnapshot(spec.id),
+      };
+    })
+  );
+});
+
+ipcMain.handle('ai:downloadBuiltinModel', async (_, modelId: string) => {
+  if (typeof modelId !== 'string' || !getModelById(modelId)) {
+    return { success: false, error: `Unknown model: ${modelId}` };
+  }
+  return downloadModel(modelId, sendDownloadProgress);
+});
+
+ipcMain.handle('ai:cancelModelDownload', async (_, modelId: string) => {
+  return typeof modelId === 'string' && cancelDownload(modelId);
+});
+
+ipcMain.handle('ai:deleteBuiltinModel', async (_, modelId: string) => {
+  if (typeof modelId !== 'string' || !getModelById(modelId)) {
+    return { success: false, error: `Unknown model: ${modelId}` };
+  }
+  return deleteDownloadedModel(modelId);
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1358,8 +1440,11 @@ ipcMain.handle('stt:checkAvailable', async (): Promise<{ available: boolean; err
   }
 });
 
-// Cleanup on app quit
+// Cleanup on app quit: abort downloads first (flushes their .partial files so
+// the tail bytes aren't torn — a torn partial forces a full re-download),
+// then drain/abort generations before releasing the model.
 app.on('before-quit', async () => {
-  await disposeLocalLLM();
+  await abortAllDownloads();
+  await shutdownLocalLLM();
   await disposeCompressor();
 });
