@@ -35,18 +35,19 @@
   --space-6: 1.5rem;
   --space-8: 2rem;
 
-  /* Corner radii — restrained */
-  --radius-sm: 6px;
-  --radius-md: 9px;
-  --radius-lg: 13px;
+  /* Corner radii — crisp book plates (Quarterly) */
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 9px;
 
   /* ── WARM PAPER PALETTE (LIGHT) ────────────────────────────────────── */
 
-  --bg-primary: #f4efe4;    /* desk / sidebar canvas */
+  --bg-primary: #efe7d5;    /* desk / sidebar — clothbound cover (Quarterly) */
   --bg-secondary: #fbf8f1;  /* paper — writing surface & cards */
   --bg-tertiary: #ebe4d4;   /* filled controls (search, inputs) */
   --bg-hover: #ede6d6;      /* hover / active fill */
   --bg-elevated: #fffdf8;
+  --rule-hair: #cdbf9f;     /* warm hairline for editorial rules (Quarterly) */
 
   /* Retained for compatibility; editorial uses flat paper, not glass */
   --material-bar: rgba(251, 248, 241, 0.85);
@@ -117,11 +118,12 @@
 /* ── WARM INK PALETTE (DARK) ────────────────────────────────────────── */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-primary: #1a1712;
+    --bg-primary: #17130e;
     --bg-secondary: #221e18;
     --bg-tertiary: #2c271f;
     --bg-hover: #322c22;
     --bg-elevated: #262117;
+    --rule-hair: #4a4231;
 
     --material-bar: rgba(34, 30, 24, 0.85);
     --material-sheet: #221e18;
@@ -266,14 +268,16 @@ input::placeholder, textarea::placeholder {
 /* Serif masthead */
 .sidebar-title {
   font-family: var(--font-serif);
-  font-size: var(--font-size-xl);
-  font-weight: 600;
+  font-size: 2rem;              /* 32px nameplate (Quarterly) */
+  font-weight: 700;
   color: var(--text-primary);
   margin-bottom: 16px;
+  padding-bottom: 11px;
+  border-bottom: 3px double var(--accent-color);
   display: flex;
   align-items: center;
   gap: 9px;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.02em;
 }
 
 .sidebar-title svg {
@@ -361,12 +365,13 @@ input::placeholder, textarea::placeholder {
 }
 
 .note-item.active {
-  background: var(--accent-glow);
-  box-shadow: inset 3px 0 0 var(--accent-color);
+  background: var(--bg-hover);
 }
 
 .note-item.active .note-item-title {
   color: var(--accent-color);
+  font-variant: small-caps;
+  letter-spacing: 0.02em;
 }
 
 .note-item-chevron {
@@ -444,14 +449,12 @@ input::placeholder, textarea::placeholder {
 .editor-header {
   padding: 10px 24px;
   padding-top: var(--titlebar-inset);
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--rule-hair);
   display: flex;
   align-items: center;
   justify-content: space-between;
   -webkit-app-region: drag;
-  background: var(--material-bar);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
+  background: var(--bg-secondary);
 }
 
 .editor-header-actions {
@@ -552,6 +555,7 @@ input::placeholder, textarea::placeholder {
   outline: none;
   min-height: 100%;
   font-family: var(--font-serif);
+  font-feature-settings: 'onum' 1, 'pnum' 1;  /* old-style figures (Quarterly) */
 }
 
 .ProseMirror > * + * {
@@ -583,6 +587,30 @@ input::placeholder, textarea::placeholder {
   margin-bottom: 0.4em;
   color: var(--text-primary);
   letter-spacing: -0.01em;
+}
+
+/* Quarterly: an asterism marks each section break */
+.ProseMirror h2::before {
+  content: "\2042";
+  display: block;
+  text-align: center;
+  color: var(--accent-color);
+  font-size: 0.7em;
+  font-weight: 400;
+  letter-spacing: 0.2em;
+  margin-bottom: 0.45em;
+  opacity: 0.8;
+}
+
+/* Quarterly: a dropped initial opens the note (only the first paragraph) */
+.ProseMirror > h1 + p::first-letter {
+  float: left;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  font-size: 3.1em;
+  line-height: 0.72;
+  padding: 0.02em 0.09em 0 0;
+  color: var(--accent-color);
 }
 
 .ProseMirror h3 {
@@ -688,10 +716,11 @@ input::placeholder, textarea::placeholder {
 }
 
 .feedback-panel-title {
-  font-weight: 700;
-  font-size: var(--font-size-xs);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  font-family: var(--font-serif);
+  font-variant: small-caps;
+  font-weight: 600;
+  font-size: var(--font-size-md);
+  letter-spacing: 0.03em;
   display: flex;
   align-items: center;
   gap: var(--space-2);
@@ -718,22 +747,24 @@ input::placeholder, textarea::placeholder {
 .feedback-list {
   list-style: none;
   margin: 0;
-  padding: 0 12px 12px;
+  padding: 0 16px 10px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 0;
 }
 
 .feedback-item {
   display: flex;
   align-items: flex-start;
   gap: var(--space-3);
-  padding: 14px;
-  border-radius: var(--radius-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  padding: 14px 2px;
+  border-bottom: 1px solid var(--rule-hair);
   transition: transform var(--transition-fast);
   animation: fadeIn 0.25s ease-out;
+}
+
+.feedback-item:last-child {
+  border-bottom: 0;
 }
 
 @keyframes fadeIn {
@@ -742,12 +773,14 @@ input::placeholder, textarea::placeholder {
 }
 
 .feedback-item-badge {
-  padding: 3px 9px;
-  border-radius: var(--radius-sm);
-  font-size: var(--font-size-xs);
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  padding: 2px 0 0;
+  background: none !important;   /* unfilled small-caps label — overrides custom inline fill */
+  border: none !important;
+  font-family: var(--font-serif);
+  font-variant: small-caps;
+  font-size: var(--font-size-sm);
+  font-weight: 600;
+  letter-spacing: 0.03em;
   flex-shrink: 0;
 }
 
@@ -777,7 +810,8 @@ input::placeholder, textarea::placeholder {
 }
 
 .feedback-item-text {
-  font-size: var(--font-size-base);
+  font-family: var(--font-serif);
+  font-size: var(--font-size-md);
   color: var(--text-primary);
   line-height: 1.55;
 }
@@ -863,8 +897,8 @@ input::placeholder, textarea::placeholder {
 }
 
 .feedback-item-btn {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   padding: 0;
   border-radius: 50%;
   font-weight: 600;
@@ -1033,8 +1067,10 @@ input::placeholder, textarea::placeholder {
   align-items: center;
   gap: 6px;
   padding: 10px 12px;
-  font-size: var(--font-size-sm);
+  font-size: var(--font-size-base);
+  font-variant: small-caps;
   font-weight: 500;
+  letter-spacing: 0.02em;
   color: var(--text-muted);
   border-bottom: 2px solid transparent;
   margin-bottom: -1px;
@@ -1271,10 +1307,8 @@ input::placeholder, textarea::placeholder {
   left: 300px;
   right: 0;
   padding: 8px 24px;
-  background: var(--material-bar);
-  backdrop-filter: var(--glass-blur);
-  -webkit-backdrop-filter: var(--glass-blur);
-  border-top: 1px solid var(--border-color);
+  background: var(--bg-secondary);
+  border-top: 1px solid var(--rule-hair);
   display: flex;
   align-items: center;
   justify-content: center;
