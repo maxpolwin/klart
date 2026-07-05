@@ -48,7 +48,12 @@ function httpGet(url, { json = false } = {}) {
       https.get(currentUrl, { headers: { 'User-Agent': 'noschen-downloader' } }, (res) => {
         if (res.statusCode === 301 || res.statusCode === 302 || res.statusCode === 307 || res.statusCode === 308) {
           res.resume();
-          return request(res.headers.location, redirects + 1);
+          const location = res.headers.location;
+          if (!location) return reject(new Error(`Redirect (${res.statusCode}) with no Location header`));
+          // Hugging Face redirects to relative paths (e.g. /api/resolve-cache/...);
+          // resolve them against the current URL so https.get gets an absolute URL.
+          const nextUrl = new URL(location, currentUrl).toString();
+          return request(nextUrl, redirects + 1);
         }
         if (res.statusCode !== 200) {
           res.resume();
