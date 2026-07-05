@@ -262,7 +262,9 @@ input::placeholder, textarea::placeholder {
 .sidebar-header {
   padding: 12px 20px 12px;
   padding-top: var(--titlebar-inset);
-  -webkit-app-region: no-drag;
+  /* The top of the sidebar is a title-bar drag zone; interactive controls
+     inside (search, New Note) opt back out with no-drag below. */
+  -webkit-app-region: drag;
 }
 
 /* Serif masthead */
@@ -278,6 +280,11 @@ input::placeholder, textarea::placeholder {
   align-items: center;
   gap: 9px;
   letter-spacing: -0.02em;
+  /* Drag the window by the masthead; don't select the text while dragging. */
+  -webkit-app-region: drag;
+  -webkit-user-select: none;
+  user-select: none;
+  cursor: default;
 }
 
 .sidebar-title svg {
@@ -286,6 +293,7 @@ input::placeholder, textarea::placeholder {
 
 .search-wrapper {
   position: relative;
+  -webkit-app-region: no-drag;
 }
 
 .search-input {
@@ -427,6 +435,7 @@ input::placeholder, textarea::placeholder {
   font-weight: 600;
   font-size: var(--font-size-base);
   transition: background var(--transition-fast), transform var(--transition-fast);
+  -webkit-app-region: no-drag;
 }
 
 .new-note-btn:hover {
