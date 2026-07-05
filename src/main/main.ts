@@ -1007,8 +1007,14 @@ ipcMain.handle('ai:checkConnection', async () => {
       });
       return response.ok;
     } else {
-      // For Mistral, just check if API key is set
-      return !!settings.mistralApiKey;
+      // For Mistral, validate the key with a lightweight authenticated call
+      // (a missing/garbage key returns 401, so the test reflects reality).
+      if (!settings.mistralApiKey) return false;
+      const response = await fetch('https://api.mistral.ai/v1/models', {
+        headers: { 'Authorization': `Bearer ${settings.mistralApiKey}` },
+        signal: AbortSignal.timeout(8000),
+      });
+      return response.ok;
     }
   } catch (error) {
     console.error('[AI] Connection check failed:', error);

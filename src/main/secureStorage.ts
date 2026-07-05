@@ -41,8 +41,15 @@ function writeSecretsFile(secrets: EncryptedSecrets): void {
 function encryptValue(value: string): string {
   if (!value) return '';
   if (safeStorage.isEncryptionAvailable()) {
-    const encrypted = safeStorage.encryptString(value);
-    return encrypted.toString('base64');
+    try {
+      const encrypted = safeStorage.encryptString(value);
+      return encrypted.toString('base64');
+    } catch (error) {
+      // e.g. macOS keychain access denied (userCanceledErr -128). Don't throw —
+      // that would hang the settings save. Fall back to storing as-is (0600 file).
+      console.warn('[SecureStorage] Encryption failed (keychain denied?), storing value as-is:', error);
+      return value;
+    }
   }
   console.warn('[SecureStorage] Encryption not available, storing value as-is');
   return value;

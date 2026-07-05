@@ -103,10 +103,16 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
 
   const handleSave = async () => {
     setIsSaving(true);
-    await window.api.settings.save(settings);
-    setIsSaving(false);
-    onSaved();
-    onClose();
+    try {
+      await window.api.settings.save(settings);
+      onSaved();
+      onClose();
+    } catch (error) {
+      // Keep the modal open so the user can retry (e.g. after allowing keychain access).
+      console.error('[Settings] Save failed:', error);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleTest = async () => {

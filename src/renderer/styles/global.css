@@ -926,7 +926,9 @@ input::placeholder, textarea::placeholder {
   padding: 48px;
 }
 
-.empty-state svg {
+/* Only the top-level decorative icon — not the icon inside the button,
+   otherwise the button's <Plus> gets blown up to 64px and the label floats. */
+.empty-state > svg {
   width: 64px;
   height: 64px;
   margin-bottom: 22px;
