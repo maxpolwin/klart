@@ -15,7 +15,8 @@
     "download-model": "node scripts/download-model.js",
     "download-model:phi3": "node scripts/download-model.js --model=phi-3-mini-128k",
     "download-compressor": "node scripts/download-compressor-model.js",
-    "generate-icon": "bash scripts/generate-icon.sh"
+    "generate-icon": "bash scripts/generate-icon.sh",
+    "generate-sample-notes": "node scripts/generate-sample-notes.js"
   },
   "overrides": {
     "tar": ">=7.5.7",
