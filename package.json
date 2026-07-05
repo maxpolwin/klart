@@ -16,7 +16,10 @@
     "download-model:phi3": "node scripts/download-model.js --model=phi-3-mini-128k",
     "download-compressor": "node scripts/download-compressor-model.js",
     "generate-icon": "bash scripts/generate-icon.sh",
-    "generate-sample-notes": "node scripts/generate-sample-notes.js"
+    "generate-sample-notes": "node scripts/generate-sample-notes.js",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:perf": "vitest run --config vitest.perf.config.ts"
   },
   "overrides": {
     "tar": ">=7.5.7",
@@ -44,7 +47,8 @@
     "png-to-ico": "^3.0.1",
     "sharp": "^0.34.5",
     "typescript": "^5.7.2",
-    "vite": "^6.0.0"
+    "vite": "^6.0.0",
+    "vitest": "^4.1.9"
   },
   "dependencies": {
     "@atjsh/llmlingua-2": "^2.0.3",

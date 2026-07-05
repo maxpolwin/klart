@@ -217,12 +217,17 @@ function shuffle(arr) {
   return a;
 }
 
+function generateNotes(count) {
+  const notes = [];
+  for (let i = 0; i < count; i++) notes.push(buildNote(i));
+  return notes;
+}
+
 function main() {
   fs.mkdirSync(OUT_DIR, { recursive: true });
 
   const summary = {};
-  for (let i = 0; i < COUNT; i++) {
-    const note = buildNote(i);
+  for (const note of generateNotes(COUNT)) {
     const profile = note._profile;
     const chars = note._chars;
     delete note._profile;
@@ -248,4 +253,8 @@ function main() {
   console.log('  - Editor typing latency on a huge note (TipTap re-render cost)');
 }
 
-main();
+module.exports = { buildNote, generateNotes, PROFILES };
+
+if (require.main === module) {
+  main();
+}
