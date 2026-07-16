@@ -2,6 +2,8 @@
 
 **AI-Powered Research Note-Taking App**
 
+> **⚡ New: native macOS app.** Noschen has been rebuilt as a Swift/SwiftUI-native macOS app with a minimal dark design and flexible LLM integration (Ollama, LM Studio, OpenRouter, or any OpenAI-compatible endpoint). See **[NoschenMac/README.md](NoschenMac/README.md)** — the Electron app documented below remains available as the legacy cross-platform version.
+
 Noschen is a privacy-first, local-first research note-taking application that provides live AI feedback to support academic researchers, consultants, and students. The AI analyzes your notes in real-time and suggests improvements, identifies gaps, and enhances research quality.
 
 ---

@@ -1,6 +1,10 @@
 # Dependencies
 node_modules/
 
+# Swift Package Manager (NoschenMac)
+.build/
+.swiftpm/
+
 # Build outputs
 dist/
 release/
