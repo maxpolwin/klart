@@ -141,6 +141,11 @@ struct MarkdownEditor: NSViewRepresentable {
             guard let textView = notification.object as? NSTextView else { return }
             parent.onCursorChange(textView.selectedRange().location)
         }
+
+        func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+            return EditorStyler.handleListContinuation(in: textView)
+        }
     }
 }
 
@@ -218,14 +223,18 @@ enum EditorStyler {
         ns.enumerateSubstrings(in: range, options: [.byLines, .substringNotRequired]) { _, lineRange, _, _ in
             let line = ns.substring(with: lineRange)
             if let level = headingLevel(of: line) {
-                storage.addAttribute(.font, value: headingFont(level: level), range: lineRange)
-                // Dim the leading # markers so headings read as headings.
+                // Keep the leading # marker at body size and dimmed, so only the
+                // actual heading text is enlarged — otherwise the marker itself
+                // renders at heading size and stays as visible as a plain "#".
                 let markerLength = min(level + 1, lineRange.length)
-                storage.addAttribute(
-                    .foregroundColor,
-                    value: markerColor,
-                    range: NSRange(location: lineRange.location, length: markerLength)
+                let markerRange = NSRange(location: lineRange.location, length: markerLength)
+                let textRange = NSRange(
+                    location: lineRange.location + markerLength,
+                    length: lineRange.length - markerLength
                 )
+                storage.addAttribute(.font, value: bodyFont, range: markerRange)
+                storage.addAttribute(.foregroundColor, value: markerColor, range: markerRange)
+                storage.addAttribute(.font, value: headingFont(level: level), range: textRange)
             } else if line.hasPrefix(">") {
                 storage.addAttributes([
                     .foregroundColor: quoteColor,
@@ -248,6 +257,67 @@ enum EditorStyler {
             value: markerColor,
             range: NSRange(location: lineRange.location + match.range.location, length: match.range.length)
         )
+    }
+
+    private struct ListMarker {
+        let indent: String
+        let marker: String
+        /// Location (in the line) of the first character after the marker,
+        /// not including the single required space the regex looks ahead for.
+        let markerEndLocation: Int
+    }
+
+    private static func matchListMarker(in line: String) -> ListMarker? {
+        let ns = line as NSString
+        let full = NSRange(location: 0, length: ns.length)
+        guard let match = listMarkerRegex.firstMatch(in: line, range: full) else { return nil }
+        let matched = ns.substring(with: match.range)
+        let indentLength = matched.prefix { $0 == " " || $0 == "\t" }.count
+        return ListMarker(
+            indent: String(matched.prefix(indentLength)),
+            marker: String(matched.dropFirst(indentLength)),
+            markerEndLocation: match.range.location + match.range.length
+        )
+    }
+
+    /// Continues `- ` / `* ` / `+ ` / `1. ` lists onto the next line when the
+    /// user presses Enter, incrementing ordered-list numbers as it goes.
+    /// Pressing Enter again on an empty item exits the list instead of adding
+    /// another empty marker. Returns whether it handled the newline itself.
+    static func handleListContinuation(in textView: NSTextView) -> Bool {
+        let ns = textView.string as NSString
+        let selection = textView.selectedRange()
+
+        // Use the paragraph's content range only (excludes the trailing "\n"),
+        // so clearing an empty item's marker below never eats the newline and
+        // merges into the following line.
+        var start = 0, contentsEnd = 0
+        ns.getParagraphStart(&start, end: nil, contentsEnd: &contentsEnd, for: NSRange(location: min(selection.location, ns.length), length: 0))
+        let lineRange = NSRange(location: start, length: contentsEnd - start)
+        let line = ns.substring(with: lineRange)
+        guard let listMarker = matchListMarker(in: line) else { return false }
+
+        let contentStart = min(listMarker.markerEndLocation + 1, (line as NSString).length)
+        let restOfLine = (line as NSString).substring(from: contentStart)
+
+        if restOfLine.trimmingCharacters(in: .whitespaces).isEmpty {
+            // Empty list item: pressing Enter here exits the list rather than
+            // continuing it with another empty marker.
+            textView.insertText("", replacementRange: lineRange)
+            return true
+        }
+
+        let nextMarker: String
+        if listMarker.marker.count > 1,
+           let punctuation = listMarker.marker.last, punctuation == "." || punctuation == ")",
+           let number = Int(listMarker.marker.dropLast()) {
+            nextMarker = "\(listMarker.indent)\(number + 1)\(punctuation) "
+        } else {
+            nextMarker = "\(listMarker.indent)\(listMarker.marker) "
+        }
+
+        textView.insertText("\n" + nextMarker, replacementRange: selection)
+        return true
     }
 
     /// Live inline markdown: **bold**, *italic* / _italic_, `code`.
