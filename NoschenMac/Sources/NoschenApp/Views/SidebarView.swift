@@ -61,10 +61,18 @@ private struct NoteRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
-            Text(note.title)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(Theme.textPrimary)
-                .lineLimit(1)
+            HStack(spacing: 5) {
+                if note.isSensitive {
+                    Image(systemName: "shield.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(Theme.accent)
+                        .help("Sensitive — local AI only")
+                }
+                Text(note.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(Theme.textPrimary)
+                    .lineLimit(1)
+            }
             HStack(spacing: 6) {
                 Text(note.updatedAt, format: .relative(presentation: .named))
                     .font(.system(size: 11))

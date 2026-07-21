@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import NoschenKit
 
 struct ContentView: View {
@@ -9,11 +10,14 @@ struct ContentView: View {
     @State private var pillPulse = false
 
     var body: some View {
-        if state.isLocked {
-            LockView()
-        } else {
-            mainInterface
+        Group {
+            if state.isLocked {
+                LockView()
+            } else {
+                mainInterface
+            }
         }
+        .background(WindowConfigurator(excludeFromCapture: state.settings.excludeFromCapture))
     }
 
     private var mainInterface: some View {
@@ -26,6 +30,8 @@ struct ContentView: View {
         .background(Theme.background)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
+                sensitiveToggle
+
                 Button {
                     state.requestFeedback(manual: true)
                 } label: {
@@ -54,6 +60,27 @@ struct ContentView: View {
         } else {
             EmptyStateView()
         }
+    }
+
+    /// Marks the current note sensitive: it will only ever use local AI,
+    /// enforced in code against the resolved endpoint, never a cloud model.
+    private var sensitiveToggle: some View {
+        Button {
+            state.toggleSensitive()
+        } label: {
+            Label(
+                "Sensitive",
+                systemImage: state.selectedNote?.isSensitive == true ? "shield.fill" : "shield"
+            )
+            .symbolEffect(.bounce, value: state.selectedNote?.isSensitive == true)
+            .foregroundStyle(state.selectedNote?.isSensitive == true ? Theme.accent : Color.secondary)
+        }
+        .help(
+            state.selectedNote?.isSensitive == true
+                ? "Sensitive note: only local AI (Ollama/LM Studio) will ever see it. Click to unmark."
+                : "Mark as sensitive: this note will only ever use local AI, never a cloud model."
+        )
+        .disabled(state.selectedNoteID == nil)
     }
 
     /// The one visible trace of AI while writing: a small pill that reports
@@ -102,6 +129,27 @@ struct ContentView: View {
         let count = state.feedbackItems.count
         if count > 0 { return count == 1 ? "1 ready" : "\(count) ready" }
         return "Coach"
+    }
+}
+
+/// Applies window-level security settings SwiftUI has no modifier for:
+/// `sharingType = .none` removes the window from screenshots, recordings,
+/// and screen sharing.
+private struct WindowConfigurator: NSViewRepresentable {
+    let excludeFromCapture: Bool
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { apply(to: view) }
+        return view
+    }
+
+    func updateNSView(_ view: NSView, context: Context) {
+        DispatchQueue.main.async { apply(to: view) }
+    }
+
+    private func apply(to view: NSView) {
+        view.window?.sharingType = excludeFromCapture ? .none : .readOnly
     }
 }
 

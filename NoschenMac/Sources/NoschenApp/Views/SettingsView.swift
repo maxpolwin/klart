@@ -275,7 +275,7 @@ private struct SecuritySettingsView: View {
     @EnvironmentObject var state: AppState
 
     private enum ActiveSheet: Identifiable {
-        case setup, changePassword, disable, enableBiometric
+        case setup, changePassword, disable, enableBiometric, rotateKey
         var id: Int { hashValue }
     }
 
@@ -300,8 +300,19 @@ private struct SecuritySettingsView: View {
 
                     Toggle("Unlock with Touch ID", isOn: biometricBinding)
 
+                    Toggle("Lock when the screen sleeps or locks", isOn: $state.settings.lockOnScreenSleep)
+                    Picker("Auto-lock when inactive", selection: $state.settings.autoLockMinutes) {
+                        Text("Never").tag(0)
+                        Text("After 5 minutes").tag(5)
+                        Text("After 15 minutes").tag(15)
+                        Text("After 30 minutes").tag(30)
+                        Text("After 1 hour").tag(60)
+                    }
+                    Toggle("Exclude window from screenshots & screen sharing", isOn: $state.settings.excludeFromCapture)
+
                     HStack(spacing: 10) {
                         Button("Change Password…") { activeSheet = .changePassword }
+                        Button("Rotate Encryption Key…") { activeSheet = .rotateKey }
                         Button("Turn Off Protection…") { activeSheet = .disable }
                     }
                 } else {
@@ -331,6 +342,8 @@ private struct SecuritySettingsView: View {
                 DisableProtectionSheet()
             case .enableBiometric:
                 EnableBiometricSheet()
+            case .rotateKey:
+                RotateKeySheet()
             }
         }
     }
@@ -511,6 +524,45 @@ private struct DisableProtectionSheet: View {
         Task {
             do {
                 try await state.disableProtection(password: password)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+}
+
+private struct RotateKeySheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VaultSheetChrome(
+            title: "Rotate encryption key",
+            confirmLabel: "Rotate Key",
+            confirmDisabled: password.isEmpty,
+            busy: busy,
+            error: error,
+            onConfirm: run
+        ) {
+            Text("Generates a fresh master key and re-encrypts every note under it. Your password stays the same. Do this periodically, or if you suspect a device compromise.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func run() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                try await state.rotateMasterKey(password: password)
                 dismiss()
             } catch {
                 self.error = error.localizedDescription

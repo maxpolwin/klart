@@ -10,19 +10,24 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// Fingerprints of AI feedback items the user has dismissed for this note,
     /// so the same tip is not shown again.
     public var rejectedFingerprints: [String]
+    /// Sensitive notes never leave the machine: any AI request for them is
+    /// refused in code unless the active provider is local.
+    public var isSensitive: Bool
 
     public init(
         id: UUID = UUID(),
         content: String = "",
         createdAt: Date = Date(),
         updatedAt: Date = Date(),
-        rejectedFingerprints: [String] = []
+        rejectedFingerprints: [String] = [],
+        isSensitive: Bool = false
     ) {
         self.id = id
         self.content = content
         self.createdAt = createdAt
         self.updatedAt = updatedAt
         self.rejectedFingerprints = rejectedFingerprints
+        self.isSensitive = isSensitive
     }
 
     public init(from decoder: Decoder) throws {
@@ -32,6 +37,7 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         rejectedFingerprints = try c.decodeIfPresent([String].self, forKey: .rejectedFingerprints) ?? []
+        isSensitive = try c.decodeIfPresent(Bool.self, forKey: .isSensitive) ?? false
     }
 
     /// Human-readable title derived from the first non-empty line,

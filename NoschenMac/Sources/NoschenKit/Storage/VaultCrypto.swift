@@ -7,19 +7,36 @@ import CommonCrypto
 /// Configuration for at-rest note encryption, persisted in settings.json.
 /// Contains no secret material: only the salt and the master key *wrapped*
 /// (encrypted) by a key derived from the user's password. Without the
-/// password — or the biometric-protected Keychain copy — the wrapped key
-/// is useless.
+/// password — or the biometric-protected copy — the wrapped key is useless.
 public struct VaultConfig: Codable, Equatable, Sendable {
     public var salt: Data
     public var wrappedMasterKey: Data
     public var iterations: Int
     public var biometricUnlock: Bool
+    /// Key-wrap cipher: nil = ChaCha20-Poly1305 (legacy), "aesgcm" = AES-256-GCM.
+    public var wrapAlgo: String?
+    /// KDF identifier for forward migration; nil = "pbkdf2-sha256".
+    public var kdf: String?
+    /// Present only while a key rotation is in flight: the *old* master key,
+    /// wrapped under the same KEK, so a crash mid-rotation is resumable.
+    public var previousWrappedMasterKey: Data?
 
-    public init(salt: Data, wrappedMasterKey: Data, iterations: Int, biometricUnlock: Bool) {
+    public init(
+        salt: Data,
+        wrappedMasterKey: Data,
+        iterations: Int,
+        biometricUnlock: Bool,
+        wrapAlgo: String? = nil,
+        kdf: String? = nil,
+        previousWrappedMasterKey: Data? = nil
+    ) {
         self.salt = salt
         self.wrappedMasterKey = wrappedMasterKey
         self.iterations = iterations
         self.biometricUnlock = biometricUnlock
+        self.wrapAlgo = wrapAlgo
+        self.kdf = kdf
+        self.previousWrappedMasterKey = previousWrappedMasterKey
     }
 }
 
@@ -40,21 +57,29 @@ public enum VaultError: LocalizedError {
 }
 
 #if canImport(CryptoKit)
-/// The cryptography behind "protect my notes":
-/// - a random 256-bit master key encrypts every note file (ChaCha20-Poly1305)
-/// - the master key is wrapped by a key derived from the user's password
-///   (PBKDF2-HMAC-SHA256, 600k iterations, random salt)
-/// - encrypted files start with a magic prefix so plaintext and sealed files
-///   can coexist during migration
+/// The cryptography behind "protect my notes". Current (v3) design:
+/// - every note file is encrypted with AES-256-GCM (FIPS-approved) under a
+///   per-note subkey derived from the master key via HKDF-SHA256, with the
+///   note's identity as both derivation context and AAD
+/// - plaintext is length-prefixed and zero-padded to 4 KiB buckets so file
+///   sizes don't reveal note sizes
+/// - the random 256-bit master key is wrapped by a key derived from the
+///   user's password (PBKDF2-HMAC-SHA256, 600k iterations, NFC-normalized)
+/// - v1 (ChaChaPoly, no AAD) and v2 (ChaChaPoly + AAD) files stay readable
+///   and upgrade to v3 on their next save
+/// Only Apple primitives are composed here; nothing is hand-rolled.
 public enum VaultCrypto {
-    /// Prefix of a version-1 encrypted file (no AAD binding). Still readable;
-    /// files are rewritten as v2 on their next save.
-    public static let magic = Data("NSCHNVLT1\n".utf8)
-    /// Prefix of a version-2 encrypted file: the ciphertext additionally
-    /// authenticates the note's identity (AAD), so a sealed file cannot be
-    /// transplanted under another note's name by someone with disk access.
-    public static let magicV2 = Data("NSCHNVLT2\n".utf8)
+    public static let magic = Data("NSCHNVLT1\n".utf8)     // v1: ChaChaPoly, no AAD
+    public static let magicV2 = Data("NSCHNVLT2\n".utf8)   // v2: ChaChaPoly + AAD
+    public static let magicV3 = Data("NSCHNVLT3\n".utf8)   // v3: AES-GCM + HKDF subkey + AAD + padding
     public static let defaultIterations = 600_000
+    /// File sizes are padded up to multiples of this bucket.
+    public static let padBucket = 4096
+
+    public enum WrapAlgo: String {
+        case chachapoly
+        case aesgcm
+    }
 
     // MARK: Keys
 
@@ -88,16 +113,39 @@ public enum VaultCrypto {
         return SymmetricKey(data: Data(derived))
     }
 
-    // MARK: Master key wrapping
-
-    public static func wrap(masterKey: Data, with kek: SymmetricKey) throws -> Data {
-        try ChaChaPoly.seal(masterKey, using: kek).combined
+    /// Per-file subkey: HKDF-SHA256 of the master key with the file identity
+    /// as context. Compromise of one subkey exposes one note, and a subkey
+    /// derived for one identity is useless for any other.
+    static func fileKey(masterKey: Data, context: Data?) -> SymmetricKey {
+        HKDF<SHA256>.deriveKey(
+            inputKeyMaterial: SymmetricKey(data: masterKey),
+            info: Data("noschen.v3.".utf8) + (context ?? Data("default".utf8)),
+            outputByteCount: 32
+        )
     }
 
-    public static func unwrap(wrapped: Data, with kek: SymmetricKey) throws -> Data {
+    // MARK: Master key wrapping
+
+    public static func wrap(masterKey: Data, with kek: SymmetricKey, algo: WrapAlgo = .aesgcm) throws -> Data {
+        switch algo {
+        case .chachapoly:
+            return try ChaChaPoly.seal(masterKey, using: kek).combined
+        case .aesgcm:
+            guard let combined = try AES.GCM.seal(masterKey, using: kek).combined else {
+                throw VaultError.corruptData
+            }
+            return combined
+        }
+    }
+
+    public static func unwrap(wrapped: Data, with kek: SymmetricKey, algo: WrapAlgo = .aesgcm) throws -> Data {
         do {
-            let box = try ChaChaPoly.SealedBox(combined: wrapped)
-            return try ChaChaPoly.open(box, using: kek)
+            switch algo {
+            case .chachapoly:
+                return try ChaChaPoly.open(try ChaChaPoly.SealedBox(combined: wrapped), using: kek)
+            case .aesgcm:
+                return try AES.GCM.open(try AES.GCM.SealedBox(combined: wrapped), using: kek)
+            }
         } catch {
             throw VaultError.wrongPassword
         }
@@ -106,29 +154,51 @@ public enum VaultCrypto {
     // MARK: File sealing
 
     public static func isSealed(_ data: Data) -> Bool {
-        data.starts(with: magic) || data.starts(with: magicV2)
+        data.starts(with: magic) || data.starts(with: magicV2) || data.starts(with: magicV3)
     }
 
-    /// Seals `plaintext`. With `aad` (the note's identity) the result is a v2
-    /// file whose ciphertext only opens under that same identity; without,
-    /// a legacy v1 file.
+    /// Seals `plaintext` as a v3 file: AES-GCM under an identity-derived
+    /// subkey, identity as AAD, length-prefixed and padded to 4 KiB buckets.
     public static func seal(_ plaintext: Data, masterKey: Data, aad: Data? = nil) throws -> Data {
-        let key = SymmetricKey(data: masterKey)
-        if let aad {
-            return magicV2 + (try ChaChaPoly.seal(plaintext, using: key, authenticating: aad).combined)
+        var body = Data(count: 8)
+        let length = UInt64(plaintext.count)
+        for i in 0..<8 {
+            body[i] = UInt8((length >> (8 * UInt64(7 - i))) & 0xFF)
         }
-        return magic + (try ChaChaPoly.seal(plaintext, using: key).combined)
+        body += plaintext
+        let padded = ((body.count + padBucket - 1) / padBucket) * padBucket
+        body += Data(count: padded - body.count)
+
+        let key = fileKey(masterKey: masterKey, context: aad)
+        let sealed = try AES.GCM.seal(body, using: key, authenticating: aad ?? Data())
+        guard let combined = sealed.combined else { throw VaultError.corruptData }
+        return magicV3 + combined
     }
 
-    /// Opens a sealed file (plaintext passes through). v2 files require the
-    /// matching `aad`; v1 files ignore it.
+    /// Opens any sealed version (plaintext passes through). v2/v3 files
+    /// require the matching `aad`; v1 files ignore it.
     public static func open(_ data: Data, masterKey: Data, aad: Data? = nil) throws -> Data {
-        let key = SymmetricKey(data: masterKey)
+        if data.starts(with: magicV3) {
+            do {
+                let box = try AES.GCM.SealedBox(combined: data.dropFirst(magicV3.count))
+                let key = fileKey(masterKey: masterKey, context: aad)
+                let body = try AES.GCM.open(box, using: key, authenticating: aad ?? Data())
+                guard body.count >= 8 else { throw VaultError.corruptData }
+                var length: UInt64 = 0
+                for i in 0..<8 {
+                    length = (length << 8) | UInt64(body[body.startIndex + i])
+                }
+                guard length <= UInt64(body.count - 8) else { throw VaultError.corruptData }
+                return body.dropFirst(8).prefix(Int(length))
+            } catch {
+                throw VaultError.corruptData
+            }
+        }
         if data.starts(with: magicV2) {
             guard let aad else { throw VaultError.corruptData }
             do {
                 let box = try ChaChaPoly.SealedBox(combined: data.dropFirst(magicV2.count))
-                return try ChaChaPoly.open(box, using: key, authenticating: aad)
+                return try ChaChaPoly.open(box, using: SymmetricKey(data: masterKey), authenticating: aad)
             } catch {
                 throw VaultError.corruptData
             }
@@ -136,7 +206,7 @@ public enum VaultCrypto {
         if data.starts(with: magic) {
             do {
                 let box = try ChaChaPoly.SealedBox(combined: data.dropFirst(magic.count))
-                return try ChaChaPoly.open(box, using: key)
+                return try ChaChaPoly.open(box, using: SymmetricKey(data: masterKey))
             } catch {
                 throw VaultError.corruptData
             }
@@ -144,37 +214,80 @@ public enum VaultCrypto {
         return data
     }
 
-    // MARK: Convenience
+    // MARK: Vault lifecycle
 
     /// Creates a fresh vault: master key + config wrapping it under `password`.
     public static func createVault(password: String, biometricUnlock: Bool) throws -> (masterKey: Data, config: VaultConfig) {
         let masterKey = generateMasterKey()
         let salt = generateSalt()
         let kek = deriveKEK(password: password, salt: salt, iterations: defaultIterations)
-        let wrapped = try wrap(masterKey: masterKey, with: kek)
+        let wrapped = try wrap(masterKey: masterKey, with: kek, algo: .aesgcm)
         return (masterKey, VaultConfig(
             salt: salt,
             wrappedMasterKey: wrapped,
             iterations: defaultIterations,
-            biometricUnlock: biometricUnlock
+            biometricUnlock: biometricUnlock,
+            wrapAlgo: WrapAlgo.aesgcm.rawValue,
+            kdf: "pbkdf2-sha256"
         ))
+    }
+
+    static func wrapAlgo(of config: VaultConfig) -> WrapAlgo {
+        config.wrapAlgo.flatMap(WrapAlgo.init(rawValue:)) ?? .chachapoly
     }
 
     /// Recovers the master key from a config; throws `.wrongPassword` on mismatch.
     public static func unlock(config: VaultConfig, password: String) throws -> Data {
         let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
-        return try unwrap(wrapped: config.wrappedMasterKey, with: kek)
+        return try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: wrapAlgo(of: config))
+    }
+
+    /// Recovers both keys during an interrupted rotation (previous is nil in
+    /// the steady state).
+    public static func unlockBoth(config: VaultConfig, password: String) throws -> (current: Data, previous: Data?) {
+        let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
+        let algo = wrapAlgo(of: config)
+        let current = try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: algo)
+        let previous = try config.previousWrappedMasterKey.map {
+            try unwrap(wrapped: $0, with: kek, algo: algo)
+        }
+        return (current, previous)
     }
 
     /// Rewraps the master key under a new password (new salt, same key —
-    /// notes on disk stay untouched).
+    /// notes on disk stay untouched). Upgrades the wrap cipher to AES-GCM.
+    /// Callers must finish any pending rotation first: the old key is wrapped
+    /// under the old salt's KEK and cannot survive a salt change.
     public static func rewrap(config: VaultConfig, masterKey: Data, newPassword: String) throws -> VaultConfig {
+        guard config.previousWrappedMasterKey == nil else { throw VaultError.locked }
         var updated = config
         updated.salt = generateSalt()
         updated.iterations = defaultIterations
+        updated.wrapAlgo = WrapAlgo.aesgcm.rawValue
         let kek = deriveKEK(password: newPassword, salt: updated.salt, iterations: updated.iterations)
-        updated.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek)
+        updated.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek, algo: .aesgcm)
         return updated
+    }
+
+    /// Starts a key rotation: generates a new master key and stores BOTH the
+    /// new and the old key (wrapped under the same KEK) so a crash while
+    /// files are being re-encrypted is fully resumable.
+    public static func beginRotation(config: VaultConfig, password: String) throws -> (oldKey: Data, newKey: Data, pending: VaultConfig) {
+        let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
+        let oldKey = try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: wrapAlgo(of: config))
+        let newKey = generateMasterKey()
+        var pending = config
+        pending.wrapAlgo = WrapAlgo.aesgcm.rawValue
+        pending.wrappedMasterKey = try wrap(masterKey: newKey, with: kek, algo: .aesgcm)
+        pending.previousWrappedMasterKey = try wrap(masterKey: oldKey, with: kek, algo: .aesgcm)
+        return (oldKey, newKey, pending)
+    }
+
+    /// Finishes a rotation once every file is re-encrypted: drops the old key.
+    public static func completeRotation(_ config: VaultConfig) -> VaultConfig {
+        var done = config
+        done.previousWrappedMasterKey = nil
+        return done
     }
 }
 #endif

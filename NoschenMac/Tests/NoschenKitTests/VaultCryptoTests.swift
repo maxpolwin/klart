@@ -117,7 +117,7 @@ final class VaultCryptoTests: XCTestCase {
         let aadA = Data("note-A".utf8)
         let sealed = try VaultCrypto.seal(plaintext, masterKey: key, aad: aadA)
 
-        XCTAssertTrue(sealed.starts(with: VaultCrypto.magicV2))
+        XCTAssertTrue(sealed.starts(with: VaultCrypto.magicV3))
         XCTAssertEqual(try VaultCrypto.open(sealed, masterKey: key, aad: aadA), plaintext)
         // Wrong identity or missing identity must fail, not decrypt.
         XCTAssertThrowsError(try VaultCrypto.open(sealed, masterKey: key, aad: Data("note-B".utf8)))

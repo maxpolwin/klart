@@ -152,6 +152,12 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Non-nil when at-rest note encryption is enabled. Holds only salt and
     /// the password-wrapped master key — no secret material.
     public var vault: VaultConfig?
+    /// Auto-lock after this many minutes without user activity (0 = never).
+    public var autoLockMinutes: Int
+    /// Lock when the screen sleeps, locks, or the screensaver starts.
+    public var lockOnScreenSleep: Bool
+    /// Make the window invisible to screenshots, recordings, and screen sharing.
+    public var excludeFromCapture: Bool
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -162,7 +168,10 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoFeedback: Bool = true,
         temperature: Double = 0.4,
         maxTokens: Int = 1024,
-        vault: VaultConfig? = nil
+        vault: VaultConfig? = nil,
+        autoLockMinutes: Int = 15,
+        lockOnScreenSleep: Bool = true,
+        excludeFromCapture: Bool = true
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -173,6 +182,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.temperature = temperature
         self.maxTokens = maxTokens
         self.vault = vault
+        self.autoLockMinutes = autoLockMinutes
+        self.lockOnScreenSleep = lockOnScreenSleep
+        self.excludeFromCapture = excludeFromCapture
     }
 
     public init(from decoder: Decoder) throws {
@@ -187,6 +199,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         temperature = min(2, max(0, try c.decodeIfPresent(Double.self, forKey: .temperature) ?? defaults.temperature))
         maxTokens = min(8192, max(64, try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? defaults.maxTokens))
         vault = try c.decodeIfPresent(VaultConfig.self, forKey: .vault)
+        autoLockMinutes = min(240, max(0, try c.decodeIfPresent(Int.self, forKey: .autoLockMinutes) ?? defaults.autoLockMinutes))
+        lockOnScreenSleep = try c.decodeIfPresent(Bool.self, forKey: .lockOnScreenSleep) ?? defaults.lockOnScreenSleep
+        excludeFromCapture = try c.decodeIfPresent(Bool.self, forKey: .excludeFromCapture) ?? defaults.excludeFromCapture
     }
 
     /// Connection details for the given provider, falling back to defaults.

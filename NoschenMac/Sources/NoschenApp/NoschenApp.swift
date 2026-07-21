@@ -1,5 +1,7 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
+import Darwin
 import NoschenKit
 
 @main
@@ -7,12 +9,30 @@ struct NoschenApp: App {
     @StateObject private var state = AppState()
 
     init() {
+        Self.hardenProcess()
         // Make sure windows come to the front when launched via `swift run`
         // (outside a .app bundle the activation policy isn't set for us).
         DispatchQueue.main.async {
             NSApp.setActivationPolicy(.regular)
             NSApp.activate(ignoringOtherApps: true)
         }
+    }
+
+    /// Process-level hardening: no core dumps (a crash must never write key
+    /// material to disk), and in release builds deny debugger attachment —
+    /// bypassable by root, but it stops casual memory dumping.
+    private static func hardenProcess() {
+        var noCore = rlimit(rlim_cur: 0, rlim_max: 0)
+        _ = setrlimit(RLIMIT_CORE, &noCore)
+
+        #if !DEBUG
+        // ptrace(PT_DENY_ATTACH) isn't exposed to Swift; resolve it at runtime.
+        typealias PtraceFn = @convention(c) (CInt, pid_t, CInt, CInt) -> CInt
+        if let sym = dlsym(dlopen(nil, RTLD_NOW), "ptrace") {
+            let ptrace = unsafeBitCast(sym, to: PtraceFn.self)
+            _ = ptrace(31 /* PT_DENY_ATTACH */, 0, 0, 0)
+        }
+        #endif
     }
 
     var body: some Scene {

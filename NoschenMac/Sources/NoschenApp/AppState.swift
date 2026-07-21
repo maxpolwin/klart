@@ -62,8 +62,19 @@ final class AppState: ObservableObject {
     /// produced this session. The UI shows the lock screen; no notes are in
     /// memory and none can be loaded.
     @Published private(set) var isLocked = false
-    /// The vault master key while unlocked; nil when locked or unprotected.
-    private var vaultKey: Data?
+    /// Unlock throttling: after repeated failures, attempts are refused
+    /// until this moment. In-memory only — offline attackers aren't slowed
+    /// by UI throttling anyway; the KDF is the real defense there.
+    @Published private(set) var lockoutUntil: Date?
+    private var failedUnlockCount = 0
+    /// The vault master key while unlocked, in mlocked zeroized-on-release
+    /// memory; nil when locked or unprotected.
+    private var vaultKey: SecureBytes?
+    /// Tamper-evident local log of security events (never content).
+    let auditLog: AuditLog
+    private var idleLockTask: Task<Void, Never>?
+    private var activityMonitor: Any?
+    private var lastActivity = Date()
 
     /// Raw master key behind a user-presence Keychain ACL — the fallback
     /// biometric path on Macs without a Secure Enclave.
@@ -89,12 +100,73 @@ final class AppState: ObservableObject {
         self.settingsStore = settingsStore
         self.secrets = secrets
         self.settings = settingsStore.load()
+        self.auditLog = AuditLog(
+            fileURL: settingsStore.fileURL.deletingLastPathComponent().appendingPathComponent("audit.log")
+        )
 
         if settings.vault != nil {
             isLocked = true          // notes stay sealed until the user unlocks
             Task { await noteStore.lock() }   // and the store refuses writes
         } else {
             Task { await loadNotes() }
+        }
+        installAutoLockMonitors()
+    }
+
+    // MARK: - Auto-lock
+
+    /// Locks on screen sleep/lock/screensaver and after an idle timeout —
+    /// an unlocked vault on a walked-away Mac is the most common real-world
+    /// exposure. Handlers are installed once and check settings at fire time.
+    private func installAutoLockMonitors() {
+        let workspace = NSWorkspace.shared.notificationCenter
+        workspace.addObserver(
+            forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.lockForScreenEventIfEnabled() }
+        }
+        workspace.addObserver(
+            forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            Task { @MainActor in self?.lockForScreenEventIfEnabled() }
+        }
+        let distributed = DistributedNotificationCenter.default()
+        for name in ["com.apple.screenIsLocked", "com.apple.screensaver.didstart"] {
+            distributed.addObserver(
+                forName: Notification.Name(name), object: nil, queue: .main
+            ) { [weak self] _ in
+                Task { @MainActor in self?.lockForScreenEventIfEnabled() }
+            }
+        }
+
+        // Any local user event counts as activity for the idle timer.
+        // Event monitors fire on the main thread; assumeIsolated makes that
+        // visible to the compiler.
+        activityMonitor = NSEvent.addLocalMonitorForEvents(
+            matching: [.keyDown, .leftMouseDown, .rightMouseDown, .scrollWheel, .mouseMoved]
+        ) { [weak self] event in
+            MainActor.assumeIsolated {
+                self?.lastActivity = Date()
+            }
+            return event
+        }
+
+        idleLockTask = Task { [weak self] in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: 30_000_000_000)
+                guard let self else { return }
+                let minutes = self.settings.autoLockMinutes
+                if self.settings.vault != nil, !self.isLocked, minutes > 0,
+                   Date().timeIntervalSince(self.lastActivity) > Double(minutes) * 60 {
+                    self.lockNow()
+                }
+            }
+        }
+    }
+
+    private func lockForScreenEventIfEnabled() {
+        if settings.vault != nil, !isLocked, settings.lockOnScreenSleep {
+            lockNow()
         }
     }
 
@@ -215,7 +287,45 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Sensitive notes never reach a cloud model — enforced here in code,
+    /// not just in the UI, against the resolved endpoint.
+    private var sensitiveNoteBlocked: Bool {
+        selectedNote?.isSensitive == true && !ProviderFactory.isLocal(
+            kind: settings.activeProvider,
+            config: settings.activeConfig
+        )
+    }
+
+    static let sensitiveBlockedMessage =
+        "This note is marked sensitive, so it only ever uses local AI. "
+        + "The current provider is a cloud service — switch to Ollama or "
+        + "LM Studio in Settings to get coaching on this note."
+
+    func toggleSensitive() {
+        guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }
+        notes[index].isSensitive.toggle()
+        persist(notes[index])
+        if notes[index].isSensitive {
+            // Nothing already fetched leaves the machine, but stop anything
+            // in flight to a cloud provider immediately.
+            if !ProviderFactory.isLocal(kind: settings.activeProvider, config: settings.activeConfig) {
+                feedbackTask?.cancel()
+                coachTask?.cancel()
+                coachRunning = false
+                feedbackItems = []
+                feedbackPhase = .skipped(Self.sensitiveBlockedMessage)
+            }
+        } else if feedbackPhase == .skipped(Self.sensitiveBlockedMessage) {
+            feedbackPhase = .idle
+        }
+    }
+
     private func runFeedback() async {
+        guard !sensitiveNoteBlocked else {
+            feedbackPhase = .skipped(Self.sensitiveBlockedMessage)
+            feedbackItems = []
+            return
+        }
         let text = editorText
         let cursor = cursorUTF16
         let currentSettings = settings
@@ -293,6 +403,12 @@ final class AppState: ObservableObject {
     func runCoach(_ action: CoachAction) {
         coachTask?.cancel()
         showCoachPopover = true
+        guard !sensitiveNoteBlocked else {
+            coachAction = action
+            coachOutput = Self.sensitiveBlockedMessage
+            coachRunning = false
+            return
+        }
         coachAction = action
         coachOutput = ""
         coachRunning = true
@@ -367,6 +483,9 @@ final class AppState: ObservableObject {
 
     var biometricUnlockAvailable: Bool {
         guard settings.vault?.biometricUnlock == true,
+              // The biometric copy holds only the current key; an interrupted
+              // rotation needs the password path, which can recover both.
+              settings.vault?.previousWrappedMasterKey == nil,
               let keychain = secrets as? KeychainSecretStore else { return false }
         return keychain.data(for: Self.vaultSEKeychainAccount) != nil
             || keychain.hasProtectedData(for: Self.vaultKeychainAccount)
@@ -416,25 +535,41 @@ final class AppState: ObservableObject {
         // mid-migration the vault config already exists, the app relaunches
         // locked, and unlock handles the mixed plaintext/sealed state — the
         // reverse order would seal notes under a key persisted nowhere.
-        vaultKey = masterKey
+        vaultKey = SecureBytes(masterKey)
         settings.vault = config
         if biometricUnlock {
             storeBiometricKey(masterKey)
         }
         try await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        await auditLog.record(.vaultEnabled)
+    }
+
+    /// Recovers the master key, finishing any interrupted key rotation first
+    /// so every caller afterwards deals with exactly one key.
+    private func resolveMasterKey(password: String) async throws -> Data {
+        guard let config = settings.vault else { throw VaultError.wrongPassword }
+        let (current, previous) = try await Task.detached(priority: .userInitiated) {
+            try VaultCrypto.unlockBoth(config: config, password: password)
+        }.value
+        if let previous {
+            try await noteStore.rotateAllOnDisk(oldKey: previous, newKey: current)
+            settings.vault = VaultCrypto.completeRotation(config)
+        }
+        return current
     }
 
     /// Turns protection off after verifying the password; notes are rewritten
     /// as plaintext and the biometric key copy is removed.
     func disableProtection(password: String) async throws {
-        guard let config = settings.vault else { return }
-        let masterKey = try await Self.deriveMasterKey(config: config, password: password)
+        guard settings.vault != nil else { return }
+        let masterKey = try await resolveMasterKey(password: password)
         await flushEditorToStoreNow()
         try await noteStore.decryptAllOnDisk(masterKey: masterKey)
         removeBiometricKey()
         vaultKey = nil
         settings.vault = nil
         isLocked = false
+        await auditLog.record(.vaultDisabled)
         // Disabling from the lock screen means nothing is in memory yet.
         if notes.isEmpty {
             await loadNotes()
@@ -444,11 +579,34 @@ final class AppState: ObservableObject {
     /// Rewraps the master key under a new password. Notes on disk are
     /// untouched — only the wrapping in settings.json changes.
     func changeVaultPassword(current: String, new: String) async throws {
+        guard settings.vault != nil else { return }
+        let masterKey = try await resolveMasterKey(password: current)
         guard let config = settings.vault else { return }
-        let masterKey = try await Self.deriveMasterKey(config: config, password: current)
         settings.vault = try await Task.detached(priority: .userInitiated) {
             try VaultCrypto.rewrap(config: config, masterKey: masterKey, newPassword: new)
         }.value
+    }
+
+    /// Rotates to a fresh master key: every note is re-encrypted, the wrap
+    /// and biometric copies are refreshed. Crash-safe — the old key stays in
+    /// the config (wrapped) until every file is confirmed re-encrypted, and
+    /// an interrupted rotation resumes on the next password unlock.
+    func rotateMasterKey(password: String) async throws {
+        guard settings.vault != nil else { return }
+        _ = try await resolveMasterKey(password: password)   // finish any pending rotation
+        guard let config = settings.vault else { return }
+        let (oldKey, newKey, pending) = try await Task.detached(priority: .userInitiated) {
+            try VaultCrypto.beginRotation(config: config, password: password)
+        }.value
+        await flushEditorToStoreNow()
+        settings.vault = pending                              // resumable from here
+        try await noteStore.rotateAllOnDisk(oldKey: oldKey, newKey: newKey)
+        settings.vault = VaultCrypto.completeRotation(pending)
+        vaultKey = SecureBytes(newKey)
+        if settings.vault?.biometricUnlock == true {
+            storeBiometricKey(newKey)
+        }
+        await auditLog.record(.keyRotated)
     }
 
     /// Enables or disables the Touch ID unlock path. Enabling needs the
@@ -472,12 +630,32 @@ final class AppState: ObservableObject {
         }.value
     }
 
+    /// Seconds until another unlock attempt is allowed (0 = now).
+    var lockoutRemaining: Int {
+        guard let until = lockoutUntil else { return 0 }
+        return max(0, Int(until.timeIntervalSinceNow.rounded(.up)))
+    }
+
     @discardableResult
     func unlock(password: String) async -> Bool {
-        guard let config = settings.vault else { return true }
-        guard let masterKey = try? await Self.deriveMasterKey(config: config, password: password) else {
+        guard settings.vault != nil else { return true }
+        if lockoutRemaining > 0 {
+            await auditLog.record(.unlockThrottled)
             return false
         }
+        guard let masterKey = try? await resolveMasterKey(password: password) else {
+            failedUnlockCount += 1
+            if failedUnlockCount >= 5 {
+                // 30s, 60s, 120s… capped at 5 minutes.
+                let delay = min(300.0, 30.0 * pow(2, Double(failedUnlockCount - 5)))
+                lockoutUntil = Date().addingTimeInterval(delay)
+            }
+            await auditLog.record(.unlockFailure)
+            return false
+        }
+        failedUnlockCount = 0
+        lockoutUntil = nil
+        await auditLog.record(.unlockSuccess)
         await finishUnlock(masterKey: masterKey)
         return true
     }
@@ -498,15 +676,21 @@ final class AppState: ObservableObject {
             }
             return keychain.protectedData(for: legacyAccount, prompt: "unlock your notes")
         }.value
-        guard let masterKey else { return false }
+        guard let masterKey else {
+            await auditLog.record(.biometricUnlockFailure)
+            return false
+        }
+        await auditLog.record(.biometricUnlockSuccess)
         await finishUnlock(masterKey: masterKey)
         return true
     }
 
     private func finishUnlock(masterKey: Data) async {
-        vaultKey = masterKey
-        await noteStore.setEncryptionKey(masterKey)
+        let secured = SecureBytes(masterKey)
+        vaultKey = secured
+        await noteStore.setEncryptionKey(secured)
         await loadNotes()
+        lastActivity = Date()
         isLocked = false
     }
 
@@ -543,6 +727,7 @@ final class AppState: ObservableObject {
             self.coachAction = nil
             self.showCoachPopover = false
             self.isLocked = true
+            await self.auditLog.record(.locked)
         }
     }
 

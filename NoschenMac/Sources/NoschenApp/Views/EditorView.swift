@@ -9,6 +9,7 @@ struct EditorView: View {
     var body: some View {
         MarkdownEditor(
             text: $state.editorText,
+            clearClipboardAfterCopy: state.settings.vault != nil,
             onTextChange: { state.editorTextChanged() },
             onCursorChange: { state.cursorUTF16 = $0 }
         )
@@ -17,11 +18,41 @@ struct EditorView: View {
     }
 }
 
+/// NSTextView that clears the pasteboard a while after a copy/cut from a
+/// protected library — unless something else was copied since. Keeps note
+/// content from lingering in clipboard history indefinitely.
+final class NoschenTextView: NSTextView {
+    var clearsClipboardAfterCopy = false
+    static let clipboardLifetime: TimeInterval = 45
+
+    override func copy(_ sender: Any?) {
+        super.copy(sender)
+        scheduleClipboardClear()
+    }
+
+    override func cut(_ sender: Any?) {
+        super.cut(sender)
+        scheduleClipboardClear()
+    }
+
+    private func scheduleClipboardClear() {
+        guard clearsClipboardAfterCopy else { return }
+        let pasteboard = NSPasteboard.general
+        let countAtCopy = pasteboard.changeCount
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.clipboardLifetime) {
+            if pasteboard.changeCount == countAtCopy {
+                pasteboard.clearContents()
+            }
+        }
+    }
+}
+
 /// Plain-text markdown editor with live, lightweight styling: headings get
 /// larger fonts, quote lines are dimmed. Styling is applied per edited
 /// paragraph, so typing stays fast in large documents.
 struct MarkdownEditor: NSViewRepresentable {
     @Binding var text: String
+    var clearClipboardAfterCopy = false
     var onTextChange: () -> Void
     var onCursorChange: (Int) -> Void
 
@@ -30,8 +61,19 @@ struct MarkdownEditor: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        let textView = scrollView.documentView as! NSTextView
+        // Assembled manually (instead of NSTextView.scrollableTextView()) so
+        // the document view can be our clipboard-aware subclass.
+        let textView = NoschenTextView()
+        textView.clearsClipboardAfterCopy = clearClipboardAfterCopy
+        textView.isVerticallyResizable = true
+        textView.isHorizontallyResizable = false
+        textView.minSize = NSSize(width: 0, height: 0)
+        textView.maxSize = NSSize(width: .greatestFiniteMagnitude, height: .greatestFiniteMagnitude)
+        textView.textContainer?.containerSize = NSSize(width: 0, height: .greatestFiniteMagnitude)
+
+        let scrollView = NSScrollView()
+        scrollView.documentView = textView
+        scrollView.borderType = .noBorder
 
         textView.delegate = context.coordinator
         textView.isRichText = false
@@ -62,6 +104,7 @@ struct MarkdownEditor: NSViewRepresentable {
     func updateNSView(_ scrollView: NSScrollView, context: Context) {
         context.coordinator.parent = self
         guard let textView = scrollView.documentView as? NSTextView else { return }
+        (textView as? NoschenTextView)?.clearsClipboardAfterCopy = clearClipboardAfterCopy
         // Only push external changes (accepted suggestions, note switches);
         // user typing already updated the binding via the delegate.
         if !context.coordinator.isEditing && textView.string != text {

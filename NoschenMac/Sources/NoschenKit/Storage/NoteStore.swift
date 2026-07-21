@@ -9,8 +9,12 @@ public actor NoteStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     /// When set, files are sealed with the vault master key on write and
-    /// opened on read. Nil = plaintext mode (vault disabled) or locked.
-    private var encryptionKey: Data?
+    /// opened on read. Held in mlocked, zeroized-on-drop memory. Nil =
+    /// plaintext mode (vault disabled) or locked.
+    private var encryptionKey: SecureBytes?
+    /// During a key rotation this holds the outgoing master key so files not
+    /// yet re-encrypted still open. Never used for writes.
+    private var fallbackKey: SecureBytes?
     /// True while the vault exists but no key is present. In this state the
     /// store refuses to write — otherwise a stray save (a menu action, a
     /// late autosave) would drop plaintext into an encrypted library.
@@ -25,14 +29,24 @@ public actor NoteStore {
         decoder.dateDecodingStrategy = .iso8601
     }
 
-    public func setEncryptionKey(_ key: Data?) {
+    /// Keys are shared-ownership SecureBytes: dropping the last reference
+    /// zeroizes the mlocked buffer via deinit, so replacing or clearing here
+    /// never explicitly destroys an instance another owner may still hold.
+    public func setEncryptionKey(_ key: SecureBytes?, fallback: SecureBytes? = nil) {
         encryptionKey = key
+        fallbackKey = fallback
         if key != nil { vaultLocked = false }
+    }
+
+    /// Convenience for callers and tests holding plain key Data.
+    public func setEncryptionKey(_ key: Data?) {
+        setEncryptionKey(key.map(SecureBytes.init), fallback: nil)
     }
 
     /// Enters the locked state: no key in memory, all writes refused.
     public func lock() {
         encryptionKey = nil
+        fallbackKey = nil
         vaultLocked = true
     }
 
@@ -98,7 +112,7 @@ public actor NoteStore {
     private func encrypt(_ data: Data, noteID: UUID) throws -> Data {
         #if canImport(CryptoKit)
         guard let key = encryptionKey else { return data }
-        return try VaultCrypto.seal(data, masterKey: key, aad: Self.aad(for: noteID))
+        return try key.withData { try VaultCrypto.seal(data, masterKey: $0, aad: Self.aad(for: noteID)) }
         #else
         return data
         #endif
@@ -108,7 +122,14 @@ public actor NoteStore {
         #if canImport(CryptoKit)
         guard VaultCrypto.isSealed(data) else { return data }
         guard let key = encryptionKey else { throw VaultError.corruptData }
-        return try VaultCrypto.open(data, masterKey: key, aad: noteID.map(Self.aad(for:)))
+        let aad = noteID.map(Self.aad(for:))
+        do {
+            return try key.withData { try VaultCrypto.open(data, masterKey: $0, aad: aad) }
+        } catch {
+            // Mid-rotation: files not yet re-encrypted still use the old key.
+            guard let fallback = fallbackKey else { throw error }
+            return try fallback.withData { try VaultCrypto.open(data, masterKey: $0, aad: aad) }
+        }
         #else
         return data
         #endif
@@ -127,8 +148,7 @@ public actor NoteStore {
             let aad = Self.idFromFilename(file).map(Self.aad(for:))
             try VaultCrypto.seal(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
-        encryptionKey = masterKey
-        vaultLocked = false
+        setEncryptionKey(SecureBytes(masterKey))
         #else
         throw VaultError.unsupportedPlatform
         #endif
@@ -146,7 +166,33 @@ public actor NoteStore {
             try VaultCrypto.open(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
         encryptionKey = nil
+        fallbackKey = nil
         vaultLocked = false
+        #else
+        throw VaultError.unsupportedPlatform
+        #endif
+    }
+
+    /// Key rotation: re-seals every encrypted file from `oldKey` to `newKey`
+    /// (also upgrading any v1/v2 file to the v3 format). Files already under
+    /// the new key — e.g. when resuming an interrupted rotation — are left
+    /// alone. Afterwards the store uses only the new key.
+    public func rotateAllOnDisk(oldKey: Data, newKey: Data) throws {
+        #if canImport(CryptoKit)
+        try ensureDirectory()
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension.lowercased() == "json" }
+        for file in files {
+            let raw = try Data(contentsOf: file)
+            guard VaultCrypto.isSealed(raw) else { continue }
+            let aad = Self.idFromFilename(file).map(Self.aad(for:))
+            if (try? VaultCrypto.open(raw, masterKey: newKey, aad: aad)) != nil {
+                continue // already rotated (resume path)
+            }
+            let plaintext = try VaultCrypto.open(raw, masterKey: oldKey, aad: aad)
+            try VaultCrypto.seal(plaintext, masterKey: newKey, aad: aad).write(to: file, options: .atomic)
+        }
+        setEncryptionKey(SecureBytes(newKey))
         #else
         throw VaultError.unsupportedPlatform
         #endif

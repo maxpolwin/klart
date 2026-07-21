@@ -51,7 +51,11 @@ struct LockView: View {
             .offset(x: shakeOffset)
             .padding(.top, 6)
 
-            if failed {
+            if state.lockoutRemaining > 0 {
+                Text("Too many attempts — try again in \(state.lockoutRemaining)s.")
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.color(for: .structure))
+            } else if failed {
                 Text("Wrong password.")
                     .font(.system(size: 11.5))
                     .foregroundStyle(Theme.color(for: .question))
