@@ -1,5 +1,6 @@
 #if canImport(CryptoKit)
 import XCTest
+import CryptoKit
 @testable import NoschenKit
 
 final class VaultCryptoTests: XCTestCase {
@@ -125,11 +126,14 @@ final class VaultCryptoTests: XCTestCase {
     }
 
     func testLegacyV1FilesStillOpen() throws {
+        // seal() only ever writes the current format, so a genuine legacy v1
+        // file (ChaChaPoly, no AAD) is crafted by hand here.
         let key = VaultCrypto.generateMasterKey()
         let plaintext = Data("legacy".utf8)
-        let v1 = try VaultCrypto.seal(plaintext, masterKey: key, aad: nil)
+        let v1 = VaultCrypto.magic
+            + (try ChaChaPoly.seal(plaintext, using: SymmetricKey(data: key)).combined)
 
-        XCTAssertTrue(v1.starts(with: VaultCrypto.magic))
+        XCTAssertTrue(VaultCrypto.isSealed(v1))
         XCTAssertEqual(try VaultCrypto.open(v1, masterKey: key), plaintext)
         // A v1 file predates AAD binding — passing an identity is harmless.
         XCTAssertEqual(try VaultCrypto.open(v1, masterKey: key, aad: Data("any".utf8)), plaintext)

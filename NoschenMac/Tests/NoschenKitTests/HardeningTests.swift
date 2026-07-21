@@ -60,19 +60,22 @@ final class HardeningTests: XCTestCase {
         let masterKey = VaultCrypto.generateMasterKey()
         let key = SymmetricKey(data: masterKey)
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        // The store decodes ISO-8601 dates; legacy files were written the same way.
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
 
         // Hand-write a v1 file (ChaChaPoly, no AAD)…
         let v1Note = Note(content: "# Legacy v1 note")
         let v1URL = dir.appendingPathComponent("\(v1Note.id.uuidString).json")
         let v1 = VaultCrypto.magic
-            + (try ChaChaPoly.seal(JSONEncoder().encode(v1Note), using: key).combined)
+            + (try ChaChaPoly.seal(encoder.encode(v1Note), using: key).combined)
         try v1.write(to: v1URL)
 
         // …and a v2 file (ChaChaPoly, AAD = note id).
         let v2Note = Note(content: "# Legacy v2 note")
         let v2URL = dir.appendingPathComponent("\(v2Note.id.uuidString).json")
         let v2 = VaultCrypto.magicV2 + (try ChaChaPoly.seal(
-            JSONEncoder().encode(v2Note),
+            encoder.encode(v2Note),
             using: key,
             authenticating: Data(v2Note.id.uuidString.utf8)
         ).combined)
