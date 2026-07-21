@@ -7,6 +7,7 @@ import NoschenKit
 struct FeedbackPanelView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         ScrollView {
@@ -19,6 +20,10 @@ struct FeedbackPanelView: View {
             }
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .animation(
+                reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.25),
+                value: state.feedbackItems
+            )
         }
     }
 
@@ -55,6 +60,7 @@ struct FeedbackPanelView: View {
                             .font(.system(size: 11.5))
                             .foregroundStyle(Theme.accent)
                             .frame(width: 16)
+                            .symbolEffect(.bounce, value: state.coachAction == action)
                         Text(action.label)
                             .font(.system(size: 12, weight: .medium))
                             .foregroundStyle(Theme.textPrimary)
@@ -113,6 +119,10 @@ struct FeedbackPanelView: View {
                     .padding(.bottom, 6)
                 ForEach(state.feedbackItems) { item in
                     FeedbackRow(item: item)
+                        .transition(.asymmetric(
+                            insertion: .opacity.combined(with: .scale(scale: 0.96, anchor: .top)),
+                            removal: .opacity.combined(with: .scale(scale: 0.97))
+                        ))
                     if item.id != state.feedbackItems.last?.id {
                         Divider().overlay(Theme.border)
                     }

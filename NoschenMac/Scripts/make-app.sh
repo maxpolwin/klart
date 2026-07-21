@@ -31,14 +31,27 @@ if [ -f ../build/icon.icns ]; then
   cp ../build/icon.icns "$APP/Contents/Resources/AppIcon.icns"
 fi
 
+# Both paths sign with the Hardened Runtime and the App Sandbox entitlements
+# (sandbox + outgoing-network-only). The bundle is a single executable, so one
+# codesign invocation covers it — no --deep needed.
+ENTITLEMENTS="Scripts/Noschen.entitlements"
+
 if [ "$SIGN_IDENTITY" = "-" ]; then
   # Ad-hoc signature: fine for running locally, not for handing to anyone else.
-  codesign --force --deep --sign - "$APP"
+  codesign --force --options runtime --entitlements "$ENTITLEMENTS" \
+    --sign - "$APP"
   echo "Built $APP (ad-hoc signed — only trusted on this Mac)"
 else
   # Real identity + hardened runtime, required for notarization eligibility.
-  codesign --force --deep --options runtime --timestamp \
+  codesign --force --options runtime --timestamp --entitlements "$ENTITLEMENTS" \
     --sign "$SIGN_IDENTITY" "$APP"
   echo "Built $APP (signed with: $SIGN_IDENTITY)"
   echo "Next: bash Scripts/notarize-app.sh   (to clear Gatekeeper for everyone)"
 fi
+
+# Fail the build if the sandbox or hardened runtime didn't take.
+codesign --display --entitlements - "$APP" 2>/dev/null | grep -q "com.apple.security.app-sandbox" \
+  || { echo "error: app-sandbox entitlement missing from signature" >&2; exit 1; }
+codesign --display --verbose "$APP" 2>&1 | grep -q "flags=.*runtime" \
+  || { echo "error: hardened runtime flag missing from signature" >&2; exit 1; }
+echo "Verified: App Sandbox + Hardened Runtime present in signature"

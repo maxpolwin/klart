@@ -72,20 +72,54 @@ public protocol LLMClient: Sendable {
 }
 
 enum LLMHTTP {
-    /// Validates and normalizes a user-entered base URL.
+    /// Validates and normalizes a user-entered base URL. Plain HTTP is only
+    /// ever accepted for hosts on the local machine or network (`allowInsecure`
+    /// merely opts a provider into that local exception) — a remote provider
+    /// over HTTP would leak notes and API keys in cleartext.
     static func normalizeBaseURL(_ raw: String, allowInsecure: Bool) throws -> URL {
         var trimmed = raw.trimmingCharacters(in: .whitespacesAndNewlines)
         while trimmed.hasSuffix("/") { trimmed.removeLast() }
-        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), url.host != nil else {
+        guard let url = URL(string: trimmed), let scheme = url.scheme?.lowercased(), let host = url.host else {
             throw LLMError.invalidBaseURL(raw)
         }
         guard scheme == "https" || scheme == "http" else {
             throw LLMError.invalidBaseURL(raw)
         }
-        if scheme == "http" && !allowInsecure {
+        if scheme == "http" && !(allowInsecure && isLocalHost(host)) {
             throw LLMError.insecureURL(raw)
         }
         return url
+    }
+
+    /// True for hosts that stay on this machine or the local network:
+    /// loopback, RFC 1918 / link-local / CGNAT IPv4, loopback / link-local /
+    /// unique-local IPv6, single-label hostnames, and mDNS-style suffixes.
+    static func isLocalHost(_ rawHost: String) -> Bool {
+        let host = rawHost.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
+
+        // IPv4 private / loopback / link-local / CGNAT ranges.
+        let parts = host.split(separator: ".").compactMap { UInt8($0) }
+        if parts.count == 4 {
+            switch (parts[0], parts[1]) {
+            case (127, _), (10, _), (192, 168), (169, 254): return true
+            case (172, 16...31): return true
+            case (100, 64...127): return true
+            default: return false
+            }
+        }
+
+        // IPv6 loopback / link-local / unique-local.
+        if host.contains(":") {
+            return host.hasPrefix("fe80:") || host.hasPrefix("fd") || host.hasPrefix("fc")
+        }
+
+        // Single-label hostnames ("mymac") and local-only DNS suffixes.
+        if !host.contains(".") { return true }
+        for suffix in [".local", ".lan", ".internal", ".home.arpa"] where host.hasSuffix(suffix) {
+            return true
+        }
+        return false
     }
 
     static func session(timeout: TimeInterval) -> URLSession {

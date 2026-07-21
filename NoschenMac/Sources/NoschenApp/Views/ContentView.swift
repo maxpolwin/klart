@@ -5,6 +5,8 @@ import NoschenKit
 struct ContentView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.openSettings) private var openSettings
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var pillPulse = false
 
     var body: some View {
         NavigationSplitView {
@@ -20,12 +22,20 @@ struct ContentView: View {
                     state.requestFeedback(manual: true)
                 } label: {
                     Label("Analyze", systemImage: "sparkles")
+                        .symbolEffect(.bounce, value: state.feedbackPhase == .analyzing)
                 }
                 .help("Ask the coach to analyze this note now (⌘R)")
                 .disabled(state.selectedNoteID == nil)
 
                 coachPill
             }
+        }
+        .onChange(of: state.feedbackItems.count) { old, new in
+            // A small, springy nudge when fresh suggestions land — the pill is
+            // the only place the AI is allowed to wave.
+            guard new > old, !reduceMotion else { return }
+            withAnimation(.spring(duration: 0.3, bounce: 0.6)) { pillPulse = true }
+            withAnimation(.spring(duration: 0.35, bounce: 0.3).delay(0.3)) { pillPulse = false }
         }
     }
 
@@ -48,14 +58,18 @@ struct ContentView: View {
                 Circle()
                     .fill(pillDotColor)
                     .frame(width: 6, height: 6)
+                    .scaleEffect(pillPulse ? 1.6 : 1.0)
                 Text(pillText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
+                    .contentTransition(.numericText())
+                    .animation(reduceMotion ? nil : .snappy(duration: 0.25), value: pillText)
                     .lineLimit(1)
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 4)
             .background(Theme.surfaceRaised, in: Capsule())
+            .scaleEffect(pillPulse ? 1.06 : 1.0)
         }
         .buttonStyle(.plain)
         .help("Coach suggestions — click to open (⌘.)")
@@ -85,12 +99,19 @@ struct ContentView: View {
 
 struct EmptyStateView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var appeared = false
 
     var body: some View {
         VStack(spacing: 14) {
             Image(systemName: "square.and.pencil")
                 .font(.system(size: 38, weight: .light))
                 .foregroundStyle(Theme.accent.opacity(0.7))
+                .scaleEffect(appeared || reduceMotion ? 1.0 : 0.6)
+                .opacity(appeared || reduceMotion ? 1 : 0)
+                .onAppear {
+                    withAnimation(.spring(duration: 0.5, bounce: 0.45)) { appeared = true }
+                }
             Text("Think in writing.")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)

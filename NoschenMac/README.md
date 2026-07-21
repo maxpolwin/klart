@@ -17,7 +17,7 @@ This is the native Swift/SwiftUI rebuild of the original Electron app (still in 
 - **Coaching, not ghostwriting** — feedback types: **Gap**, **MECE**, **Source**, **Structure**, **Clarity**, and **Question** (Socratic). Plus one-tap coach actions: *Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps* (streamed live).
 - **Feedback you control** — accept a tip to insert it as a quoted block in the right section; dismiss it and it never comes back for that note. Tune tone, detail, language, tips-per-round, and add your own standing guidance.
 - **Context-aware** — the coach knows your H1 topic, which H2 section you're editing, and what the other sections cover, so MECE and gap analysis are about the *document*, not the paragraph. Mark any section `[no-ai]` to exclude it.
-- **Secure by default** — API keys live in the macOS Keychain, never in settings files. Remote providers are HTTPS-enforced in code; plain HTTP is allowed only for local servers.
+- **Secure by default** — API keys live in the macOS Keychain, never in settings files. Plain HTTP is enforced in code to local hosts only (loopback, RFC 1918/link-local addresses, `.local`/`.lan` names); every remote endpoint must be HTTPS. Packaged builds are signed with the **Hardened Runtime** and run in the **App Sandbox** (outgoing network only, no file access beyond the app's own container) — `make-app.sh` verifies both flags are present in the signature and fails the build otherwise.
 - **Fast** — actor-based file I/O, debounced autosave (atomic writes), per-paragraph editor styling, cancellation-aware feedback pipeline (a new keystroke cancels the in-flight analysis).
 
 ## Requirements
@@ -105,10 +105,12 @@ Design decisions worth knowing:
 
 | What | Where |
 |---|---|
-| Notes | `~/Library/Application Support/Noschen/Notes/*.json` |
-| Settings | `~/Library/Application Support/Noschen/settings.json` (never contains keys) |
+| Notes | `…/Application Support/Noschen/Notes/*.json` |
+| Settings | `…/Application Support/Noschen/settings.json` (never contains keys) |
 | API keys | macOS Keychain (`com.noschen.mac`) |
 | Telemetry | none |
+
+The `…` base depends on how you run Noschen: the sandboxed packaged app resolves to its container (`~/Library/Containers/com.noschen.mac/Data/Library/Application Support/…`), while an unsandboxed `swift run` dev build uses `~/Library/Application Support/…` directly. If you move from a dev build to the packaged app, copy the `Noschen` folder across once.
 
 Only the relevant slice of the note you're editing is sent to the provider you configured, when you pause typing or invoke the coach. With Ollama or LM Studio, everything stays on your machine.
 

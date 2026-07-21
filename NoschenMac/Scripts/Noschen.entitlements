@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- App Sandbox: the app can only touch its own container
+	     (~/Library/Containers/com.noschen.mac), its Keychain items, and
+	     the network. Notes and settings live in Application Support inside
+	     the container. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Outgoing connections only: local Ollama/LM Studio and HTTPS cloud
+	     providers. The app never listens on a port. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>
