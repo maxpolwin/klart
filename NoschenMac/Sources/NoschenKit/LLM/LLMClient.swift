@@ -41,6 +41,12 @@ public enum LLMError: Error, LocalizedError, Equatable {
     case http(status: Int, message: String)
     case emptyResponse
     case cannotConnect(String)
+    /// Built-in provider: weights aren't on disk yet. Payload is UI detail
+    /// (e.g. the download size), may be empty.
+    case modelNotInstalled(String)
+    /// Built-in provider: weights exist but llama.cpp couldn't load them,
+    /// or this build lacks the bundled runtime.
+    case modelLoadFailed(String)
 
     public var errorDescription: String? {
         switch self {
@@ -54,6 +60,11 @@ public enum LLMError: Error, LocalizedError, Equatable {
             return "The model returned an empty response"
         case .cannotConnect(let detail):
             return "Cannot reach the server. \(detail)"
+        case .modelNotInstalled(let detail):
+            let size = detail.isEmpty ? "" : " (\(detail))"
+            return "The built-in model isn't downloaded yet\(size). Open Settings → AI Provider to download it."
+        case .modelLoadFailed(let detail):
+            return detail.isEmpty ? "The built-in model couldn't be loaded." : detail
         }
     }
 }

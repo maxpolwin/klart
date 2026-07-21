@@ -4,7 +4,7 @@
 
 Noschen is a minimal, dark, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of giving answers.
 
-This is the native Swift/SwiftUI rebuild of the original Electron app (still in the repository root). It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
+This is the native Swift/SwiftUI rebuild of the original Electron app (still in the repository root). It is faster, lighter (~5 MB app, no bundled browser), and comes with a **built-in on-device model** (llama.cpp in-process — no external tools needed), plus flexible integrations with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
 
 ---
 
@@ -24,7 +24,8 @@ This is the native Swift/SwiftUI rebuild of the original Electron app (still in 
 - macOS 14 (Sonoma) or later
 - Xcode 15+ command line tools (to build)
 - An LLM to talk to:
-  - [Ollama](https://ollama.com) — `ollama pull llama3.2` (recommended local default)
+  - **Built-in** (default) — a small on-device model, downloaded once (~0.5–1.1 GB) from Settings; no server, no account. Requires a build with the vendored llama.xcframework — see `Docs/BUILTIN_MODEL.md`.
+  - [Ollama](https://ollama.com) — `ollama pull llama3.2`
   - [LM Studio](https://lmstudio.ai) — load a model, start the local server
   - [OpenRouter](https://openrouter.ai) — API key, access to hundreds of cloud models
 
@@ -68,6 +69,7 @@ The last step needs a paid Apple Developer Program membership and one-time notar
 
 | Provider | Default endpoint | API key | Notes |
 |---|---|---|---|
+| Built-in | — (in-process) | — | Small on-device model (Qwen2.5), one-time download, grammar-constrained JSON. Nothing ever leaves your Mac. |
 | Ollama | `http://localhost:11434` | — | Native Ollama API, JSON mode enforced for reliable feedback |
 | LM Studio | `http://localhost:1234/v1` | — | OpenAI-compatible local server |
 | OpenRouter | `https://openrouter.ai/api/v1` | Keychain | HTTPS enforced; any OpenRouter model id works |
@@ -81,11 +83,12 @@ The last step needs a paid Apple Developer Program membership and one-time notar
 NoschenMac/
 ├── Package.swift                 SwiftPM: NoschenKit (library) + Noschen (app)
 ├── Sources/
+│   ├── LlamaBridge/              Thin wrapper over the vendored llama.cpp (stub without it)
 │   ├── NoschenKit/               Platform-independent core (unit-tested)
 │   │   ├── Models/               Note, Settings, Feedback types
 │   │   ├── Markdown/             Outline parser (UTF-16 offsets ↔ editor cursor)
 │   │   ├── Storage/              NoteStore (actor, atomic JSON), SettingsStore, Keychain
-│   │   ├── LLM/                  LLMClient protocol, Ollama + OpenAI-compatible clients
+│   │   ├── LLM/                  LLMClient protocol, built-in (llama.cpp) + Ollama + OpenAI-compatible clients, model registry/downloader
 │   │   └── Feedback/             PromptBuilder, robust FeedbackParser, FeedbackEngine
 │   └── NoschenApp/               SwiftUI app (macOS-only)
 │       ├── AppState.swift        Single source of truth, debounce/cancellation logic
@@ -106,6 +109,7 @@ Design decisions worth knowing:
 |---|---|
 | Notes | `~/Library/Application Support/Noschen/Notes/*.json` |
 | Settings | `~/Library/Application Support/Noschen/settings.json` (never contains keys) |
+| Built-in model weights | `~/Library/Application Support/Noschen/Models/*.gguf` (removable in Settings) |
 | API keys | macOS Keychain (`com.noschen.mac`) |
 | Telemetry | none |
 

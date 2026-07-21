@@ -8,6 +8,8 @@ public enum ProviderFactory {
         secrets: SecretStore
     ) throws -> any LLMClient {
         switch kind {
+        case .builtin:
+            return LocalLLMClient()
         case .ollama:
             return try OllamaClient(baseURL: config.baseURL)
         case .lmstudio:

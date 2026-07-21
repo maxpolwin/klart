@@ -1,9 +1,11 @@
 import Foundation
 
-/// The LLM backends Noschen can talk to. Ollama uses its native API;
-/// everything else speaks the OpenAI-compatible chat/completions dialect,
-/// which is what LM Studio, OpenRouter, and most self-hosted gateways expose.
+/// The LLM backends Noschen can talk to. Built-in runs a small model
+/// in-process (no server at all); Ollama uses its native API; everything
+/// else speaks the OpenAI-compatible chat/completions dialect, which is
+/// what LM Studio, OpenRouter, and most self-hosted gateways expose.
 public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable {
+    case builtin
     case ollama
     case lmstudio
     case openrouter
@@ -13,6 +15,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
 
     public var displayName: String {
         switch self {
+        case .builtin: return "Built-in (private, no setup)"
         case .ollama: return "Ollama"
         case .lmstudio: return "LM Studio"
         case .openrouter: return "OpenRouter"
@@ -22,6 +25,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
 
     public var defaultBaseURL: String {
         switch self {
+        case .builtin: return ""  // in-process — there is no server
         case .ollama: return "http://localhost:11434"
         case .lmstudio: return "http://localhost:1234/v1"
         case .openrouter: return "https://openrouter.ai/api/v1"
@@ -31,6 +35,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
 
     public var defaultModel: String {
         switch self {
+        case .builtin: return ModelRegistry.defaultModelID
         case .ollama: return "llama3.2"
         case .lmstudio: return ""
         case .openrouter: return "anthropic/claude-haiku-4.5"
@@ -42,7 +47,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
     public var usesAPIKey: Bool {
         switch self {
         case .openrouter, .custom: return true
-        case .ollama, .lmstudio: return false
+        case .builtin, .ollama, .lmstudio: return false
         }
     }
 
@@ -50,9 +55,10 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
     public var keychainAccount: String { "noschen.apikey.\(rawValue)" }
 
     /// Local providers may use plain http; remote ones must use https.
+    /// (Irrelevant for builtin — it never opens a connection.)
     public var allowsInsecureHTTP: Bool {
         switch self {
-        case .ollama, .lmstudio, .custom: return true
+        case .builtin, .ollama, .lmstudio, .custom: return true
         case .openrouter: return false
         }
     }
@@ -150,8 +156,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var temperature: Double
     public var maxTokens: Int
 
+    // Fresh installs default to the built-in model: works with zero external
+    // setup and nothing ever leaves the machine. Anyone with a previously
+    // saved settings.json keeps their provider — the file always contains an
+    // explicit activeProvider, and the lenient decoder below only falls back
+    // to this default when the key is absent.
     public init(
-        activeProvider: ProviderKind = .ollama,
+        activeProvider: ProviderKind = .builtin,
         providers: [ProviderKind: ProviderConfig] = [:],
         enabledFeedbackKinds: [FeedbackKind] = FeedbackKind.defaultEnabled,
         tipStyle: TipStyle = TipStyle(),

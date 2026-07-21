@@ -132,5 +132,36 @@ final class SettingsTests: XCTestCase {
         XCTAssertFalse(ProviderKind.openrouter.allowsInsecureHTTP)
         XCTAssertEqual(ProviderKind.ollama.defaultBaseURL, "http://localhost:11434")
         XCTAssertEqual(ProviderKind.lmstudio.defaultBaseURL, "http://localhost:1234/v1")
+        XCTAssertFalse(ProviderKind.builtin.usesAPIKey)
+        XCTAssertEqual(ProviderKind.builtin.defaultBaseURL, "")
+        XCTAssertEqual(ProviderKind.builtin.defaultModel, ModelRegistry.defaultModelID)
+    }
+
+    func testFreshInstallDefaultsToBuiltin() {
+        let settings = AppSettings()
+        XCTAssertEqual(settings.activeProvider, .builtin)
+        XCTAssertEqual(settings.activeConfig.model, ModelRegistry.defaultModelID)
+        XCTAssertFalse(settings.activeConfig.model.isEmpty, "runFeedback guards on a non-empty model")
+    }
+
+    func testExistingSettingsKeepTheirProviderOnUpgrade() throws {
+        // A settings.json written by any previous version always contains an
+        // explicit activeProvider — switching the fresh-install default to
+        // builtin must not migrate those users.
+        for raw in ["ollama", "lmstudio", "openrouter", "custom"] {
+            let json = #"{"activeProvider":"\#(raw)"}"#
+            let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+            XCTAssertEqual(decoded.activeProvider.rawValue, raw)
+        }
+    }
+
+    func testBuiltinSettingsRoundtrip() throws {
+        var settings = AppSettings()
+        settings.activeProvider = .builtin
+        settings.setConfig(ProviderConfig(baseURL: "", model: ModelRegistry.defaultModelID), for: .builtin)
+        let data = try JSONEncoder().encode(settings)
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: data)
+        XCTAssertEqual(decoded, settings)
+        XCTAssertEqual(decoded.activeConfig.model, ModelRegistry.defaultModelID)
     }
 }

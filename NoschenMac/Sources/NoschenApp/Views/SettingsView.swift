@@ -41,11 +41,16 @@ private struct ProviderSettingsView: View {
                     apiKey = state.apiKey(for: newKind)
                     state.availableModels = []
                     state.connection = .unknown
+                    if newKind == .builtin {
+                        state.refreshBuiltinModelStates()
+                    }
                 }
 
-                TextField("Server URL", text: config.baseURL)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
+                if kind != .builtin {
+                    TextField("Server URL", text: config.baseURL)
+                        .textFieldStyle(.roundedBorder)
+                        .autocorrectionDisabled()
+                }
 
                 if kind.usesAPIKey {
                     SecureField("API Key", text: $apiKey)
@@ -66,28 +71,42 @@ private struct ProviderSettingsView: View {
             }
 
             Section("Model") {
-                HStack {
-                    TextField("Model", text: config.model)
-                        .textFieldStyle(.roundedBorder)
-                        .autocorrectionDisabled()
-                    if !state.availableModels.isEmpty {
-                        Menu {
-                            ForEach(state.availableModels, id: \.self) { model in
-                                Button(model) { config.wrappedValue.model = model }
-                            }
-                        } label: {
-                            Image(systemName: "chevron.up.chevron.down")
-                        }
-                        .menuStyle(.borderlessButton)
-                        .frame(width: 24)
-                        .help("Pick from models the server offers")
+                if kind == .builtin {
+                    ForEach(ModelRegistry.models) { model in
+                        BuiltinModelRow(
+                            model: model,
+                            state: state.builtinModelStates[model.id] ?? .notInstalled,
+                            isActive: config.wrappedValue.model == model.id,
+                            select: { config.wrappedValue.model = model.id },
+                            download: { state.downloadBuiltinModel(model) },
+                            cancel: { state.cancelBuiltinDownload(model) },
+                            delete: { state.deleteBuiltinModel(model) }
+                        )
                     }
-                }
+                } else {
+                    HStack {
+                        TextField("Model", text: config.model)
+                            .textFieldStyle(.roundedBorder)
+                            .autocorrectionDisabled()
+                        if !state.availableModels.isEmpty {
+                            Menu {
+                                ForEach(state.availableModels, id: \.self) { model in
+                                    Button(model) { config.wrappedValue.model = model }
+                                }
+                            } label: {
+                                Image(systemName: "chevron.up.chevron.down")
+                            }
+                            .menuStyle(.borderlessButton)
+                            .frame(width: 24)
+                            .help("Pick from models the server offers")
+                        }
+                    }
 
-                HStack(spacing: 10) {
-                    Button("Test Connection") { state.testConnection() }
-                    connectionLabel
-                    Spacer()
+                    HStack(spacing: 10) {
+                        Button("Test Connection") { state.testConnection() }
+                        connectionLabel
+                        Spacer()
+                    }
                 }
             }
 
@@ -109,11 +128,18 @@ private struct ProviderSettingsView: View {
             }
         }
         .formStyle(.grouped)
-        .onAppear { apiKey = state.apiKey(for: kind) }
+        .onAppear {
+            apiKey = state.apiKey(for: kind)
+            if kind == .builtin {
+                state.refreshBuiltinModelStates()
+            }
+        }
     }
 
     private var providerHint: String {
         switch kind {
+        case .builtin:
+            return "Runs entirely inside Noschen — no server, no account, nothing leaves your Mac. The model is a one-time download stored in Application Support."
         case .ollama:
             return "Local, private, free. Install from ollama.com and run `ollama pull llama3.2`."
         case .lmstudio:
@@ -141,6 +167,125 @@ private struct ProviderSettingsView: View {
                 .font(.caption)
                 .foregroundStyle(.red)
                 .lineLimit(2)
+        }
+    }
+}
+
+// MARK: - Built-in model row
+
+private struct BuiltinModelRow: View {
+    let model: BuiltinModel
+    let state: ModelDownloadState
+    let isActive: Bool
+    let select: () -> Void
+    let download: () -> Void
+    let cancel: () -> Void
+    let delete: () -> Void
+
+    @State private var confirmingDelete = false
+
+    init(
+        model: BuiltinModel,
+        state: ModelDownloadState,
+        isActive: Bool,
+        select: @escaping () -> Void,
+        download: @escaping () -> Void,
+        cancel: @escaping () -> Void,
+        delete: @escaping () -> Void
+    ) {
+        self.model = model
+        self.state = state
+        self.isActive = isActive
+        self.select = select
+        self.download = download
+        self.cancel = cancel
+        self.delete = delete
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                if case .installed = state {
+                    Button(action: select) {
+                        Image(systemName: isActive ? "largecircle.fill.circle" : "circle")
+                            .foregroundStyle(isActive ? Color.accentColor : .secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Use this model")
+                }
+                Text(model.displayName)
+                    .fontWeight(isActive ? .semibold : .regular)
+                Text(model.sizeLabel)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                trailingControl
+            }
+            Text(model.description)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            if case .downloading(let bytes, let total) = state {
+                progressBar(bytes: bytes, total: total)
+            }
+            if case .failed(let message) = state {
+                Label(message, systemImage: "xmark.circle.fill")
+                    .font(.caption)
+                    .foregroundStyle(.red)
+                    .lineLimit(3)
+            }
+        }
+        .padding(.vertical, 2)
+        .confirmationDialog(
+            "Remove the downloaded model? This frees \(model.sizeLabel) of disk space. You can download it again anytime.",
+            isPresented: $confirmingDelete
+        ) {
+            Button("Remove Download", role: .destructive) { delete() }
+            Button("Cancel", role: .cancel) {}
+        }
+    }
+
+    @ViewBuilder
+    private var trailingControl: some View {
+        switch state {
+        case .notInstalled:
+            Button("Download") { download() }
+        case .downloading:
+            Button("Cancel") { cancel() }
+        case .verifying:
+            HStack(spacing: 6) {
+                ProgressView().controlSize(.small)
+                Text("Verifying…").font(.caption).foregroundStyle(.secondary)
+            }
+        case .installed:
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.circle.fill").foregroundStyle(.green)
+                Button("Remove Download") { confirmingDelete = true }
+                    .controlSize(.small)
+            }
+        case .failed:
+            Button("Retry") { download() }
+        }
+    }
+
+    @ViewBuilder
+    private func progressBar(bytes: Int64, total: Int64?) -> some View {
+        if let total, total > 0 {
+            HStack(spacing: 8) {
+                ProgressView(value: Double(bytes), total: Double(total))
+                Text("\(Int(Double(bytes) / Double(total) * 100))%")
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+        } else {
+            HStack(spacing: 8) {
+                ProgressView()
+                    .controlSize(.small)
+                Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file))
+                    .font(.caption)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
         }
     }
 }

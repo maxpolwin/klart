@@ -53,7 +53,12 @@ final class AppState: ObservableObject {
     @Published var connection: ConnectionStatus = .unknown
     @Published var availableModels: [String] = []
 
+    /// Download lifecycle of each built-in model, keyed by registry id.
+    @Published var builtinModelStates: [String: ModelDownloadState] = [:]
+
     let secrets: SecretStore
+    let modelDownloads = ModelDownloadManager()
+    private var builtinDownloadTasks: [String: Task<Void, Never>] = [:]
     private let noteStore: NoteStore
     private let settingsStore: SettingsStore
 
@@ -324,6 +329,43 @@ final class AppState: ObservableObject {
             } catch {
                 self.connection = .failed(error.localizedDescription)
             }
+        }
+    }
+
+    // MARK: - Built-in model downloads
+
+    func refreshBuiltinModelStates() {
+        Task { [weak self] in
+            guard let self else { return }
+            for model in ModelRegistry.models where self.builtinDownloadTasks[model.id] == nil {
+                self.builtinModelStates[model.id] = await self.modelDownloads.state(for: model)
+            }
+        }
+    }
+
+    func downloadBuiltinModel(_ model: BuiltinModel) {
+        guard builtinDownloadTasks[model.id] == nil else { return }
+        builtinModelStates[model.id] = .downloading(bytes: 0, total: model.sizeBytes)
+        builtinDownloadTasks[model.id] = Task { [weak self] in
+            guard let self else { return }
+            let stream = await self.modelDownloads.download(model)
+            for await state in stream {
+                self.builtinModelStates[model.id] = state
+            }
+            self.builtinDownloadTasks[model.id] = nil
+        }
+    }
+
+    func cancelBuiltinDownload(_ model: BuiltinModel) {
+        Task { await modelDownloads.cancel(model) }
+    }
+
+    func deleteBuiltinModel(_ model: BuiltinModel) {
+        Task { [weak self] in
+            guard let self else { return }
+            await BuiltinModelRuntime.shared.unloadIfLoaded(modelID: model.id)
+            try? await self.modelDownloads.delete(model)
+            self.builtinModelStates[model.id] = await self.modelDownloads.state(for: model)
         }
     }
 

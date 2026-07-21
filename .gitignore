@@ -5,6 +5,9 @@ node_modules/
 .build/
 .swiftpm/
 
+# Vendored llama.xcframework (see NoschenMac/Docs/BUILTIN_MODEL.md)
+NoschenMac/Vendor/
+
 # Build outputs
 dist/
 release/
