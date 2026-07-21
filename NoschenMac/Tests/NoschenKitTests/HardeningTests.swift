@@ -141,16 +141,19 @@ final class HardeningTests: XCTestCase {
         // rotates the rest.
         let resumed = NoteStore(directory: dir)
         await resumed.setEncryptionKey(SecureBytes(new), fallback: SecureBytes(old))
-        XCTAssertEqual(try await resumed.loadAll().count, 3)
+        let mixedCount = try await resumed.loadAll().count
+        XCTAssertEqual(mixedCount, 3)
         try await resumed.rotateAllOnDisk(oldKey: old, newKey: new)
 
         // Everything now opens under the new key alone; the old key is dead.
         let done = NoteStore(directory: dir)
         await done.setEncryptionKey(new)
-        XCTAssertEqual(try await done.loadAll().count, 3)
+        let rotatedCount = try await done.loadAll().count
+        XCTAssertEqual(rotatedCount, 3)
         let withOld = NoteStore(directory: dir)
         await withOld.setEncryptionKey(old)
-        XCTAssertEqual(try await withOld.loadAll().count, 0)
+        let staleCount = try await withOld.loadAll().count
+        XCTAssertEqual(staleCount, 0)
 
         let completed = VaultCrypto.completeRotation(pending)
         XCTAssertNil(completed.previousWrappedMasterKey)
@@ -216,7 +219,7 @@ final class HardeningTests: XCTestCase {
         XCTAssertTrue(decoded.isSensitive)
 
         // Old note files without the field decode as not sensitive.
-        let legacy = Data(#"{"content":"# Old note"}"#.utf8)
+        let legacy = Data("{\"content\":\"# Old note\"}".utf8)
         XCTAssertFalse(try JSONDecoder().decode(Note.self, from: legacy).isSensitive)
     }
 
