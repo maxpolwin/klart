@@ -1,0 +1,792 @@
+<title>Noschen — Interface Directions</title>
+<style>
+  :root {
+    --shell-bg: #F6F6F3;
+    --shell-surface: #FFFFFF;
+    --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62;
+    --shell-line: #E3E2DB;
+    --shell-focus: #2B5FAD;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --shell-bg: #16161A;
+      --shell-surface: #1D1D21;
+      --shell-ink: #ECECE7;
+      --shell-mute: #9A998F;
+      --shell-line: #2B2B2F;
+      --shell-focus: #7FA8E6;
+    }
+  }
+  :root[data-theme="dark"] {
+    --shell-bg: #16161A;
+    --shell-surface: #1D1D21;
+    --shell-ink: #ECECE7;
+    --shell-mute: #9A998F;
+    --shell-line: #2B2B2F;
+    --shell-focus: #7FA8E6;
+  }
+  :root[data-theme="light"] {
+    --shell-bg: #F6F6F3;
+    --shell-surface: #FFFFFF;
+    --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62;
+    --shell-line: #E3E2DB;
+    --shell-focus: #2B5FAD;
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--shell-bg);
+    color: var(--shell-ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  img, svg { max-width: 100%; }
+  a { color: inherit; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--shell-focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .page {
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 80px;
+  }
+
+  /* ---------- Intro ---------- */
+  .intro { max-width: 720px; margin-bottom: clamp(28px, 4vw, 44px); }
+  .eyebrow {
+    margin: 0 0 10px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--shell-mute);
+  }
+  .intro h1 {
+    margin: 0 0 14px;
+    font-size: clamp(28px, 4vw, 40px);
+    line-height: 1.12;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .intro p {
+    margin: 0;
+    font-size: 16px;
+    line-height: 1.6;
+    color: var(--shell-mute);
+    max-width: 62ch;
+  }
+
+  /* ---------- Tabs ---------- */
+  .tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    border-bottom: 1px solid var(--shell-line);
+    margin-bottom: clamp(22px, 3vw, 34px);
+  }
+  .tabs button {
+    appearance: none;
+    background: none;
+    border: none;
+    padding: 10px 4px;
+    margin-right: 22px;
+    font-size: 14.5px;
+    font-weight: 600;
+    color: var(--shell-mute);
+    cursor: pointer;
+    position: relative;
+    top: 1px;
+  }
+  .tabs button[aria-selected="true"] {
+    color: var(--shell-ink);
+    box-shadow: inset 0 -2px 0 var(--shell-ink);
+  }
+  .tabs button:hover { color: var(--shell-ink); }
+
+  /* ---------- Panel meta ---------- */
+  .panel[hidden] { display: none; }
+  .panel-meta { max-width: 720px; margin-bottom: 22px; }
+  .panel-meta h2 { margin: 0 0 6px; font-size: 24px; letter-spacing: -0.01em; }
+  .panel-meta .tagline { margin: 0 0 12px; font-size: 15px; color: var(--shell-mute); font-style: italic; }
+  .panel-meta .rationale { margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: var(--shell-ink); }
+  .verdict-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px 28px;
+    font-size: 13px;
+    color: var(--shell-mute);
+    border-top: 1px solid var(--shell-line);
+    padding-top: 12px;
+  }
+  .verdict-row strong { color: var(--shell-ink); font-weight: 600; margin-right: 6px; }
+
+  /* ---------- Mock frame (shared scaffold) ---------- */
+  .mock-frame {
+    overflow-x: auto;
+    border-radius: 14px;
+    background: var(--shell-surface);
+    border: 1px solid var(--shell-line);
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 18px 40px -22px rgba(0,0,0,0.25);
+  }
+  .mock {
+    min-width: 900px;
+    min-height: 600px;
+    display: flex;
+    flex-direction: column;
+  }
+  .chrome {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    padding: 11px 16px;
+    flex-shrink: 0;
+  }
+  .chrome .dot { width: 10px; height: 10px; border-radius: 50%; }
+
+  /* ================================================================
+     CONCEPT 1 — QUIET
+     ================================================================ */
+  .concept-ive {
+    --q-bg: #F5F5F3; --q-panel: rgba(255,255,255,0.55); --q-ink: #1D1D1F;
+    --q-mute: #86868B; --q-line: rgba(0,0,0,0.08); --q-accent: #2B5FAD;
+  }
+  .concept-ive .mock {
+    font-family: -apple-system, "SF Pro Text", "Segoe UI", system-ui, sans-serif;
+    background: var(--q-bg); color: var(--q-ink);
+  }
+  .concept-ive .chrome { border-bottom: 1px solid var(--q-line); }
+  .concept-ive .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-ive .body-row { display: flex; flex: 1; min-height: 0; }
+  .concept-ive .sidebar {
+    width: 208px; flex-shrink: 0; padding: 18px 10px;
+    background: var(--q-panel); border-right: 1px solid var(--q-line);
+    backdrop-filter: blur(20px);
+  }
+  .concept-ive .sidebar h3 {
+    margin: 4px 8px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--q-mute);
+  }
+  .concept-ive .note-row {
+    padding: 7px 8px; border-radius: 6px; font-size: 13px; color: var(--q-ink);
+    margin-bottom: 1px;
+  }
+  .concept-ive .note-row.active { background: rgba(43,95,173,0.12); color: var(--q-accent); font-weight: 500; }
+  .concept-ive .content { flex: 1; padding: 40px 56px 40px; position: relative; overflow-y: auto; }
+  .concept-ive .content h1 {
+    margin: 0 0 22px; font-size: 27px; font-weight: 600; letter-spacing: -0.01em; max-width: 46ch;
+  }
+  .concept-ive .content h4 {
+    margin: 26px 0 10px; font-size: 13px; font-weight: 600; color: var(--q-mute);
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .concept-ive .content p { margin: 0 0 13px; font-size: 15px; line-height: 1.7; max-width: 60ch; color: var(--q-ink); }
+  .concept-ive .ai-affordance {
+    position: absolute; top: 34px; right: 48px; display: flex; align-items: center; gap: 7px;
+  }
+  .concept-ive .ai-dot-btn {
+    display: flex; align-items: center; gap: 6px; border: none; background: rgba(0,0,0,0.045);
+    padding: 5px 10px 5px 8px; border-radius: 999px; cursor: pointer; font-size: 12px; color: var(--q-mute);
+  }
+  .concept-ive .ai-dot-btn::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--q-accent);
+  }
+  .concept-ive .ai-dot-btn:hover { background: rgba(0,0,0,0.08); color: var(--q-ink); }
+  .concept-ive .ai-popover {
+    position: absolute; top: 60px; right: 48px; width: 260px; background: var(--q-panel);
+    backdrop-filter: blur(24px); border: 1px solid var(--q-line); border-radius: 10px;
+    padding: 12px 14px; box-shadow: 0 12px 28px -12px rgba(0,0,0,0.25);
+  }
+  .concept-ive .ai-popover[hidden] { display: none; }
+  .concept-ive .ai-popover p {
+    margin: 0 0 8px; font-size: 12.5px; line-height: 1.5; color: var(--q-ink);
+    padding-bottom: 8px; border-bottom: 1px solid var(--q-line);
+  }
+  .concept-ive .ai-popover p:last-child { margin: 0; border: none; padding: 0; }
+  .concept-ive .ai-popover b { color: var(--q-accent); font-weight: 600; }
+
+  /* ================================================================
+     CONCEPT 2 — THE GAZETTE
+     ================================================================ */
+  .concept-gazette {
+    --g-paper: #EDEAE1; --g-ink: #201C18; --g-mute: #6E655A; --g-rule: #C9C2B4; --g-accent: #7B2E28;
+  }
+  .concept-gazette .mock { background: var(--g-paper); color: var(--g-ink); }
+  .concept-gazette .chrome { border-bottom: 1px solid var(--g-rule); }
+  .concept-gazette .chrome .dot { background: rgba(0,0,0,0.14); }
+  .concept-gazette .masthead { text-align: center; padding: 8px 0 14px; border-bottom: 3px double var(--g-rule); }
+  .concept-gazette .masthead .name {
+    font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
+    font-size: 26px; font-weight: 700; letter-spacing: 0.02em;
+  }
+  .concept-gazette .masthead .issue {
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
+    font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--g-mute); margin-top: 4px;
+  }
+  .concept-gazette .spread { display: flex; flex: 1; min-height: 0; }
+  .concept-gazette .toc { width: 190px; flex-shrink: 0; padding: 26px 20px; border-right: 1px solid var(--g-rule); }
+  .concept-gazette .toc h4 {
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 10px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--g-mute); margin: 0 0 14px;
+  }
+  .concept-gazette .toc-item {
+    display: flex; align-items: baseline; gap: 5px; margin-bottom: 12px;
+    font-family: Georgia, serif; font-size: 12.5px; font-style: italic;
+  }
+  .concept-gazette .toc-item.active { font-style: normal; font-weight: 700; color: var(--g-accent); }
+  .concept-gazette .toc-item .fill { flex: 1; border-bottom: 1px dotted var(--g-rule); }
+  .concept-gazette .toc-item .num { font-family: "Helvetica Neue", Arial, sans-serif; font-style: normal; color: var(--g-mute); }
+  .concept-gazette .article { flex: 1; padding: 30px 40px; overflow-y: auto; }
+  .concept-gazette .byline {
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 10.5px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--g-mute); margin-bottom: 6px;
+  }
+  .concept-gazette .article h1 {
+    font-family: Georgia, "Iowan Old Style", serif; font-size: 27px; line-height: 1.2; font-weight: 700;
+    margin: 0 0 18px; max-width: 20ch;
+  }
+  .concept-gazette .lede {
+    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink);
+    max-width: 52ch; margin: 0 0 12px;
+  }
+  .concept-gazette .lede::first-letter {
+    font-size: 3.4em; font-weight: 700; float: left; line-height: 0.82; padding: 4px 6px 0 0;
+  }
+  .concept-gazette p.body-text {
+    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink);
+    max-width: 52ch; margin: 0 0 12px;
+  }
+  .concept-gazette h2.section {
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 11px; letter-spacing: 0.1em;
+    text-transform: uppercase; color: var(--g-accent); margin: 22px 0 8px; font-weight: 700;
+  }
+  .concept-gazette .margin { width: 200px; flex-shrink: 0; padding: 30px 20px; border-left: 1px solid var(--g-rule); }
+  .concept-gazette .note {
+    margin-bottom: 22px; padding-left: 12px; border-left: 2px solid var(--g-accent);
+  }
+  .concept-gazette .note .label {
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 9.5px; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--g-accent); font-weight: 700; margin-bottom: 3px; display: block;
+  }
+  .concept-gazette .note p {
+    font-family: Georgia, serif; font-size: 12px; line-height: 1.5; font-style: italic; margin: 0; color: var(--g-ink);
+  }
+
+  /* ================================================================
+     CONCEPT 3 — THE DESK
+     ================================================================ */
+  .concept-desk {
+    --d-bg: #FFFFFF; --d-surface: #FAFAF8; --d-ink: #2B2B26; --d-mute: #83807A; --d-line: #E9E7DF; --d-accent: #3E8079;
+  }
+  .concept-desk .mock {
+    background: var(--d-bg); color: var(--d-ink);
+    font-family: "Avenir Next", -apple-system, system-ui, sans-serif;
+  }
+  .concept-desk .chrome { border-bottom: 1px solid var(--d-line); }
+  .concept-desk .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-desk .desk-app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .concept-desk .toolbar {
+    display: flex; align-items: center; gap: 12px; padding: 16px 28px; flex-shrink: 0;
+  }
+  .concept-desk .search {
+    flex: 1; max-width: 300px; padding: 8px 14px; border-radius: 999px; background: var(--d-surface);
+    border: 1px solid var(--d-line); font-size: 13px; color: var(--d-mute);
+  }
+  .concept-desk .new-btn {
+    margin-left: auto; border: none; background: var(--d-accent); color: #fff; padding: 8px 16px;
+    border-radius: 999px; font-size: 13px; font-weight: 600; cursor: pointer;
+  }
+  .concept-desk .new-btn:hover { filter: brightness(1.08); }
+  .concept-desk .grid-view { padding: 4px 28px 28px; overflow-y: auto; }
+  .concept-desk .grid {
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
+  }
+  .concept-desk .card {
+    background: var(--d-surface); border: 1px solid var(--d-line); border-radius: 14px; padding: 16px;
+    cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 8px;
+    transition: transform 160ms ease, box-shadow 160ms ease;
+  }
+  .concept-desk .card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -14px rgba(0,0,0,0.25); }
+  .concept-desk .tag {
+    align-self: flex-start; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .concept-desk .tag.sage { background: #E4EBDF; color: #3E5136; }
+  .concept-desk .tag.lav { background: #E7E2EF; color: #4C4468; }
+  .concept-desk .tag.ochre { background: #F1E8D2; color: #6B5323; }
+  .concept-desk .tag.blue { background: #DEE7ED; color: #33566B; }
+  .concept-desk .card h4 { margin: 0; font-size: 14.5px; font-weight: 700; line-height: 1.3; }
+  .concept-desk .card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--d-mute); }
+  .concept-desk .card .date { font-size: 11px; color: var(--d-mute); margin-top: auto; }
+  .concept-desk .focus-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .concept-desk .status-line {
+    display: flex; align-items: center; gap: 10px; padding: 14px 40px; font-size: 12px; color: var(--d-mute);
+    flex-shrink: 0;
+  }
+  .concept-desk .status-line button {
+    border: none; background: none; color: var(--d-accent); font-weight: 600; cursor: pointer; padding: 0;
+    font-size: 12px;
+  }
+  .concept-desk .focus-body { padding: 6px 64px 40px; overflow-y: auto; max-width: 720px; }
+  .concept-desk .focus-body h1 { font-size: 26px; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em; }
+  .concept-desk .focus-body h4 { font-size: 13px; color: var(--d-accent); margin: 24px 0 8px; font-weight: 700; }
+  .concept-desk .focus-body p { font-size: 15px; line-height: 1.75; margin: 0 0 13px; }
+  .concept-desk .desk-app:not(.is-open) .focus-view { display: none; }
+  .concept-desk .desk-app.is-open .grid-view { display: none; }
+  .concept-desk .desk-app.is-open .toolbar { display: none; }
+
+  /* ================================================================
+     CONCEPT 4 — THROUGHLINE
+     ================================================================ */
+  .concept-throughline {
+    --t-bg: #F1F0EC; --t-surface: #FFFFFF; --t-ink: #23241F; --t-mute: #77786F; --t-line: #DFDED6;
+    --t-steady: #5C7A6B; --t-thin: #B98A46;
+  }
+  .concept-throughline .mock {
+    background: var(--t-bg); color: var(--t-ink);
+    font-family: Optima, "Trebuchet MS", -apple-system, system-ui, sans-serif;
+  }
+  .concept-throughline .chrome { border-bottom: 1px solid var(--t-line); }
+  .concept-throughline .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-throughline .pin-bar {
+    display: flex; align-items: center; gap: 14px; padding: 16px 32px; border-bottom: 1px solid var(--t-line);
+    flex-shrink: 0; position: relative;
+  }
+  .concept-throughline .pin-bar .q-label {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 10px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--t-mute); flex-shrink: 0;
+  }
+  .concept-throughline .pin-bar .q-text { font-size: 15px; font-weight: 600; flex: 1; }
+  .concept-throughline .clarity-btn {
+    display: flex; align-items: center; gap: 7px; border: none; background: none; cursor: pointer;
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--t-mute);
+  }
+  .concept-throughline .clarity-btn .signal { width: 8px; height: 8px; border-radius: 50%; background: var(--t-steady); }
+  .concept-throughline .clarity-pop {
+    position: absolute; top: 52px; right: 32px; width: 240px; background: var(--t-surface);
+    border: 1px solid var(--t-line); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5;
+    box-shadow: 0 12px 24px -14px rgba(0,0,0,0.25);
+  }
+  .concept-throughline .clarity-pop[hidden] { display: none; }
+  .concept-throughline .clarity-pop b { color: var(--t-thin); }
+  .concept-throughline .body-row { display: flex; flex: 1; min-height: 0; }
+  .concept-throughline .spine {
+    width: 210px; flex-shrink: 0; padding: 30px 20px; display: flex; flex-direction: column; gap: 22px;
+    position: relative;
+  }
+  .concept-throughline .spine::before {
+    content: ""; position: absolute; left: 25px; top: 34px; bottom: 34px; width: 1px; background: var(--t-line);
+  }
+  .concept-throughline .node { display: flex; align-items: flex-start; gap: 10px; position: relative; }
+  .concept-throughline .node .ring {
+    width: 10px; height: 10px; border-radius: 50%; margin-top: 3px; flex-shrink: 0; background: var(--t-surface);
+    border: 2px solid var(--t-steady); position: relative; z-index: 1;
+  }
+  .concept-throughline .node.thin .ring { border-color: var(--t-thin); background: var(--t-bg); }
+  .concept-throughline .node span.label { font-size: 12.5px; line-height: 1.4; }
+  .concept-throughline .node.active span.label { font-weight: 700; }
+  .concept-throughline .node.thin span.hint { display: block; font-size: 10.5px; color: var(--t-thin); margin-top: 2px; }
+  .concept-throughline .content { flex: 1; padding: 30px 44px; overflow-y: auto; }
+  .concept-throughline .content p { font-size: 15px; line-height: 1.8; max-width: 58ch; margin: 0 0 14px; }
+  .concept-throughline .content h4 { font-size: 13px; font-weight: 700; margin: 22px 0 8px; }
+
+  /* ================================================================
+     CONCEPT 5 — THE ARCHIVE
+     ================================================================ */
+  .concept-archive {
+    --a-paper: #E4DFCE; --a-card: #EFEBDD; --a-ink: #2A2416; --a-mute: #756B54; --a-line: #C9C0A4; --a-accent: #2E3A52;
+  }
+  .concept-archive .mock {
+    background: var(--a-paper); color: var(--a-ink);
+    font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  }
+  .concept-archive .chrome { border-bottom: 1px solid var(--a-line); }
+  .concept-archive .chrome .dot { background: rgba(0,0,0,0.16); }
+  .concept-archive .archive-app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+  .concept-archive .shelf-head {
+    display: flex; align-items: baseline; justify-content: space-between; padding: 20px 32px 6px; flex-shrink: 0;
+  }
+  .concept-archive .shelf-head h3 { margin: 0; font-size: 16px; font-weight: 700; }
+  .concept-archive .shelf-head span {
+    font-family: "Courier New", ui-monospace, monospace; font-size: 11px; color: var(--a-mute); letter-spacing: 0.03em;
+  }
+  .concept-archive .shelf {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 16px; padding: 18px 32px 32px; overflow-y: auto;
+  }
+  .concept-archive .index-card {
+    background: var(--a-card); border: 1px solid var(--a-line); border-radius: 3px; padding: 14px 14px 12px;
+    cursor: pointer; box-shadow: 2px 3px 0 rgba(42,36,22,0.06); transition: transform 160ms ease;
+    display: flex; flex-direction: column; gap: 8px; min-height: 128px;
+  }
+  .concept-archive .index-card:nth-child(1) { transform: rotate(-0.6deg); }
+  .concept-archive .index-card:nth-child(2) { transform: rotate(0.5deg); }
+  .concept-archive .index-card:nth-child(3) { transform: rotate(-0.3deg); }
+  .concept-archive .index-card:nth-child(4) { transform: rotate(0.7deg); }
+  .concept-archive .index-card:hover { transform: rotate(0deg) translateY(-2px); }
+  .concept-archive .card-top { display: flex; justify-content: space-between; align-items: flex-start; }
+  .concept-archive .stamp {
+    font-family: "Courier New", ui-monospace, monospace; font-size: 9.5px; color: var(--a-accent);
+    border: 1px solid var(--a-accent); padding: 1px 5px; border-radius: 2px; letter-spacing: 0.02em;
+  }
+  .concept-archive .call-no {
+    font-family: "Courier New", ui-monospace, monospace; font-size: 9.5px; color: var(--a-mute);
+  }
+  .concept-archive .index-card h4 { margin: 0; font-size: 13.5px; line-height: 1.3; font-weight: 700; }
+  .concept-archive .index-card p { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--a-mute); }
+  .concept-archive .note-view { flex: 1; display: flex; min-height: 0; }
+  .concept-archive .note-sheet { flex: 1; padding: 8px 48px 32px; overflow-y: auto; }
+  .concept-archive .note-sheet button.back {
+    border: none; background: none; color: var(--a-accent); font-family: "Courier New", ui-monospace, monospace;
+    font-size: 11px; cursor: pointer; padding: 10px 0; letter-spacing: 0.02em;
+  }
+  .concept-archive .note-sheet h1 { font-size: 25px; margin: 6px 0 16px; font-weight: 700; line-height: 1.25; }
+  .concept-archive .note-sheet h4 { font-size: 13px; margin: 20px 0 7px; font-style: italic; }
+  .concept-archive .note-sheet p { font-size: 14.5px; line-height: 1.75; margin: 0 0 12px; max-width: 56ch; }
+  .concept-archive .related-rail { width: 210px; flex-shrink: 0; padding: 24px 24px 24px 0; border-left: 1px solid var(--a-line); margin-left: 8px; }
+  .concept-archive .related-rail h5 {
+    font-family: "Courier New", ui-monospace, monospace; font-size: 10px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--a-mute); margin: 0 0 14px; padding-left: 16px;
+  }
+  .concept-archive .mini-card {
+    background: var(--a-card); border: 1px solid var(--a-line); border-radius: 3px; padding: 10px 12px;
+    margin-bottom: 12px; margin-left: 12px; box-shadow: 1px 2px 0 rgba(42,36,22,0.05);
+  }
+  .concept-archive .mini-card p.rel { margin: 0 0 4px; font-size: 10px; color: var(--a-accent); font-style: italic; }
+  .concept-archive .mini-card h6 { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.3; }
+  .concept-archive .archive-app:not(.is-open) .note-view { display: none; }
+  .concept-archive .archive-app.is-open .shelf-head,
+  .concept-archive .archive-app.is-open .shelf { display: none; }
+
+  /* ---------- Comparison table ---------- */
+  .compare { margin-top: 56px; }
+  .compare h2 { font-size: 19px; margin: 0 0 14px; }
+  .compare-scroll { overflow-x: auto; border: 1px solid var(--shell-line); border-radius: 10px; }
+  table.compare-table { width: 100%; border-collapse: collapse; min-width: 780px; font-size: 13.5px; }
+  table.compare-table th, table.compare-table td {
+    text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--shell-line);
+  }
+  table.compare-table th {
+    font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--shell-mute); font-weight: 600;
+    background: var(--shell-surface);
+  }
+  table.compare-table tr:last-child td { border-bottom: none; }
+  table.compare-table td:first-child { font-weight: 600; }
+  table.compare-table tbody { background: var(--shell-surface); }
+</style>
+
+<div class="page">
+
+  <header class="intro">
+    <p class="eyebrow">Interface study · Noschen</p>
+    <h1>Same note, five treatments</h1>
+    <p>One research note — the same title, the same four sections, the same AI observations — run through five different interface philosophies. All five start from the same brief: the writing is the product, and the interface's only job is to get out of its way. Switch between them below.</p>
+  </header>
+
+  <nav class="tabs" role="tablist" aria-label="Interface direction">
+    <button role="tab" id="tab-ive" aria-controls="panel-ive" aria-selected="true" data-target="ive">Quiet</button>
+    <button role="tab" id="tab-gazette" aria-controls="panel-gazette" aria-selected="false" tabindex="-1" data-target="gazette">The Gazette</button>
+    <button role="tab" id="tab-desk" aria-controls="panel-desk" aria-selected="false" tabindex="-1" data-target="desk">The Desk</button>
+    <button role="tab" id="tab-throughline" aria-controls="panel-throughline" aria-selected="false" tabindex="-1" data-target="throughline">Throughline</button>
+    <button role="tab" id="tab-archive" aria-controls="panel-archive" aria-selected="false" tabindex="-1" data-target="archive">The Archive</button>
+  </nav>
+
+  <div class="panels">
+
+    <!-- ============ CONCEPT 1 — QUIET ============ -->
+    <article class="panel concept-ive" id="panel-ive" role="tabpanel" aria-labelledby="tab-ive">
+      <div class="panel-meta">
+        <h2>Quiet</h2>
+        <p class="tagline">Minimal macOS-native, in the spirit of Jony Ive.</p>
+        <p class="rationale">Built the way Apple's own apps are built: one type family, one accent, and otherwise nothing but hairlines and air. The sidebar is barely there — translucent, borderless. AI feedback lives behind a single small dot in the corner until you ask for it; it never appears on its own.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Writers who already trust their own judgment and want AI on a short leash.</span>
+          <span><strong>Trade-off</strong>Restraint can read as "where are the features" to anyone expecting more chrome.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="body-row">
+            <aside class="sidebar">
+              <h3>Notes</h3>
+              <div class="note-row active">Do Remote Teams Communicate Worse?</div>
+              <div class="note-row">Platform Governance &amp; Institutional Economics</div>
+              <div class="note-row">Literature Review: The Attention Economy</div>
+              <div class="note-row">Thesis Outline: Algorithmic Accountability</div>
+              <div class="note-row">Field Notes: Interview Coding, Pass 2</div>
+            </aside>
+            <div class="content">
+              <div class="ai-affordance">
+                <button class="ai-dot-btn" id="ive-ai-trigger" data-popover-trigger aria-expanded="false" aria-controls="ive-ai-pop">3 ready</button>
+              </div>
+              <div class="ai-popover" id="ive-ai-pop" hidden>
+                <p><b>Gap —</b> time-zone friction is named but never analyzed.</p>
+                <p><b>MECE —</b> "sync vs. async" overlaps with hybrid norms below.</p>
+                <p><b>Source —</b> Kahneman &amp; Thaler, on decision fatigue.</p>
+              </div>
+              <h1>Do Remote Teams Communicate Worse? A Structural Review</h1>
+              <h4>Synchronous vs. Asynchronous Patterns</h4>
+              <p>Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination — Slack threads, shared docs, the occasional recorded video.</p>
+              <p>The literature is split on whether this is a net loss. Some argue that writing things down forces clearer thinking; others point to the erosion of the informal, low-stakes exchange that used to catch problems early.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 2 — THE GAZETTE ============ -->
+    <article class="panel concept-gazette" id="panel-gazette" role="tabpanel" aria-labelledby="tab-gazette" hidden>
+      <div class="panel-meta">
+        <h2>The Gazette</h2>
+        <p class="tagline">A New Yorker editorial sensibility.</p>
+        <p class="rationale">Treats every note like a galley proof: serif body copy set to a comfortable measure, a masthead instead of a toolbar, a table of contents instead of a file list. AI observations run as a copyeditor's pencil marks in the margin — a discipline borrowed whole from print, where the text is the product and everything else is production design.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Long-form writing you intend to actually finish and be proud of.</span>
+          <span><strong>Trade-off</strong>The margin column costs real width and doesn't collapse gracefully under ~1000px.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="masthead">
+            <div class="name">NOSCHEN</div>
+            <div class="issue">Research Notes · Vol. I</div>
+          </div>
+          <div class="spread">
+            <nav class="toc">
+              <h4>Contents</h4>
+              <div class="toc-item active"><span>Remote Teams</span><span class="fill"></span><span class="num">1</span></div>
+              <div class="toc-item"><span>Platform Governance</span><span class="fill"></span><span class="num">4</span></div>
+              <div class="toc-item"><span>Attention Economy</span><span class="fill"></span><span class="num">9</span></div>
+              <div class="toc-item"><span>Accountability</span><span class="fill"></span><span class="num">14</span></div>
+            </nav>
+            <div class="article">
+              <div class="byline">Communication · 21 July</div>
+              <h1>Do Remote Teams Communicate Worse?</h1>
+              <h2 class="section">Synchronous vs. Asynchronous Patterns</h2>
+              <p class="lede">Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination — Slack threads, shared docs, the occasional recorded video.</p>
+              <p class="body-text">The literature is split on whether this is a net loss. Some argue that writing things down forces clearer thinking; others point to the erosion of the informal exchange that used to catch problems early.</p>
+            </div>
+            <aside class="margin">
+              <div class="note"><span class="label">Gap</span><p>Time-zone friction is named but never analyzed — worth its own subsection.</p></div>
+              <div class="note"><span class="label">MECE</span><p>Overlaps with "Hybrid Meeting Norms" below. Consider merging.</p></div>
+              <div class="note"><span class="label">Source</span><p>Kahneman &amp; Thaler, on decision fatigue under distributed trust.</p></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 3 — THE DESK ============ -->
+    <article class="panel concept-desk" id="panel-desk" role="tabpanel" aria-labelledby="tab-desk" hidden>
+      <div class="panel-meta">
+        <h2>The Desk</h2>
+        <p class="tagline">Clean, a little playful — an Evernote-style overview.</p>
+        <p class="rationale">An overview grid up front — muted tag colors, soft cards, enough white space to breathe — so you can see the shape of your whole research library before you commit to one thing. Open a note and every trace of the grid disappears: full window, nothing but the document and a thin status line. Try it — click a card.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>People juggling many notes who need to browse before they write.</span>
+          <span><strong>Trade-off</strong>Two distinct visual modes to design and keep consistent, instead of one.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="desk-app" id="desk-app">
+            <div class="toolbar">
+              <input class="search" value="Search notes…" readonly>
+              <button class="new-btn" type="button">+ New note</button>
+            </div>
+            <div class="grid-view">
+              <div class="grid">
+                <button class="card" type="button" data-open-note="#desk-app"><span class="tag sage">Sociology</span><h4>Do Remote Teams Communicate Worse?</h4><p>A structural review of sync vs. async coordination…</p><span class="date">21 Jul</span></button>
+                <div class="card"><span class="tag lav">Theory</span><h4>Platform Governance &amp; Institutional Economics</h4><p>Where platform rules substitute for institutions…</p><span class="date">18 Jul</span></div>
+                <div class="card"><span class="tag ochre">Lit Review</span><h4>The Attention Economy</h4><p>Mapping the last decade of scarcity-of-attention work…</p><span class="date">14 Jul</span></div>
+                <div class="card"><span class="tag blue">Methods</span><h4>Algorithmic Accountability — Outline</h4><p>Thesis structure, three chapters, open questions…</p><span class="date">9 Jul</span></div>
+                <div class="card"><span class="tag sage">Fieldwork</span><h4>Interview Coding, Pass 2</h4><p>Second pass on transcripts 12–19, new codes added…</p><span class="date">3 Jul</span></div>
+                <div class="card"><span class="tag lav">Theory</span><h4>Trust Without Proximity</h4><p>Early notes, mostly quotations to sort later…</p><span class="date">28 Jun</span></div>
+              </div>
+            </div>
+            <div class="focus-view">
+              <div class="status-line"><button type="button" data-close-note="#desk-app">← All notes</button><span>Autosaved 21 Jul, 14:02</span></div>
+              <div class="focus-body">
+                <h1>Do Remote Teams Communicate Worse? A Structural Review</h1>
+                <h4>Synchronous vs. Asynchronous Patterns</h4>
+                <p>Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination.</p>
+                <h4>Time-Zone Friction</h4>
+                <p>The literature is split on whether this is a net loss. Some argue that writing things down forces clearer thinking; others point to what gets lost.</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 4 — THROUGHLINE ============ -->
+    <article class="panel concept-throughline" id="panel-throughline" role="tabpanel" aria-labelledby="tab-throughline" hidden>
+      <div class="panel-meta">
+        <h2>Throughline</h2>
+        <p class="tagline">Built to help you keep hold of your own argument.</p>
+        <p class="rationale">Starts from a different question: not "how do we show AI feedback" but "how do we stop the writer from losing their argument." The research question stays pinned at the top at all times. A quiet spine down the left turns your outline into a structure map — thin ring where a section is underdeveloped. AI doesn't file a report; it changes the color of one ambient dot.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Long, structurally demanding writing — literature reviews, thesis chapters.</span>
+          <span><strong>Trade-off</strong>Needs real H1/H2 structure to be useful; has little to say about a short, flat note.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="pin-bar">
+            <span class="q-label">Your question</span>
+            <span class="q-text">Do Remote Teams Communicate Worse?</span>
+            <button class="clarity-btn" id="t-clarity-trigger" data-popover-trigger aria-expanded="false" aria-controls="t-clarity-pop"><span class="signal"></span>Steady</button>
+          </div>
+          <div class="clarity-pop" id="t-clarity-pop" hidden>
+            One section is thin: <b>"Trust Without Proximity"</b> is two lines and no sources. Everything else is holding its weight.
+          </div>
+          <div class="body-row">
+            <nav class="spine">
+              <div class="node active"><span class="ring"></span><span class="label">Synchronous vs. Asynchronous Patterns</span></div>
+              <div class="node"><span class="ring"></span><span class="label">Time-Zone Friction</span></div>
+              <div class="node"><span class="ring"></span><span class="label">Hybrid Meeting Norms</span></div>
+              <div class="node thin"><span class="ring"></span><span class="label">Trust Without Proximity<span class="hint">thin — 2 lines</span></span></div>
+            </nav>
+            <div class="content">
+              <h4>Synchronous vs. Asynchronous Patterns</h4>
+              <p>Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination — Slack threads, shared docs, the occasional recorded video.</p>
+              <p>The literature is split on whether this is a net loss. Some argue that writing things down forces clearer thinking; others point to the erosion of the informal exchange that used to catch problems early.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 5 — THE ARCHIVE ============ -->
+    <article class="panel concept-archive" id="panel-archive" role="tabpanel" aria-labelledby="tab-archive" hidden>
+      <div class="panel-meta">
+        <h2>The Archive</h2>
+        <p class="tagline">A card catalog for a researcher's own thinking.</p>
+        <p class="rationale">Reframes note-taking as a card catalog: each note is an index card with a stamped date and a call number, and related notes surface as a few cards pulled loose from the stack instead of a search box. It leans on association over hierarchy, closer to a Zettelkasten than a file system — on the theory that a researcher thinks better when they can see what else they've already written that's relevant. Click a card.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Cumulative research over months, where the value is in connections you'd forget you made.</span>
+          <span><strong>Trade-off</strong>Needs a real cross-note linking model — the payoff shows up at note #50, not note #5.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="archive-app" id="archive-app">
+            <div class="shelf-head"><h3>The shelf</h3><span>14 cards, since March</span></div>
+            <div class="shelf">
+              <button class="index-card" type="button" data-open-note="#archive-app">
+                <div class="card-top"><span class="stamp">21 JUL</span><span class="call-no">RN·014</span></div>
+                <h4>Do Remote Teams Communicate Worse?</h4>
+                <p>Structural review, sync vs. async coordination</p>
+              </button>
+              <div class="index-card"><div class="card-top"><span class="stamp">18 JUL</span><span class="call-no">RN·013</span></div><h4>Platform Governance</h4><p>Institutional economics of platform rules</p></div>
+              <div class="index-card"><div class="card-top"><span class="stamp">14 JUL</span><span class="call-no">RN·012</span></div><h4>The Attention Economy</h4><p>Decade-long literature scan</p></div>
+              <div class="index-card"><div class="card-top"><span class="stamp">28 JUN</span><span class="call-no">RN·007</span></div><h4>Trust Without Proximity</h4><p>Early notes, quotations to sort</p></div>
+            </div>
+            <div class="note-view">
+              <div class="note-sheet">
+                <button class="back" type="button" data-close-note="#archive-app">← Back to the shelf</button>
+                <h1>Do Remote Teams Communicate Worse?</h1>
+                <h4>Synchronous vs. Asynchronous Patterns</h4>
+                <p>Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination.</p>
+                <h4>Time-Zone Friction</h4>
+                <p>The literature is split on whether this is a net loss — some argue that writing things down forces clearer thinking.</p>
+              </div>
+              <aside class="related-rail">
+                <h5>Pulled from the archive</h5>
+                <div class="mini-card"><p class="rel">Same theme: distributed trust</p><h6>Trust Without Proximity</h6></div>
+                <div class="mini-card"><p class="rel">Cited together twice</p><h6>The Attention Economy</h6></div>
+                <div class="mini-card"><p class="rel">Same method: interview coding</p><h6>Interview Coding, Pass 2</h6></div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <section class="compare">
+    <h2>At a glance</h2>
+    <div class="compare-scroll">
+      <table class="compare-table">
+        <thead>
+          <tr><th>Direction</th><th>Metaphor</th><th>Where AI lives</th><th>Distraction level</th><th>Build effort</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Quiet</td><td>Apple's own apps</td><td>One dot, summoned</td><td>Lowest</td><td>Low</td></tr>
+          <tr><td>The Gazette</td><td>Print magazine</td><td>Margin pencil marks</td><td>Low</td><td>Medium</td></tr>
+          <tr><td>The Desk</td><td>Evernote-style desk</td><td>Panel, focus mode only</td><td>Low in focus, higher in overview</td><td>Medium</td></tr>
+          <tr><td>Throughline</td><td>An outline you can feel</td><td>One ambient signal</td><td>Lowest</td><td>Medium–high</td></tr>
+          <tr><td>The Archive</td><td>Zettelkasten card catalog</td><td>Related cards, not alerts</td><td>Low</td><td>High</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+    var panels = {};
+    tabs.forEach(function (t) {
+      panels[t.dataset.target] = document.getElementById('panel-' + t.dataset.target);
+    });
+
+    function activate(target) {
+      tabs.forEach(function (t) {
+        var selected = t.dataset.target === target;
+        t.setAttribute('aria-selected', selected ? 'true' : 'false');
+        t.tabIndex = selected ? 0 : -1;
+      });
+      Object.keys(panels).forEach(function (key) {
+        panels[key].hidden = key !== target;
+      });
+    }
+
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { activate(t.dataset.target); });
+      t.addEventListener('keydown', function (e) {
+        var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!dir) return;
+        e.preventDefault();
+        var next = tabs[(i + dir + tabs.length) % tabs.length];
+        next.focus();
+        activate(next.dataset.target);
+      });
+    });
+
+    // Popovers (Quiet + Throughline)
+    document.querySelectorAll('[data-popover-trigger]').forEach(function (btn) {
+      var pop = document.getElementById(btn.getAttribute('aria-controls'));
+      if (!pop) return;
+      btn.addEventListener('click', function () {
+        var willShow = pop.hidden;
+        pop.hidden = !willShow;
+        btn.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+      });
+    });
+
+    // Grid <-> focus toggles (Desk + Archive)
+    document.querySelectorAll('[data-open-note]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelector(btn.getAttribute('data-open-note')).classList.add('is-open');
+      });
+    });
+    document.querySelectorAll('[data-close-note]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        document.querySelector(btn.getAttribute('data-close-note')).classList.remove('is-open');
+      });
+    });
+  })();
+</script>
