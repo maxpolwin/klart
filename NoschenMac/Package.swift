@@ -9,8 +9,20 @@ let package = Package(
         .executable(name: "Noschen", targets: ["Noschen"]),
     ],
     targets: [
+        // Vendored, hash-pinned PHC reference Argon2 (see Sources/CArgon2/
+        // THIRD_PARTY.md). Compiled in-tree; nothing is fetched at build time.
+        .target(
+            name: "CArgon2",
+            path: "Sources/CArgon2",
+            exclude: ["LICENSE", "THIRD_PARTY.md"],
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("src"),
+            ]
+        ),
         .target(
             name: "NoschenKit",
+            dependencies: ["CArgon2"],
             path: "Sources/NoschenKit"
         ),
         .executableTarget(

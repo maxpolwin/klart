@@ -1,4 +1,5 @@
 import Foundation
+import CArgon2
 #if canImport(CryptoKit)
 import CryptoKit
 import CommonCrypto
@@ -15,8 +16,12 @@ public struct VaultConfig: Codable, Equatable, Sendable {
     public var biometricUnlock: Bool
     /// Key-wrap cipher: nil = ChaCha20-Poly1305 (legacy), "aesgcm" = AES-256-GCM.
     public var wrapAlgo: String?
-    /// KDF identifier for forward migration; nil = "pbkdf2-sha256".
+    /// KDF identifier: nil = "pbkdf2-sha256" (legacy), "argon2id" = current.
     public var kdf: String?
+    /// Argon2id parameters (nil for PBKDF2 configs).
+    public var kdfMemoryKiB: Int?
+    public var kdfTimeCost: Int?
+    public var kdfParallelism: Int?
     /// Present only while a key rotation is in flight: the *old* master key,
     /// wrapped under the same KEK, so a crash mid-rotation is resumable.
     public var previousWrappedMasterKey: Data?
@@ -28,6 +33,9 @@ public struct VaultConfig: Codable, Equatable, Sendable {
         biometricUnlock: Bool,
         wrapAlgo: String? = nil,
         kdf: String? = nil,
+        kdfMemoryKiB: Int? = nil,
+        kdfTimeCost: Int? = nil,
+        kdfParallelism: Int? = nil,
         previousWrappedMasterKey: Data? = nil
     ) {
         self.salt = salt
@@ -36,6 +44,9 @@ public struct VaultConfig: Codable, Equatable, Sendable {
         self.biometricUnlock = biometricUnlock
         self.wrapAlgo = wrapAlgo
         self.kdf = kdf
+        self.kdfMemoryKiB = kdfMemoryKiB
+        self.kdfTimeCost = kdfTimeCost
+        self.kdfParallelism = kdfParallelism
         self.previousWrappedMasterKey = previousWrappedMasterKey
     }
 }
@@ -44,6 +55,7 @@ public enum VaultError: LocalizedError {
     case wrongPassword
     case corruptData
     case locked
+    case kdfFailure
     case unsupportedPlatform
 
     public var errorDescription: String? {
@@ -51,6 +63,7 @@ public enum VaultError: LocalizedError {
         case .wrongPassword: return "Wrong password."
         case .corruptData: return "This file is encrypted but could not be decrypted."
         case .locked: return "Notes are locked."
+        case .kdfFailure: return "Key derivation failed — is the system low on memory?"
         case .unsupportedPlatform: return "Note encryption requires macOS."
         }
     }
@@ -93,7 +106,59 @@ public enum VaultCrypto {
         return Data(bytes)
     }
 
-    /// PBKDF2-HMAC-SHA256. CryptoKit has no PBKDF2, so this uses CommonCrypto.
+    // MARK: Argon2id (current KDF)
+
+    /// Argon2id defaults for new vaults: 128 MiB, 3 passes, 4 lanes —
+    /// roughly 0.3s on Apple Silicon, memory-hard against GPU farms.
+    public static let argon2MemoryKiB = 131_072
+    public static let argon2TimeCost = 3
+    public static let argon2Parallelism = 4
+    public static let kdfArgon2id = "argon2id"
+
+    /// Argon2id via the vendored, hash-pinned PHC reference implementation
+    /// (Sources/CArgon2). NFC-normalized password, 32-byte output.
+    public static func deriveKEKArgon2id(
+        password: String,
+        salt: Data,
+        memoryKiB: Int,
+        timeCost: Int,
+        parallelism: Int
+    ) throws -> SymmetricKey {
+        var out = [UInt8](repeating: 0, count: 32)
+        let passwordBytes = Array(password.precomposedStringWithCanonicalMapping.utf8)
+        let rc = salt.withUnsafeBytes { saltBuffer in
+            passwordBytes.withUnsafeBufferPointer { passwordBuffer in
+                argon2id_hash_raw(
+                    UInt32(timeCost),
+                    UInt32(memoryKiB),
+                    UInt32(parallelism),
+                    passwordBuffer.baseAddress, passwordBytes.count,
+                    saltBuffer.baseAddress, salt.count,
+                    &out, out.count
+                )
+            }
+        }
+        guard rc == 0 else { throw VaultError.kdfFailure }
+        return SymmetricKey(data: Data(out))
+    }
+
+    /// Derives the KEK the way this config was created: Argon2id for current
+    /// vaults, PBKDF2 for legacy ones (which upgrade on password unlock).
+    static func kek(for config: VaultConfig, password: String) throws -> SymmetricKey {
+        if config.kdf == kdfArgon2id {
+            return try deriveKEKArgon2id(
+                password: password,
+                salt: config.salt,
+                memoryKiB: config.kdfMemoryKiB ?? argon2MemoryKiB,
+                timeCost: config.kdfTimeCost ?? argon2TimeCost,
+                parallelism: config.kdfParallelism ?? argon2Parallelism
+            )
+        }
+        return deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
+    }
+
+    /// PBKDF2-HMAC-SHA256 (legacy KDF; readable forever, no longer written).
+    /// CryptoKit has no PBKDF2, so this uses CommonCrypto.
     /// The password is canonically normalized (NFC) first so the same visual
     /// password always derives the same key regardless of how the input
     /// method composed its characters.
@@ -216,20 +281,23 @@ public enum VaultCrypto {
 
     // MARK: Vault lifecycle
 
-    /// Creates a fresh vault: master key + config wrapping it under `password`.
+    /// Creates a fresh vault: master key + config wrapping it under `password`
+    /// via Argon2id.
     public static func createVault(password: String, biometricUnlock: Bool) throws -> (masterKey: Data, config: VaultConfig) {
         let masterKey = generateMasterKey()
-        let salt = generateSalt()
-        let kek = deriveKEK(password: password, salt: salt, iterations: defaultIterations)
-        let wrapped = try wrap(masterKey: masterKey, with: kek, algo: .aesgcm)
-        return (masterKey, VaultConfig(
-            salt: salt,
-            wrappedMasterKey: wrapped,
+        var config = VaultConfig(
+            salt: generateSalt(),
+            wrappedMasterKey: Data(),
             iterations: defaultIterations,
             biometricUnlock: biometricUnlock,
             wrapAlgo: WrapAlgo.aesgcm.rawValue,
-            kdf: "pbkdf2-sha256"
-        ))
+            kdf: kdfArgon2id,
+            kdfMemoryKiB: argon2MemoryKiB,
+            kdfTimeCost: argon2TimeCost,
+            kdfParallelism: argon2Parallelism
+        )
+        config.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek(for: config, password: password), algo: .aesgcm)
+        return (masterKey, config)
     }
 
     static func wrapAlgo(of config: VaultConfig) -> WrapAlgo {
@@ -238,24 +306,24 @@ public enum VaultCrypto {
 
     /// Recovers the master key from a config; throws `.wrongPassword` on mismatch.
     public static func unlock(config: VaultConfig, password: String) throws -> Data {
-        let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
-        return try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: wrapAlgo(of: config))
+        try unwrap(wrapped: config.wrappedMasterKey, with: try kek(for: config, password: password), algo: wrapAlgo(of: config))
     }
 
     /// Recovers both keys during an interrupted rotation (previous is nil in
     /// the steady state).
     public static func unlockBoth(config: VaultConfig, password: String) throws -> (current: Data, previous: Data?) {
-        let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
+        let kekKey = try kek(for: config, password: password)
         let algo = wrapAlgo(of: config)
-        let current = try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: algo)
+        let current = try unwrap(wrapped: config.wrappedMasterKey, with: kekKey, algo: algo)
         let previous = try config.previousWrappedMasterKey.map {
-            try unwrap(wrapped: $0, with: kek, algo: algo)
+            try unwrap(wrapped: $0, with: kekKey, algo: algo)
         }
         return (current, previous)
     }
 
     /// Rewraps the master key under a new password (new salt, same key —
-    /// notes on disk stay untouched). Upgrades the wrap cipher to AES-GCM.
+    /// notes on disk stay untouched). Upgrades the wrap cipher to AES-GCM
+    /// and the KDF to Argon2id.
     /// Callers must finish any pending rotation first: the old key is wrapped
     /// under the old salt's KEK and cannot survive a salt change.
     public static func rewrap(config: VaultConfig, masterKey: Data, newPassword: String) throws -> VaultConfig {
@@ -264,8 +332,11 @@ public enum VaultCrypto {
         updated.salt = generateSalt()
         updated.iterations = defaultIterations
         updated.wrapAlgo = WrapAlgo.aesgcm.rawValue
-        let kek = deriveKEK(password: newPassword, salt: updated.salt, iterations: updated.iterations)
-        updated.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek, algo: .aesgcm)
+        updated.kdf = kdfArgon2id
+        updated.kdfMemoryKiB = argon2MemoryKiB
+        updated.kdfTimeCost = argon2TimeCost
+        updated.kdfParallelism = argon2Parallelism
+        updated.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek(for: updated, password: newPassword), algo: .aesgcm)
         return updated
     }
 
@@ -273,13 +344,13 @@ public enum VaultCrypto {
     /// new and the old key (wrapped under the same KEK) so a crash while
     /// files are being re-encrypted is fully resumable.
     public static func beginRotation(config: VaultConfig, password: String) throws -> (oldKey: Data, newKey: Data, pending: VaultConfig) {
-        let kek = deriveKEK(password: password, salt: config.salt, iterations: config.iterations)
-        let oldKey = try unwrap(wrapped: config.wrappedMasterKey, with: kek, algo: wrapAlgo(of: config))
+        let kekKey = try kek(for: config, password: password)
+        let oldKey = try unwrap(wrapped: config.wrappedMasterKey, with: kekKey, algo: wrapAlgo(of: config))
         let newKey = generateMasterKey()
         var pending = config
         pending.wrapAlgo = WrapAlgo.aesgcm.rawValue
-        pending.wrappedMasterKey = try wrap(masterKey: newKey, with: kek, algo: .aesgcm)
-        pending.previousWrappedMasterKey = try wrap(masterKey: oldKey, with: kek, algo: .aesgcm)
+        pending.wrappedMasterKey = try wrap(masterKey: newKey, with: kekKey, algo: .aesgcm)
+        pending.previousWrappedMasterKey = try wrap(masterKey: oldKey, with: kekKey, algo: .aesgcm)
         return (oldKey, newKey, pending)
     }
 

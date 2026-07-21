@@ -656,6 +656,18 @@ final class AppState: ObservableObject {
         failedUnlockCount = 0
         lockoutUntil = nil
         await auditLog.record(.unlockSuccess)
+        // Transparent KDF upgrade: legacy PBKDF2 vaults rewrap under Argon2id
+        // the first time the password is available. Notes are untouched; a
+        // failure just leaves the working legacy config in place.
+        if let config = settings.vault, config.kdf != VaultCrypto.kdfArgon2id,
+           config.previousWrappedMasterKey == nil {
+            let upgraded = try? await Task.detached(priority: .userInitiated) {
+                try VaultCrypto.rewrap(config: config, masterKey: masterKey, newPassword: password)
+            }.value
+            if let upgraded {
+                settings.vault = upgraded
+            }
+        }
         await finishUnlock(masterKey: masterKey)
         return true
     }
