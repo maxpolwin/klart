@@ -1,0 +1,470 @@
+<title>Noschen — Sidebar Directions</title>
+<style>
+  :root {
+    --shell-bg: #F6F6F3;
+    --shell-surface: #FFFFFF;
+    --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62;
+    --shell-line: #E3E2DB;
+    --shell-focus: #2B5FAD;
+
+    /* Noschen "Quiet" palette — copied 1:1 from Theme.swift so these mocks
+       are color-accurate, not approximations. */
+    --n-bg: #F5F5F3;
+    --n-ink: #1D1D1F;
+    --n-mute: #86868B;
+    --n-tertiary: rgba(0,0,0,0.32);
+    --n-accent: #2B5FAD;
+    --n-accent-wash: rgba(43,95,173,0.10);
+    --n-accent-wash-strong: rgba(43,95,173,0.16);
+    --n-border: rgba(0,0,0,0.08);
+    --n-raised: rgba(0,0,0,0.055);
+    --n-field-bg: rgba(0,0,0,0.045);
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --shell-bg: #16161A; --shell-surface: #1D1D21; --shell-ink: #ECECE7;
+      --shell-mute: #9A998F; --shell-line: #2B2B2F; --shell-focus: #7FA8E6;
+      --n-bg: #1E1E20; --n-ink: #F5F5F7; --n-mute: #98989D;
+      --n-tertiary: rgba(255,255,255,0.35); --n-accent: #6FA0EA;
+      --n-accent-wash: rgba(111,160,234,0.14); --n-accent-wash-strong: rgba(111,160,234,0.22);
+      --n-border: rgba(255,255,255,0.08); --n-raised: rgba(255,255,255,0.055);
+      --n-field-bg: rgba(255,255,255,0.07);
+    }
+  }
+  :root[data-theme="dark"], :root[data-preview-theme="dark"] {
+    --shell-bg: #16161A; --shell-surface: #1D1D21; --shell-ink: #ECECE7;
+    --shell-mute: #9A998F; --shell-line: #2B2B2F; --shell-focus: #7FA8E6;
+    --n-bg: #1E1E20; --n-ink: #F5F5F7; --n-mute: #98989D;
+    --n-tertiary: rgba(255,255,255,0.35); --n-accent: #6FA0EA;
+    --n-accent-wash: rgba(111,160,234,0.14); --n-accent-wash-strong: rgba(111,160,234,0.22);
+    --n-border: rgba(255,255,255,0.08); --n-raised: rgba(255,255,255,0.055);
+    --n-field-bg: rgba(255,255,255,0.07);
+  }
+  :root[data-theme="light"], :root[data-preview-theme="light"] {
+    --shell-bg: #F6F6F3; --shell-surface: #FFFFFF; --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62; --shell-line: #E3E2DB; --shell-focus: #2B5FAD;
+    --n-bg: #F5F5F3; --n-ink: #1D1D1F; --n-mute: #86868B;
+    --n-tertiary: rgba(0,0,0,0.32); --n-accent: #2B5FAD;
+    --n-accent-wash: rgba(43,95,173,0.10); --n-accent-wash-strong: rgba(43,95,173,0.16);
+    --n-border: rgba(0,0,0,0.08); --n-raised: rgba(0,0,0,0.055);
+    --n-field-bg: rgba(0,0,0,0.045);
+  }
+
+  * { box-sizing: border-box; }
+  html, body { margin: 0; padding: 0; }
+  body {
+    background: var(--shell-bg);
+    color: var(--shell-ink);
+    font-family: -apple-system, "SF Pro Text", system-ui, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    overflow-x: hidden;
+  }
+  a { color: inherit; }
+  button { font: inherit; color: inherit; }
+  :focus-visible { outline: 2px solid var(--shell-focus); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation-duration: 0.001ms !important; transition-duration: 0.001ms !important; }
+  }
+
+  .page { max-width: 1180px; margin: 0 auto; padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 90px; }
+
+  .page-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 20px; flex-wrap: wrap; margin-bottom: clamp(26px, 4vw, 40px); }
+  .intro { max-width: 660px; }
+  .eyebrow { margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.09em; text-transform: uppercase; color: var(--shell-mute); }
+  .intro h1 { margin: 0 0 14px; font-size: clamp(26px, 3.6vw, 36px); line-height: 1.14; letter-spacing: -0.01em; text-wrap: balance; }
+  .intro p { margin: 0; font-size: 15.5px; line-height: 1.62; color: var(--shell-mute); max-width: 64ch; }
+  .theme-toggle { display: flex; gap: 2px; padding: 3px; border: 1px solid var(--shell-line); border-radius: 999px; background: var(--shell-surface); flex-shrink: 0; }
+  .theme-toggle button { border: none; background: none; padding: 6px 13px; border-radius: 999px; font-size: 12.5px; font-weight: 600; color: var(--shell-mute); cursor: pointer; }
+  .theme-toggle button[aria-pressed="true"] { background: var(--shell-ink); color: var(--shell-bg); }
+
+  .tabs { display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--shell-line); margin-bottom: clamp(22px, 3vw, 32px); }
+  .tabs button { appearance: none; background: none; border: none; padding: 10px 4px; margin-right: 24px; font-size: 14.5px; font-weight: 600; color: var(--shell-mute); cursor: pointer; position: relative; top: 1px; }
+  .tabs button[aria-selected="true"] { color: var(--shell-ink); box-shadow: inset 0 -2px 0 var(--shell-ink); }
+  .tabs button:hover { color: var(--shell-ink); }
+
+  .panel[hidden] { display: none; }
+  .panel-meta { max-width: 760px; margin-bottom: 22px; }
+  .panel-meta h2 { margin: 0 0 6px; font-size: 23px; letter-spacing: -0.01em; }
+  .panel-meta .tagline { margin: 0 0 12px; font-size: 14.5px; color: var(--shell-mute); font-style: italic; }
+  .panel-meta .rationale { margin: 0 0 14px; font-size: 14.5px; line-height: 1.62; color: var(--shell-ink); }
+  .verdict-row { display: flex; flex-wrap: wrap; gap: 10px 30px; font-size: 13px; color: var(--shell-mute); border-top: 1px solid var(--shell-line); padding-top: 12px; }
+  .verdict-row strong { color: var(--shell-ink); font-weight: 600; margin-right: 6px; }
+
+  /* ---------- Shared mac window frame ---------- */
+  .mock-frame { overflow-x: auto; border-radius: 14px; background: var(--n-bg); border: 1px solid var(--shell-line); box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 18px 40px -22px rgba(0,0,0,0.28); }
+  .mock { min-width: 760px; display: flex; flex-direction: column; }
+  .chrome { display: flex; align-items: center; gap: 7px; padding: 10px 14px; flex-shrink: 0; border-bottom: 1px solid var(--n-border); position: relative; }
+  .chrome .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--n-border); }
+  .chrome .win-title { position: absolute; left: 0; right: 0; text-align: center; font-size: 12px; font-weight: 600; color: var(--n-mute); pointer-events: none; }
+  .body-row { display: flex; height: 560px; }
+
+  .sidebar { width: 280px; flex-shrink: 0; display: flex; flex-direction: column; background: var(--n-bg); border-right: 1px solid var(--n-border); overflow-y: auto; }
+  .sidebar-list { flex: 1; overflow-y: auto; }
+  .new-note-btn { flex-shrink: 0; display: flex; align-items: center; gap: 7px; padding: 12px 16px; font-size: 12.5px; font-weight: 500; color: var(--n-mute); border-top: 1px solid var(--n-border); cursor: pointer; }
+  .new-note-btn::before { content: "✎"; font-size: 12px; }
+  .new-note-btn:hover { color: var(--n-ink); }
+
+  .detail { flex: 1; background: var(--shell-surface); padding: 40px 44px; color: var(--n-mute); }
+  .detail .d-title { height: 22px; width: 62%; border-radius: 5px; background: var(--n-raised); margin-bottom: 16px; }
+  .detail .d-line { height: 10px; border-radius: 4px; background: var(--n-raised); margin-bottom: 10px; }
+  .detail .d-line:nth-child(2) { width: 94%; }
+  .detail .d-line:nth-child(3) { width: 88%; }
+  .detail .d-line:nth-child(4) { width: 91%; }
+  .detail .d-line:nth-child(5) { width: 60%; margin-bottom: 26px; }
+  .detail .d-note { font-size: 12px; color: var(--n-tertiary); }
+
+  /* generic search field look, refined per concept below */
+  .search-wrap { flex-shrink: 0; }
+  .search-field { display: flex; align-items: center; gap: 7px; font-size: 12.5px; color: var(--n-mute); }
+  .search-field::before { content: "⌕"; font-size: 13px; opacity: 0.65; }
+
+  /* ================================================================
+     CONCEPT 1 — QUIET RAIL
+     ================================================================ */
+  .concept-quiet .search-wrap { padding: 14px 14px 0; }
+  .concept-quiet .search-field { background: var(--n-field-bg); border-radius: 9px; padding: 7px 10px; }
+  .concept-quiet .sidebar-list { padding-top: 28px; }
+  .qr-row { display: flex; align-items: center; gap: 0; min-height: 52px; padding: 0 16px 0 13px; cursor: pointer; position: relative; }
+  .qr-row .bar { width: 3px; align-self: stretch; margin: 8px 10px 8px 0; border-radius: 2px; background: transparent; }
+  .qr-row:hover { background: var(--n-raised); }
+  .qr-row.selected { background: var(--n-accent-wash); }
+  .qr-row.selected .bar { background: var(--n-accent); }
+  .qr-title { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--n-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .qr-meta { font-size: 11px; color: var(--n-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 2px; }
+  .shield { color: var(--n-accent); font-size: 9px; flex-shrink: 0; }
+
+  /* ================================================================
+     CONCEPT 2 — GROUPED TIMELINE
+     ================================================================ */
+  .concept-grouped .search-wrap { padding: 14px 14px 0; }
+  .concept-grouped .search-field { background: var(--n-field-bg); border-radius: 9px; padding: 7px 10px; }
+  .concept-grouped .sidebar-list { padding-top: 24px; }
+  .gt-group { margin-bottom: 20px; }
+  .gt-group:last-child { margin-bottom: 8px; }
+  .gt-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--n-tertiary); padding: 0 16px 6px; }
+  .gt-row { display: flex; align-items: center; min-height: 44px; padding: 0 16px 0 13px; cursor: pointer; position: relative; gap: 0; }
+  .gt-row .bar { width: 3px; align-self: stretch; margin: 5px 10px 5px 0; border-radius: 2px; background: transparent; }
+  .gt-row:hover { background: var(--n-raised); }
+  .gt-row.selected { background: var(--n-accent-wash); }
+  .gt-row.selected .bar { background: var(--n-accent); }
+  .gt-title { font-size: 13px; font-weight: 500; color: var(--n-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .gt-meta { font-size: 11px; color: var(--n-tertiary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 1px; }
+
+  /* ================================================================
+     CONCEPT 3 — CARD RAIL
+     ================================================================ */
+  .concept-card .sb-header { padding: 14px 16px 20px; border-bottom: 1px solid var(--n-border); }
+  .concept-card .search-field { background: var(--n-field-bg); border-radius: 9px; padding: 7px 10px; }
+  .concept-card .rail-label { margin-top: 16px; font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--n-tertiary); }
+  .concept-card .sidebar-list { padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; }
+  .cr-card { border-radius: 12px; background: var(--n-raised); padding: 11px 12px; cursor: pointer; border: 1px solid transparent; min-height: 44px; }
+  .cr-card:hover { background: var(--n-field-bg); }
+  .cr-card.selected { background: var(--n-accent-wash); border-color: var(--n-accent-wash-strong); }
+  .cr-title { display: flex; align-items: center; gap: 5px; font-size: 13px; font-weight: 500; color: var(--n-ink); }
+  .cr-meta { font-size: 11px; color: var(--n-tertiary); margin-top: 3px; }
+
+  /* ================================================================
+     CONCEPT 4 — CONSTELLATION
+     ================================================================ */
+  .concept-constellation .sb-header { padding: 16px 16px 0; }
+  .concept-constellation .search-field { border-radius: 0; padding: 6px 2px 10px; border-bottom: 1px solid var(--n-border); }
+  .concept-constellation .search-field:focus-within { border-color: var(--n-accent); }
+  .concept-constellation .sidebar-list { padding: 32px 16px 20px 22px; position: relative; }
+  .spine { position: absolute; top: 32px; bottom: 20px; left: 27px; width: 1px; background: var(--n-border); }
+  .spine-selected-seg { position: absolute; left: 27px; width: 1px; background: var(--n-accent); opacity: 0.55; }
+  .co-node { display: flex; align-items: flex-start; gap: 12px; position: relative; cursor: pointer; padding: 3px 8px 3px 0; border-radius: 8px; min-height: 24px; }
+  .co-node:hover { background: var(--n-raised); }
+  .co-dot-col { width: 9px; flex-shrink: 0; display: flex; justify-content: center; padding-top: 4px; }
+  .co-dot { width: 7px; height: 7px; border-radius: 50%; background: var(--n-tertiary); }
+  .co-node.recent .co-dot { width: 9px; height: 9px; background: var(--n-accent); }
+  .co-node.selected .co-dot { width: 10px; height: 10px; background: var(--n-accent); box-shadow: 0 0 0 3px var(--n-accent-wash); }
+  .co-body { min-width: 0; }
+  .co-title { font-size: 13px; font-weight: 500; color: var(--n-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .co-node:not(.recent):not(.selected) .co-title { color: var(--n-mute); font-weight: 400; }
+  .co-meta { font-size: 10.5px; color: var(--n-tertiary); margin-top: 1px; }
+
+  /* ---------- footer comparison ---------- */
+  .compare { margin-top: 56px; border-top: 1px solid var(--shell-line); padding-top: 28px; }
+  .compare h2 { font-size: 20px; margin: 0 0 14px; letter-spacing: -0.01em; }
+  .compare-table-wrap { overflow-x: auto; }
+  table.compare-table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13px; }
+  table.compare-table th, table.compare-table td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--shell-line); }
+  table.compare-table th { color: var(--shell-mute); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.04em; }
+  table.compare-table td:first-child, table.compare-table th:first-child { color: var(--shell-mute); font-weight: 500; }
+  .rec { margin-top: 18px; font-size: 14.5px; line-height: 1.62; color: var(--shell-ink); max-width: 74ch; }
+  .rec strong { font-weight: 700; }
+</style>
+
+<div class="page">
+
+  <div class="page-head">
+    <header class="intro">
+      <p class="eyebrow">Interface study · Noschen</p>
+      <h1>Four sidebars, one goal: quieter and cleaner</h1>
+      <p>The current sidebar's search field sits flush against the note list with no breathing room, and dense rows make a long list feel noisy. These four alternatives all fix the search-to-list gap and pursue a more minimal reading — using Noschen's existing palette, no new colors — and differ in how far they go past that baseline. Switch between them below.</p>
+    </header>
+    <div class="theme-toggle" role="group" aria-label="Preview theme">
+      <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
+
+  <nav class="tabs" role="tablist" aria-label="Sidebar direction">
+    <button role="tab" id="tab-quiet" aria-controls="panel-quiet" aria-selected="true" data-target="quiet">Quiet Rail</button>
+    <button role="tab" id="tab-grouped" aria-controls="panel-grouped" aria-selected="false" tabindex="-1" data-target="grouped">Grouped Timeline</button>
+    <button role="tab" id="tab-card" aria-controls="panel-card" aria-selected="false" tabindex="-1" data-target="card">Card Rail</button>
+    <button role="tab" id="tab-constellation" aria-controls="panel-constellation" aria-selected="false" tabindex="-1" data-target="constellation">Constellation ✦</button>
+  </nav>
+
+  <div class="panels">
+
+    <!-- ============ CONCEPT 1 — QUIET RAIL ============ -->
+    <article class="panel concept-quiet" id="panel-quiet" role="tabpanel" aria-labelledby="tab-quiet">
+      <div class="panel-meta">
+        <h2>Quiet Rail</h2>
+        <p class="tagline">The refined-minimal baseline — same shape, real room to breathe.</p>
+        <p class="rationale">Inset, rounded search field; a fixed 28px gap before the list starts; no dividers between rows; selection reads as a soft accent wash plus a leading bar, never color alone. Lowest risk, lowest effort, and it directly answers the "cramped" complaint.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Shipping the fix now, with no data-model changes.</span>
+          <span><strong>Trade-off</strong>Gets visually noisier as note count grows past ~30.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="win-title">Noschen</span></div>
+          <div class="body-row">
+            <aside class="sidebar">
+              <div class="search-wrap"><div class="search-field">Search notes</div></div>
+              <div class="sidebar-list">
+                <div class="qr-row selected"><span class="bar"></span><div><div class="qr-title">EU Taxonomy — Article 8 Disclosures</div><div class="qr-meta">2m ago · Still missing the alignment threshold for…</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Competitor Landscape: B2B SaaS Pricing</div><div class="qr-meta">38m ago · Three tiers converge around $49…</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title"><span class="shield">●</span>Interview Notes — User #7</div><div class="qr-meta">1h ago · Strong reaction to onboarding step 3</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Literature Review: Attention Is All You Need</div><div class="qr-meta">3h ago · Multi-head attention as a routing…</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Q3 OKR Draft</div><div class="qr-meta">Yesterday · Objective: reduce churn by…</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Methodology Outline — Mixed Methods</div><div class="qr-meta">Yesterday · Triangulating survey + interviews</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Market Sizing — Nordics Expansion</div><div class="qr-meta">2d ago · TAM estimate revised down to…</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Book Notes: Thinking in Systems</div><div class="qr-meta">4d ago · Feedback loops as leverage points</div></div></div>
+                <div class="qr-row"><span class="bar"></span><div><div class="qr-title">Thesis Outline: Algorithmic Accountability</div><div class="qr-meta">6d ago · Chapter 2 needs restructuring</div></div></div>
+              </div>
+              <div class="new-note-btn">New Note</div>
+            </aside>
+            <div class="detail">
+              <div class="d-title"></div>
+              <div class="d-line"></div><div class="d-line"></div><div class="d-line"></div><div class="d-line"></div>
+              <div class="d-note">EU Taxonomy — Article 8 Disclosures</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 2 — GROUPED TIMELINE ============ -->
+    <article class="panel concept-grouped" id="panel-grouped" role="tabpanel" aria-labelledby="tab-grouped" hidden>
+      <div class="panel-meta">
+        <h2>Grouped Timeline</h2>
+        <p class="tagline">Mail.app-style date sections — chunking instead of raw padding.</p>
+        <p class="rationale">Same inset search field, then a 24px gap into sticky "Today / Yesterday / This Week / Earlier" labels. Whitespace comes from grouping itself: every section boundary is a moment of rest, and rows inside a group can sit tighter since the label already carries "when." Scans better than Quiet Rail as the list grows.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Users who accumulate dozens of notes and need to scan, not just skim.</span>
+          <span><strong>Trade-off</strong>Search must decide whether to flatten groups into one "Results" section while querying.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="win-title">Noschen</span></div>
+          <div class="body-row">
+            <aside class="sidebar">
+              <div class="search-wrap"><div class="search-field">Search notes</div></div>
+              <div class="sidebar-list">
+                <div class="gt-group">
+                  <div class="gt-label">Today</div>
+                  <div class="gt-row selected"><span class="bar"></span><div><div class="gt-title">EU Taxonomy — Article 8 Disclosures</div><div class="gt-meta">2m ago · Still missing the alignment threshold…</div></div></div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Competitor Landscape: B2B SaaS Pricing</div><div class="gt-meta">38m ago · Three tiers converge around $49…</div></div></div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Interview Notes — User #7</div><div class="gt-meta">1h ago · Strong reaction to onboarding step 3</div></div></div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Literature Review: Attention Is All You Need</div><div class="gt-meta">3h ago · Multi-head attention as a routing…</div></div></div>
+                </div>
+                <div class="gt-group">
+                  <div class="gt-label">Yesterday</div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Q3 OKR Draft</div><div class="gt-meta">Objective: reduce churn by…</div></div></div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Methodology Outline — Mixed Methods</div><div class="gt-meta">Triangulating survey + interviews</div></div></div>
+                </div>
+                <div class="gt-group">
+                  <div class="gt-label">This Week</div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Market Sizing — Nordics Expansion</div><div class="gt-meta">2d ago · TAM estimate revised down to…</div></div></div>
+                </div>
+                <div class="gt-group">
+                  <div class="gt-label">Earlier</div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Book Notes: Thinking in Systems</div><div class="gt-meta">4d ago · Feedback loops as leverage points</div></div></div>
+                  <div class="gt-row"><span class="bar"></span><div><div class="gt-title">Thesis Outline: Algorithmic Accountability</div><div class="gt-meta">6d ago · Chapter 2 needs restructuring</div></div></div>
+                </div>
+              </div>
+              <div class="new-note-btn">New Note</div>
+            </aside>
+            <div class="detail">
+              <div class="d-title"></div>
+              <div class="d-line"></div><div class="d-line"></div><div class="d-line"></div><div class="d-line"></div>
+              <div class="d-note">EU Taxonomy — Article 8 Disclosures</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 3 — CARD RAIL ============ -->
+    <article class="panel concept-card" id="panel-card" role="tabpanel" aria-labelledby="tab-card" hidden>
+      <div class="panel-meta">
+        <h2>Card Rail</h2>
+        <p class="tagline">Craft/Notion-style discrete cards — whitespace repeated at every row, not just once.</p>
+        <p class="rationale">The search field lives in its own header zone with a hairline beneath it, fully detached from the list (20px above and below). Each note is a rounded, elevated card using the existing "surface raised" tint, with real 10px gaps between cards — so the gap the user asked for shows up between every pair of notes, not only under the search field. Selection tints the whole card instead of the old solid-fill highlight.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Making "minimal" read as premium rather than empty.</span>
+          <span><strong>Trade-off</strong>Drops native `List`; needs custom keyboard row navigation.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="win-title">Noschen</span></div>
+          <div class="body-row">
+            <aside class="sidebar">
+              <div class="sb-header">
+                <div class="search-field">Search notes</div>
+                <div class="rail-label">Recent</div>
+              </div>
+              <div class="sidebar-list">
+                <div class="cr-card selected"><div class="cr-title">EU Taxonomy — Article 8 Disclosures</div><div class="cr-meta">2m ago · Still missing the alignment threshold…</div></div>
+                <div class="cr-card"><div class="cr-title">Competitor Landscape: B2B SaaS Pricing</div><div class="cr-meta">38m ago · Three tiers converge around $49…</div></div>
+                <div class="cr-card"><div class="cr-title"><span class="shield">●</span>Interview Notes — User #7</div><div class="cr-meta">1h ago · Strong reaction to onboarding step 3</div></div>
+                <div class="cr-card"><div class="cr-title">Literature Review: Attention Is All You Need</div><div class="cr-meta">3h ago · Multi-head attention as a routing…</div></div>
+                <div class="cr-card"><div class="cr-title">Q3 OKR Draft</div><div class="cr-meta">Yesterday · Objective: reduce churn by…</div></div>
+                <div class="cr-card"><div class="cr-title">Methodology Outline — Mixed Methods</div><div class="cr-meta">Yesterday · Triangulating survey + interviews</div></div>
+                <div class="cr-card"><div class="cr-title">Market Sizing — Nordics Expansion</div><div class="cr-meta">2d ago · TAM estimate revised down to…</div></div>
+              </div>
+              <div class="new-note-btn">New Note</div>
+            </aside>
+            <div class="detail">
+              <div class="d-title"></div>
+              <div class="d-line"></div><div class="d-line"></div><div class="d-line"></div><div class="d-line"></div>
+              <div class="d-note">EU Taxonomy — Article 8 Disclosures</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+    <!-- ============ CONCEPT 4 — CONSTELLATION ============ -->
+    <article class="panel concept-constellation" id="panel-constellation" role="tabpanel" aria-labelledby="tab-constellation" hidden>
+      <div class="panel-meta">
+        <h2>Constellation <span aria-hidden="true">✦</span></h2>
+        <p class="tagline">The creative swing: a research timeline, not a file list.</p>
+        <p class="rationale">A borderless, underline-only search field keeps the header almost invisible; a deliberate 32px gap opens onto a thin vertical spine running down the sidebar. Notes are dots along it — size and opacity fade with age — and <strong>the gap between two dots is proportional to the real time between those notes</strong> (log-compressed so old notes don't push the list off-screen). A large empty stretch of spine is itself information: "nothing happened here." It turns Noschen's own premise — thinking over time — into the sidebar's organizing idea, rather than a generic file browser.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>A distinctive, on-brand sidebar worth prototyping live before committing.</span>
+          <span><strong>Trade-off</strong>Needs a strict accessibility fallback — see write-up — and gap-clamping so dense days don't collide.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="win-title">Noschen</span></div>
+          <div class="body-row">
+            <aside class="sidebar">
+              <div class="sb-header"><div class="search-field">Search notes</div></div>
+              <div class="sidebar-list">
+                <div class="spine"></div>
+                <div class="spine-selected-seg" style="top:32px; height:14px;"></div>
+                <div class="co-node recent selected" style="margin-top:0;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">EU Taxonomy — Article 8 Disclosures</div><div class="co-meta">2m ago</div></div></div>
+                <div class="co-node recent" style="margin-top:8px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Competitor Landscape: B2B SaaS Pricing</div><div class="co-meta">38m ago</div></div></div>
+                <div class="co-node recent" style="margin-top:12px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Interview Notes — User #7</div><div class="co-meta">1h ago</div></div></div>
+                <div class="co-node" style="margin-top:16px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Literature Review: Attention Is All You Need</div><div class="co-meta">3h ago</div></div></div>
+                <div class="co-node" style="margin-top:30px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Q3 OKR Draft</div><div class="co-meta">Yesterday</div></div></div>
+                <div class="co-node" style="margin-top:10px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Methodology Outline — Mixed Methods</div><div class="co-meta">Yesterday</div></div></div>
+                <div class="co-node" style="margin-top:26px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Market Sizing — Nordics Expansion</div><div class="co-meta">2d ago</div></div></div>
+                <div class="co-node" style="margin-top:34px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Book Notes: Thinking in Systems</div><div class="co-meta">4d ago</div></div></div>
+                <div class="co-node" style="margin-top:30px;"><div class="co-dot-col"><span class="co-dot"></span></div><div class="co-body"><div class="co-title">Thesis Outline: Algorithmic Accountability</div><div class="co-meta">6d ago</div></div></div>
+              </div>
+              <div class="new-note-btn">New Note</div>
+            </aside>
+            <div class="detail">
+              <div class="d-title"></div>
+              <div class="d-line"></div><div class="d-line"></div><div class="d-line"></div><div class="d-line"></div>
+              <div class="d-note">EU Taxonomy — Article 8 Disclosures</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
+  </div>
+
+  <section class="compare">
+    <h2>Comparison and recommendation</h2>
+    <div class="compare-table-wrap">
+      <table class="compare-table">
+        <thead>
+          <tr><th></th><th>1 · Quiet Rail</th><th>2 · Grouped Timeline</th><th>3 · Card Rail</th><th>4 · Constellation</th></tr>
+        </thead>
+        <tbody>
+          <tr><td>Fixes the search→list gap</td><td>yes (28px)</td><td>yes (24px + label)</td><td>yes (header zone)</td><td>yes (32px + spine)</td></tr>
+          <tr><td>Scales to 100+ notes</td><td>fair</td><td>best</td><td>fair</td><td>needs clamping</td></tr>
+          <tr><td>Visual distinctiveness</td><td>low</td><td>low–medium</td><td>medium</td><td>highest</td></tr>
+          <tr><td>Keeps native List</td><td>yes</td><td>yes</td><td>no</td><td>no (needs fallback)</td></tr>
+          <tr><td>Implementation effort</td><td>low</td><td>low–medium</td><td>medium</td><td>medium–high</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="rec"><strong>Recommendation:</strong> ship <strong>Quiet Rail</strong> first — it directly answers the whitespace complaint with almost no risk and no data-model changes. Follow with <strong>Grouped Timeline</strong> once real note counts justify grouping. Keep <strong>Constellation</strong> as the deliberate creative bet: worth a throwaway prototype in the real app, since it's the one direction that turns Noschen's own premise — thinking over time — into the sidebar itself. Full write-up: <code>docs/SIDEBAR_ALTERNATIVES.md</code>.</p>
+  </section>
+
+</div>
+
+<script>
+  (function () {
+    var tabs = Array.prototype.slice.call(document.querySelectorAll('[role="tab"]'));
+    var panels = {};
+    tabs.forEach(function (t) { panels[t.dataset.target] = document.getElementById('panel-' + t.dataset.target); });
+
+    function activate(target) {
+      tabs.forEach(function (t) {
+        var selected = t.dataset.target === target;
+        t.setAttribute('aria-selected', selected ? 'true' : 'false');
+        t.tabIndex = selected ? 0 : -1;
+      });
+      Object.keys(panels).forEach(function (key) { panels[key].hidden = key !== target; });
+    }
+
+    tabs.forEach(function (t, i) {
+      t.addEventListener('click', function () { activate(t.dataset.target); });
+      t.addEventListener('keydown', function (e) {
+        var dir = e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : 0;
+        if (!dir) return;
+        e.preventDefault();
+        var next = tabs[(i + dir + tabs.length) % tabs.length];
+        next.focus();
+        activate(next.dataset.target);
+      });
+    });
+
+    var root = document.documentElement;
+    var themeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-theme-choice]'));
+    themeButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var choice = btn.getAttribute('data-theme-choice');
+        if (choice === 'auto') { root.removeAttribute('data-preview-theme'); }
+        else { root.setAttribute('data-preview-theme', choice); }
+        themeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
+      });
+    });
+
+    // Selectable rows within each mock — clicking any row/card/node moves selection.
+    ['.qr-row', '.gt-row', '.cr-card', '.co-node'].forEach(function (sel) {
+      Array.prototype.slice.call(document.querySelectorAll(sel)).forEach(function (row) {
+        row.addEventListener('click', function () {
+          Array.prototype.slice.call(row.parentElement.parentElement.querySelectorAll(sel))
+            .forEach(function (r) { r.classList.remove('selected'); });
+          row.classList.add('selected');
+        });
+      });
+    });
+  })();
+</script>
