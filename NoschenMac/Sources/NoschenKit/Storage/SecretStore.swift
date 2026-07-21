@@ -71,6 +71,30 @@ public final class KeychainSecretStore: SecretStore {
         SecItemAdd(attributes as CFDictionary, nil)
     }
 
+    // MARK: - Raw data items (Secure-Enclave-wrapped key blob)
+
+    /// Stores opaque data (e.g. the enclave-encrypted master key). No
+    /// user-presence ACL: the blob is ciphertext whose decryption is itself
+    /// gated by the Secure Enclave key's access control.
+    public func setData(_ value: Data?, for account: String) {
+        SecItemDelete(baseQuery(account: account) as CFDictionary)
+        guard let value, !value.isEmpty else { return }
+        var attributes = baseQuery(account: account)
+        attributes[kSecValueData as String] = value
+        attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+        SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    public func data(for account: String) -> Data? {
+        var query = baseQuery(account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return data
+    }
+
     // MARK: - User-presence protected items (vault master key)
 
     /// Stores data behind a user-presence access control: reading it back

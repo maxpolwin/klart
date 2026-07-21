@@ -65,7 +65,11 @@ final class AppState: ObservableObject {
     /// The vault master key while unlocked; nil when locked or unprotected.
     private var vaultKey: Data?
 
+    /// Raw master key behind a user-presence Keychain ACL — the fallback
+    /// biometric path on Macs without a Secure Enclave.
     static let vaultKeychainAccount = "noschen.vault.masterkey"
+    /// Master key encrypted to the Secure Enclave key — the preferred path.
+    static let vaultSEKeychainAccount = "noschen.vault.masterkey.se"
 
     let secrets: SecretStore
     private let noteStore: NoteStore
@@ -360,8 +364,29 @@ final class AppState: ObservableObject {
     // MARK: - Vault (at-rest encryption + app lock)
 
     var biometricUnlockAvailable: Bool {
-        settings.vault?.biometricUnlock == true
-            && (secrets as? KeychainSecretStore)?.hasProtectedData(for: Self.vaultKeychainAccount) == true
+        guard settings.vault?.biometricUnlock == true,
+              let keychain = secrets as? KeychainSecretStore else { return false }
+        return keychain.data(for: Self.vaultSEKeychainAccount) != nil
+            || keychain.hasProtectedData(for: Self.vaultKeychainAccount)
+    }
+
+    /// Stores the biometric-unlock copy of the master key: wrapped by the
+    /// Secure Enclave where available, else raw behind a user-presence ACL.
+    private func storeBiometricKey(_ masterKey: Data) {
+        guard let keychain = secrets as? KeychainSecretStore else { return }
+        if let blob = SecureEnclaveWrap.wrap(masterKey) {
+            keychain.setData(blob, for: Self.vaultSEKeychainAccount)
+            keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
+        } else {
+            keychain.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+        }
+    }
+
+    private func removeBiometricKey() {
+        guard let keychain = secrets as? KeychainSecretStore else { return }
+        keychain.setData(nil, for: Self.vaultSEKeychainAccount)
+        keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
+        SecureEnclaveWrap.deleteKey()
     }
 
     /// Flushes the live editor buffer straight through the actor, awaiting the
@@ -392,7 +417,7 @@ final class AppState: ObservableObject {
         vaultKey = masterKey
         settings.vault = config
         if biometricUnlock {
-            (secrets as? KeychainSecretStore)?.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+            storeBiometricKey(masterKey)
         }
         try await noteStore.encryptAllOnDisk(masterKey: masterKey)
     }
@@ -404,7 +429,7 @@ final class AppState: ObservableObject {
         let masterKey = try await Self.deriveMasterKey(config: config, password: password)
         await flushEditorToStoreNow()
         try await noteStore.decryptAllOnDisk(masterKey: masterKey)
-        (secrets as? KeychainSecretStore)?.setProtectedData(nil, for: Self.vaultKeychainAccount)
+        removeBiometricKey()
         vaultKey = nil
         settings.vault = nil
         isLocked = false
@@ -427,9 +452,9 @@ final class AppState: ObservableObject {
         if enabled {
             guard let password else { throw VaultError.wrongPassword }
             let masterKey = try await Self.deriveMasterKey(config: config, password: password)
-            (secrets as? KeychainSecretStore)?.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+            storeBiometricKey(masterKey)
         } else {
-            (secrets as? KeychainSecretStore)?.setProtectedData(nil, for: Self.vaultKeychainAccount)
+            removeBiometricKey()
         }
         config.biometricUnlock = enabled
         settings.vault = config
@@ -451,15 +476,21 @@ final class AppState: ObservableObject {
         return true
     }
 
-    /// Touch ID / Apple Watch / login-password unlock: reading the protected
-    /// Keychain item triggers the system authentication prompt.
+    /// Touch ID / Apple Watch / login-password unlock. Preferred path:
+    /// decrypt the enclave-wrapped key (the enclave enforces user presence).
+    /// Fallback path: read the user-presence-protected raw key. Either way
+    /// the system authentication prompt appears off the main actor.
     @discardableResult
     func unlockWithBiometrics() async -> Bool {
         guard settings.vault?.biometricUnlock == true,
               let keychain = secrets as? KeychainSecretStore else { return false }
-        let account = Self.vaultKeychainAccount
-        let masterKey = await Task.detached(priority: .userInitiated) {
-            keychain.protectedData(for: account, prompt: "unlock your notes")
+        let seAccount = Self.vaultSEKeychainAccount
+        let legacyAccount = Self.vaultKeychainAccount
+        let masterKey = await Task.detached(priority: .userInitiated) { () -> Data? in
+            if let blob = keychain.data(for: seAccount) {
+                return SecureEnclaveWrap.unwrap(blob, prompt: "unlock your notes")
+            }
+            return keychain.protectedData(for: legacyAccount, prompt: "unlock your notes")
         }.value
         guard let masterKey else { return false }
         await finishUnlock(masterKey: masterKey)

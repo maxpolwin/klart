@@ -40,6 +40,17 @@ public actor NoteStore {
         directory.appendingPathComponent("\(id.uuidString).json")
     }
 
+    /// The identity a sealed file is bound to: the note UUID, which is also
+    /// the filename — so a ciphertext copied under another note's name
+    /// fails authentication instead of impersonating it.
+    private static func aad(for id: UUID) -> Data {
+        Data(id.uuidString.utf8)
+    }
+
+    private static func idFromFilename(_ url: URL) -> UUID? {
+        UUID(uuidString: url.deletingPathExtension().lastPathComponent)
+    }
+
     /// Loads every note, newest first. Unreadable files are skipped rather
     /// than taking the whole library down.
     public func loadAll() throws -> [Note] {
@@ -49,7 +60,7 @@ public actor NoteStore {
         var notes: [Note] = []
         for file in files {
             guard let raw = try? Data(contentsOf: file),
-                  let data = try? decrypt(raw),
+                  let data = try? decrypt(raw, noteID: Self.idFromFilename(file)),
                   let note = try? decoder.decode(Note.self, from: data) else { continue }
             notes.append(note)
         }
@@ -58,7 +69,7 @@ public actor NoteStore {
 
     public func save(_ note: Note) throws {
         try ensureDirectory()
-        let data = try encrypt(try encoder.encode(note))
+        let data = try encrypt(try encoder.encode(note), noteID: note.id)
         try data.write(to: fileURL(for: note.id), options: .atomic)
     }
 
@@ -71,20 +82,20 @@ public actor NoteStore {
 
     // MARK: - At-rest encryption
 
-    private func encrypt(_ data: Data) throws -> Data {
+    private func encrypt(_ data: Data, noteID: UUID) throws -> Data {
         #if canImport(CryptoKit)
         guard let key = encryptionKey else { return data }
-        return try VaultCrypto.seal(data, masterKey: key)
+        return try VaultCrypto.seal(data, masterKey: key, aad: Self.aad(for: noteID))
         #else
         return data
         #endif
     }
 
-    private func decrypt(_ data: Data) throws -> Data {
+    private func decrypt(_ data: Data, noteID: UUID?) throws -> Data {
         #if canImport(CryptoKit)
         guard VaultCrypto.isSealed(data) else { return data }
         guard let key = encryptionKey else { throw VaultError.corruptData }
-        return try VaultCrypto.open(data, masterKey: key)
+        return try VaultCrypto.open(data, masterKey: key, aad: noteID.map(Self.aad(for:)))
         #else
         return data
         #endif
@@ -100,7 +111,8 @@ public actor NoteStore {
         for file in files {
             let raw = try Data(contentsOf: file)
             guard !VaultCrypto.isSealed(raw) else { continue }
-            try VaultCrypto.seal(raw, masterKey: masterKey).write(to: file, options: .atomic)
+            let aad = Self.idFromFilename(file).map(Self.aad(for:))
+            try VaultCrypto.seal(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
         encryptionKey = masterKey
         #else
@@ -116,7 +128,8 @@ public actor NoteStore {
         for file in files {
             let raw = try Data(contentsOf: file)
             guard VaultCrypto.isSealed(raw) else { continue }
-            try VaultCrypto.open(raw, masterKey: masterKey).write(to: file, options: .atomic)
+            let aad = Self.idFromFilename(file).map(Self.aad(for:))
+            try VaultCrypto.open(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
         encryptionKey = nil
         #else

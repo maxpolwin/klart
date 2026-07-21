@@ -45,8 +45,13 @@ public enum VaultError: LocalizedError {
 /// - encrypted files start with a magic prefix so plaintext and sealed files
 ///   can coexist during migration
 public enum VaultCrypto {
-    /// Prefix identifying an encrypted Noschen file (version 1).
+    /// Prefix of a version-1 encrypted file (no AAD binding). Still readable;
+    /// files are rewritten as v2 on their next save.
     public static let magic = Data("NSCHNVLT1\n".utf8)
+    /// Prefix of a version-2 encrypted file: the ciphertext additionally
+    /// authenticates the note's identity (AAD), so a sealed file cannot be
+    /// transplanted under another note's name by someone with disk access.
+    public static let magicV2 = Data("NSCHNVLT2\n".utf8)
     public static let defaultIterations = 600_000
 
     // MARK: Keys
@@ -99,23 +104,42 @@ public enum VaultCrypto {
     // MARK: File sealing
 
     public static func isSealed(_ data: Data) -> Bool {
-        data.starts(with: magic)
+        data.starts(with: magic) || data.starts(with: magicV2)
     }
 
-    public static func seal(_ plaintext: Data, masterKey: Data) throws -> Data {
+    /// Seals `plaintext`. With `aad` (the note's identity) the result is a v2
+    /// file whose ciphertext only opens under that same identity; without,
+    /// a legacy v1 file.
+    public static func seal(_ plaintext: Data, masterKey: Data, aad: Data? = nil) throws -> Data {
         let key = SymmetricKey(data: masterKey)
+        if let aad {
+            return magicV2 + (try ChaChaPoly.seal(plaintext, using: key, authenticating: aad).combined)
+        }
         return magic + (try ChaChaPoly.seal(plaintext, using: key).combined)
     }
 
-    public static func open(_ data: Data, masterKey: Data) throws -> Data {
-        guard isSealed(data) else { return data }
+    /// Opens a sealed file (plaintext passes through). v2 files require the
+    /// matching `aad`; v1 files ignore it.
+    public static func open(_ data: Data, masterKey: Data, aad: Data? = nil) throws -> Data {
         let key = SymmetricKey(data: masterKey)
-        do {
-            let box = try ChaChaPoly.SealedBox(combined: data.dropFirst(magic.count))
-            return try ChaChaPoly.open(box, using: key)
-        } catch {
-            throw VaultError.corruptData
+        if data.starts(with: magicV2) {
+            guard let aad else { throw VaultError.corruptData }
+            do {
+                let box = try ChaChaPoly.SealedBox(combined: data.dropFirst(magicV2.count))
+                return try ChaChaPoly.open(box, using: key, authenticating: aad)
+            } catch {
+                throw VaultError.corruptData
+            }
         }
+        if data.starts(with: magic) {
+            do {
+                let box = try ChaChaPoly.SealedBox(combined: data.dropFirst(magic.count))
+                return try ChaChaPoly.open(box, using: key)
+            } catch {
+                throw VaultError.corruptData
+            }
+        }
+        return data
     }
 
     // MARK: Convenience

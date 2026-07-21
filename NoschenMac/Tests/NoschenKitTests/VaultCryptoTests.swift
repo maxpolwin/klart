@@ -111,6 +111,63 @@ final class VaultCryptoTests: XCTestCase {
         XCTAssertEqual(reloaded.first?.content, note.content)
     }
 
+    func testAADBindingRoundtripAndMismatch() throws {
+        let key = VaultCrypto.generateMasterKey()
+        let plaintext = Data("bound".utf8)
+        let aadA = Data("note-A".utf8)
+        let sealed = try VaultCrypto.seal(plaintext, masterKey: key, aad: aadA)
+
+        XCTAssertTrue(sealed.starts(with: VaultCrypto.magicV2))
+        XCTAssertEqual(try VaultCrypto.open(sealed, masterKey: key, aad: aadA), plaintext)
+        // Wrong identity or missing identity must fail, not decrypt.
+        XCTAssertThrowsError(try VaultCrypto.open(sealed, masterKey: key, aad: Data("note-B".utf8)))
+        XCTAssertThrowsError(try VaultCrypto.open(sealed, masterKey: key, aad: nil))
+    }
+
+    func testLegacyV1FilesStillOpen() throws {
+        let key = VaultCrypto.generateMasterKey()
+        let plaintext = Data("legacy".utf8)
+        let v1 = try VaultCrypto.seal(plaintext, masterKey: key, aad: nil)
+
+        XCTAssertTrue(v1.starts(with: VaultCrypto.magic))
+        XCTAssertEqual(try VaultCrypto.open(v1, masterKey: key), plaintext)
+        // A v1 file predates AAD binding — passing an identity is harmless.
+        XCTAssertEqual(try VaultCrypto.open(v1, masterKey: key, aad: Data("any".utf8)), plaintext)
+    }
+
+    func testNoteStoreRejectsTransplantedCiphertext() async throws {
+        let dir = FileManager.default.temporaryDirectory
+            .appendingPathComponent("noschen-vault-test-\(UUID().uuidString)")
+        defer { try? FileManager.default.removeItem(at: dir) }
+
+        let store = NoteStore(directory: dir)
+        let key = VaultCrypto.generateMasterKey()
+        await store.setEncryptionKey(key)
+        let note = Note(content: "# Original")
+        try await store.save(note)
+
+        // Simulate an attacker with disk access copying this note's sealed
+        // bytes under a different note's filename.
+        let original = dir.appendingPathComponent("\(note.id.uuidString).json")
+        let transplanted = dir.appendingPathComponent("\(UUID().uuidString).json")
+        try FileManager.default.copyItem(at: original, to: transplanted)
+
+        // The transplant fails authentication and is skipped; the real note loads.
+        let loaded = try await store.loadAll()
+        XCTAssertEqual(loaded.map(\.id), [note.id])
+    }
+
+    func testSecureEnclaveWrapDegradesGracefully() {
+        // CI runners and most VMs have no Secure Enclave — wrap must return
+        // nil there (callers fall back), never crash. On enclave hardware the
+        // blob must be non-trivial; unwrap isn't exercised because it demands
+        // interactive user presence.
+        if let blob = SecureEnclaveWrap.wrap(Data("key-material".utf8)) {
+            XCTAssertGreaterThan(blob.count, 32)
+            SecureEnclaveWrap.deleteKey()
+        }
+    }
+
     func testLoadAllSkipsSealedFilesWithoutKey() async throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("noschen-vault-test-\(UUID().uuidString)")
