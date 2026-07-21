@@ -26,12 +26,14 @@ public struct VaultConfig: Codable, Equatable, Sendable {
 public enum VaultError: LocalizedError {
     case wrongPassword
     case corruptData
+    case locked
     case unsupportedPlatform
 
     public var errorDescription: String? {
         switch self {
         case .wrongPassword: return "Wrong password."
         case .corruptData: return "This file is encrypted but could not be decrypted."
+        case .locked: return "Notes are locked."
         case .unsupportedPlatform: return "Note encryption requires macOS."
         }
     }

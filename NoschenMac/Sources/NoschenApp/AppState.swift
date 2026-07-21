@@ -92,6 +92,7 @@ final class AppState: ObservableObject {
 
         if settings.vault != nil {
             isLocked = true          // notes stay sealed until the user unlocks
+            Task { await noteStore.lock() }   // and the store refuses writes
         } else {
             Task { await loadNotes() }
         }
@@ -124,6 +125,7 @@ final class AppState: ObservableObject {
     }
 
     func createNote() {
+        guard !isLocked else { return }
         saveNow()
         let note = Note(content: "# ")
         notes.insert(note, at: 0)
@@ -433,6 +435,10 @@ final class AppState: ObservableObject {
         vaultKey = nil
         settings.vault = nil
         isLocked = false
+        // Disabling from the lock screen means nothing is in memory yet.
+        if notes.isEmpty {
+            await loadNotes()
+        }
     }
 
     /// Rewraps the master key under a new password. Notes on disk are
@@ -527,7 +533,7 @@ final class AppState: ObservableObject {
             if let pendingSave {
                 try? await self.noteStore.save(pendingSave)   // key still set
             }
-            await self.noteStore.setEncryptionKey(nil)
+            await self.noteStore.lock()
             self.vaultKey = nil
             self.notes = []
             self.selectedNoteID = nil
@@ -545,6 +551,7 @@ final class AppState: ObservableObject {
     /// Writes every note as a plain .md file into a user-chosen folder.
     /// This is the manual backup path: plaintext by design, user-invoked only.
     func exportAllNotesAsMarkdown() {
+        guard !isLocked else { return }
         saveNow()
         let panel = NSOpenPanel()
         panel.canChooseFiles = false
@@ -571,6 +578,7 @@ final class AppState: ObservableObject {
     /// Imports .md / .txt files as new notes (or updates the existing note
     /// when the file carries a noschen:id header from a previous export).
     func importMarkdownNotes() {
+        guard !isLocked else { return }
         let panel = NSOpenPanel()
         panel.canChooseFiles = true
         panel.canChooseDirectories = false

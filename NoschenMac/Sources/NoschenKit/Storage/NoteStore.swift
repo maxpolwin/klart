@@ -9,8 +9,12 @@ public actor NoteStore {
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
     /// When set, files are sealed with the vault master key on write and
-    /// opened on read. Nil = plaintext mode (vault disabled or locked).
+    /// opened on read. Nil = plaintext mode (vault disabled) or locked.
     private var encryptionKey: Data?
+    /// True while the vault exists but no key is present. In this state the
+    /// store refuses to write — otherwise a stray save (a menu action, a
+    /// late autosave) would drop plaintext into an encrypted library.
+    private var vaultLocked = false
 
     public init(directory: URL) {
         self.directory = directory
@@ -23,6 +27,13 @@ public actor NoteStore {
 
     public func setEncryptionKey(_ key: Data?) {
         encryptionKey = key
+        if key != nil { vaultLocked = false }
+    }
+
+    /// Enters the locked state: no key in memory, all writes refused.
+    public func lock() {
+        encryptionKey = nil
+        vaultLocked = true
     }
 
     /// Default notes directory: ~/Library/Application Support/Noschen/Notes
@@ -68,12 +79,14 @@ public actor NoteStore {
     }
 
     public func save(_ note: Note) throws {
+        guard !vaultLocked else { throw VaultError.locked }
         try ensureDirectory()
         let data = try encrypt(try encoder.encode(note), noteID: note.id)
         try data.write(to: fileURL(for: note.id), options: .atomic)
     }
 
     public func delete(id: UUID) throws {
+        guard !vaultLocked else { throw VaultError.locked }
         let url = fileURL(for: id)
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
@@ -115,6 +128,7 @@ public actor NoteStore {
             try VaultCrypto.seal(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
         encryptionKey = masterKey
+        vaultLocked = false
         #else
         throw VaultError.unsupportedPlatform
         #endif
@@ -132,6 +146,7 @@ public actor NoteStore {
             try VaultCrypto.open(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
         }
         encryptionKey = nil
+        vaultLocked = false
         #else
         throw VaultError.unsupportedPlatform
         #endif

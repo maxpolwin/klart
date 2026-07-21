@@ -40,6 +40,7 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Note") { state.createNote() }
                 .keyboardShortcut("n", modifiers: .command)
+                .disabled(state.isLocked)
         }
         CommandGroup(after: .saveItem) {
             Button("Save Now") { state.saveNow() }
