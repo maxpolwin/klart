@@ -32,6 +32,9 @@ jobs:
       - name: Assemble Noschen.app (release)
         run: bash Scripts/make-app.sh
 
+      - name: Build installer DMG
+        run: bash Scripts/make-dmg.sh
+
       - name: Zip app bundle
         run: ditto -c -k --keepParent dist/Noschen.app Noschen.app.zip
 
@@ -40,4 +43,11 @@ jobs:
         with:
           name: Noschen.app
           path: NoschenMac/Noschen.app.zip
+          if-no-files-found: error
+
+      - name: Upload DMG artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Noschen.dmg
+          path: NoschenMac/dist/Noschen.dmg
           if-no-files-found: error

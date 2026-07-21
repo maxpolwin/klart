@@ -43,7 +43,17 @@ swift test
 bash Scripts/make-app.sh
 ```
 
-CI builds and tests the app on every push (see `.github/workflows/macos-app.yml`) and uploads a ready-to-run `Noschen.app` artifact.
+CI builds and tests the app on every push (see `.github/workflows/macos-app.yml`) and uploads a ready-to-run `Noschen.app` and an ad-hoc-signed `Noschen.dmg` artifact — fine for testing on your own Mac, but ad-hoc signing (no `SIGN_IDENTITY` secret is configured in CI) still shows a Gatekeeper warning for anyone else. For a DMG you can hand to other people with no warning, build and notarize it locally with your own Developer ID:
+
+```bash
+ID="Developer ID Application: Your Name (TEAM1234ID)"   # from: security find-identity -v -p codesigning
+
+SIGN_IDENTITY="$ID" bash Scripts/make-app.sh    # build + sign Noschen.app
+SIGN_IDENTITY="$ID" bash Scripts/make-dmg.sh    # package + sign dist/Noschen.dmg
+bash Scripts/notarize-app.sh                    # submit to Apple, staple the ticket
+```
+
+The last step needs a paid Apple Developer Program membership and one-time notarization credentials (an app-specific password, stored via `xcrun notarytool store-credentials`) — see the comments at the top of `Scripts/notarize-app.sh` for the exact commands. Verify the result with `spctl --assess --verbose dist/Noschen.dmg`, which should print `accepted`.
 
 ## Using Noschen
 
