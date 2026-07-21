@@ -17,7 +17,9 @@ This is the native Swift/SwiftUI rebuild of the original Electron app (still in 
 - **Coaching, not ghostwriting** — feedback types: **Gap**, **MECE**, **Source**, **Structure**, **Clarity**, and **Question** (Socratic). Plus one-tap coach actions: *Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps* (streamed live).
 - **Feedback you control** — accept a tip to insert it as a quoted block in the right section; dismiss it and it never comes back for that note. Tune tone, detail, language, tips-per-round, and add your own standing guidance.
 - **Context-aware** — the coach knows your H1 topic, which H2 section you're editing, and what the other sections cover, so MECE and gap analysis are about the *document*, not the paragraph. Mark any section `[no-ai]` to exclude it.
-- **Secure by default** — API keys live in the macOS Keychain, never in settings files. Plain HTTP is enforced in code to local hosts only (loopback, RFC 1918/link-local addresses, `.local`/`.lan` names); every remote endpoint must be HTTPS. Packaged builds are signed with the **Hardened Runtime** and run in the **App Sandbox** (outgoing network only, no file access beyond the app's own container) — `make-app.sh` verifies both flags are present in the signature and fails the build otherwise.
+- **Secure by default** — API keys live in the macOS Keychain, never in settings files. Plain HTTP is enforced in code to local hosts only (loopback, RFC 1918/link-local addresses, `.local`/`.lan` names) and Settings shows a notice whenever an endpoint is unencrypted; every remote endpoint must be HTTPS. Packaged builds are signed with the **Hardened Runtime** and run in the **App Sandbox** (outgoing network only, plus files the user explicitly picks for export/import) — `make-app.sh` verifies both flags are present in the signature and fails the build otherwise.
+- **Optional note encryption + app lock** — Settings → Security encrypts every note file at rest (ChaCha20-Poly1305; key derived from your password via PBKDF2-HMAC-SHA256, 600k rounds) and locks the app behind that password, with optional Touch ID unlock (the key copy for Touch ID sits behind a user-presence Keychain control). Lock any time with `⌘L`; the app starts locked. There is no recovery backdoor: a forgotten password (with Touch ID off) means the notes are gone — keep a markdown export. FIDO2 hardware keys (YubiKey) are not supported: macOS exposes no public API to derive stable encryption secrets from a security key for app-local vaults, so password + Touch ID is the honest option.
+- **Markdown export/import** — File → Export Notes as Markdown… writes every note as a plain `.md` file to a folder you pick (your manual, provider-independent backup); Import Markdown Notes… brings them back, recognizing its own export headers so re-imports update instead of duplicate.
 - **Fast** — actor-based file I/O, debounced autosave (atomic writes), per-paragraph editor styling, cancellation-aware feedback pipeline (a new keystroke cancels the in-flight analysis).
 
 ## Requirements
@@ -55,6 +57,21 @@ bash Scripts/notarize-app.sh                    # submit to Apple, staple the ti
 ```
 
 The last step needs a paid Apple Developer Program membership and one-time notarization credentials (an app-specific password, stored via `xcrun notarytool store-credentials`) — see the comments at the top of `Scripts/notarize-app.sh` for the exact commands. Verify the result with `spctl --assess --verbose dist/Noschen.dmg`, which should print `accepted`.
+
+## Distributing to testers (CI-signed builds)
+
+Once the following repository secrets exist (GitHub → Settings → Secrets and variables → Actions), every CI run produces a Developer-ID-signed — and, with the notary secrets, notarized and stapled — `Noschen.dmg` artifact you can hand straight to testers, no Gatekeeper warning:
+
+| Secret | Value |
+|---|---|
+| `MACOS_CERT_P12` | Your Developer ID Application certificate + private key as base64. Export from Keychain Access (select the certificate → File → Export Items → `.p12`), then `base64 -i cert.p12 \| pbcopy` |
+| `MACOS_CERT_PASSWORD` | The password you set on that `.p12` export |
+| `MACOS_SIGN_IDENTITY` | The identity string, e.g. `Developer ID Application: Your Name (TEAM1234ID)` — from `security find-identity -v -p codesigning` |
+| `NOTARY_APPLE_ID` | Apple ID email of your developer account *(optional — enables notarization)* |
+| `NOTARY_TEAM_ID` | Your team ID, from developer.apple.com → Membership |
+| `NOTARY_PASSWORD` | An app-specific password from appleid.apple.com — **not** your Apple ID password |
+
+With no secrets configured the workflow keeps working and falls back to ad-hoc signing (fine for CI checks, not for handing out). The certificate is imported into a throwaway CI keychain with a random password and never touches the repository.
 
 ## Using Noschen
 
@@ -111,6 +128,8 @@ Design decisions worth knowing:
 | Telemetry | none |
 
 The `…` base depends on how you run Noschen: the sandboxed packaged app resolves to its container (`~/Library/Containers/com.noschen.mac/Data/Library/Application Support/…`), while an unsandboxed `swift run` dev build uses `~/Library/Application Support/…` directly. If you move from a dev build to the packaged app, copy the `Noschen` folder across once.
+
+**Reinstalls:** deleting the app does *not* delete your notes — the container (and the unsandboxed path) survive uninstall/reinstall, including App Store reinstalls, as long as the bundle ID stays `com.noschen.mac`. Only manually deleting `~/Library/Containers/com.noschen.mac` (or an "app cleaner" tool doing it for you) removes them. For belt-and-braces, File → Export Notes as Markdown… gives you a plaintext backup you can re-import on any machine.
 
 Only the relevant slice of the note you're editing is sent to the provider you configured, when you pause typing or invoke the coach. With Ollama or LM Studio, everything stays on your machine.
 

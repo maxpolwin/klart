@@ -1,5 +1,6 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import NoschenKit
 
 enum FeedbackPhase: Equatable {
@@ -55,6 +56,17 @@ final class AppState: ObservableObject {
     @Published var connection: ConnectionStatus = .unknown
     @Published var availableModels: [String] = []
 
+    // MARK: Vault / app lock
+
+    /// True while note protection is enabled and the master key has not been
+    /// produced this session. The UI shows the lock screen; no notes are in
+    /// memory and none can be loaded.
+    @Published private(set) var isLocked = false
+    /// The vault master key while unlocked; nil when locked or unprotected.
+    private var vaultKey: Data?
+
+    static let vaultKeychainAccount = "noschen.vault.masterkey"
+
     let secrets: SecretStore
     private let noteStore: NoteStore
     private let settingsStore: SettingsStore
@@ -74,7 +86,11 @@ final class AppState: ObservableObject {
         self.secrets = secrets
         self.settings = settingsStore.load()
 
-        Task { await loadNotes() }
+        if settings.vault != nil {
+            isLocked = true          // notes stay sealed until the user unlocks
+        } else {
+            Task { await loadNotes() }
+        }
     }
 
     // MARK: - Note lifecycle
@@ -339,6 +355,218 @@ final class AppState: ObservableObject {
 
     private func persistSettings() {
         try? settingsStore.save(settings)
+    }
+
+    // MARK: - Vault (at-rest encryption + app lock)
+
+    var biometricUnlockAvailable: Bool {
+        settings.vault?.biometricUnlock == true
+            && (secrets as? KeychainSecretStore)?.hasProtectedData(for: Self.vaultKeychainAccount) == true
+    }
+
+    /// Flushes the live editor buffer straight through the actor, awaiting the
+    /// write. The vault migrations below need the save strictly ordered
+    /// against the key change — the usual fire-and-forget persist is not.
+    private func flushEditorToStoreNow() async {
+        autosaveTask?.cancel()
+        guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }
+        if notes[index].content != editorText {
+            notes[index].content = editorText
+            notes[index].updatedAt = Date()
+        }
+        try? await noteStore.save(notes[index])
+    }
+
+    /// Turns protection on: encrypts every note on disk under a fresh master
+    /// key wrapped by `password`. The app stays unlocked afterwards.
+    /// Key derivation (600k PBKDF2 rounds) runs off the main actor.
+    func enableProtection(password: String, biometricUnlock: Bool) async throws {
+        await flushEditorToStoreNow()
+        let (masterKey, config) = try await Task.detached(priority: .userInitiated) {
+            try VaultCrypto.createVault(password: password, biometricUnlock: biometricUnlock)
+        }.value
+        try await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        if biometricUnlock {
+            (secrets as? KeychainSecretStore)?.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+        }
+        vaultKey = masterKey
+        settings.vault = config
+    }
+
+    /// Turns protection off after verifying the password; notes are rewritten
+    /// as plaintext and the biometric key copy is removed.
+    func disableProtection(password: String) async throws {
+        guard let config = settings.vault else { return }
+        let masterKey = try await Self.deriveMasterKey(config: config, password: password)
+        await flushEditorToStoreNow()
+        try await noteStore.decryptAllOnDisk(masterKey: masterKey)
+        (secrets as? KeychainSecretStore)?.setProtectedData(nil, for: Self.vaultKeychainAccount)
+        vaultKey = nil
+        settings.vault = nil
+        isLocked = false
+    }
+
+    /// Rewraps the master key under a new password. Notes on disk are
+    /// untouched — only the wrapping in settings.json changes.
+    func changeVaultPassword(current: String, new: String) async throws {
+        guard let config = settings.vault else { return }
+        let masterKey = try await Self.deriveMasterKey(config: config, password: current)
+        settings.vault = try await Task.detached(priority: .userInitiated) {
+            try VaultCrypto.rewrap(config: config, masterKey: masterKey, newPassword: new)
+        }.value
+    }
+
+    /// Enables or disables the Touch ID unlock path. Enabling needs the
+    /// password once, to obtain the key that gets stored behind user presence.
+    func setBiometricUnlock(_ enabled: Bool, password: String?) async throws {
+        guard var config = settings.vault else { return }
+        if enabled {
+            guard let password else { throw VaultError.wrongPassword }
+            let masterKey = try await Self.deriveMasterKey(config: config, password: password)
+            (secrets as? KeychainSecretStore)?.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+        } else {
+            (secrets as? KeychainSecretStore)?.setProtectedData(nil, for: Self.vaultKeychainAccount)
+        }
+        config.biometricUnlock = enabled
+        settings.vault = config
+    }
+
+    private static func deriveMasterKey(config: VaultConfig, password: String) async throws -> Data {
+        try await Task.detached(priority: .userInitiated) {
+            try VaultCrypto.unlock(config: config, password: password)
+        }.value
+    }
+
+    @discardableResult
+    func unlock(password: String) async -> Bool {
+        guard let config = settings.vault else { return true }
+        guard let masterKey = try? await Self.deriveMasterKey(config: config, password: password) else {
+            return false
+        }
+        await finishUnlock(masterKey: masterKey)
+        return true
+    }
+
+    /// Touch ID / Apple Watch / login-password unlock: reading the protected
+    /// Keychain item triggers the system authentication prompt.
+    @discardableResult
+    func unlockWithBiometrics() async -> Bool {
+        guard settings.vault?.biometricUnlock == true,
+              let keychain = secrets as? KeychainSecretStore else { return false }
+        let account = Self.vaultKeychainAccount
+        let masterKey = await Task.detached(priority: .userInitiated) {
+            keychain.protectedData(for: account, prompt: "unlock your notes")
+        }.value
+        guard let masterKey else { return false }
+        await finishUnlock(masterKey: masterKey)
+        return true
+    }
+
+    private func finishUnlock(masterKey: Data) async {
+        vaultKey = masterKey
+        await noteStore.setEncryptionKey(masterKey)
+        await loadNotes()
+        isLocked = false
+    }
+
+    /// Drops the key and all decrypted content from memory. Notes on disk
+    /// are already sealed, so at-rest protection is unaffected.
+    func lockNow() {
+        guard settings.vault != nil, !isLocked else { return }
+        autosaveTask?.cancel()
+        feedbackTask?.cancel()
+        coachTask?.cancel()
+        // Flush the editor buffer into the model without spawning the usual
+        // fire-and-forget save: the final write must happen strictly BEFORE
+        // the encryption key is cleared, or it would land in plaintext.
+        var pendingSave: Note?
+        if let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) {
+            if notes[index].content != editorText {
+                notes[index].content = editorText
+                notes[index].updatedAt = Date()
+            }
+            pendingSave = notes[index]
+        }
+        Task { [weak self] in
+            guard let self else { return }
+            if let pendingSave {
+                try? await self.noteStore.save(pendingSave)   // key still set
+            }
+            await self.noteStore.setEncryptionKey(nil)
+            self.vaultKey = nil
+            self.notes = []
+            self.selectedNoteID = nil
+            self.editorText = ""
+            self.feedbackItems = []
+            self.coachOutput = ""
+            self.coachAction = nil
+            self.showCoachPopover = false
+            self.isLocked = true
+        }
+    }
+
+    // MARK: - Export / import (markdown backup)
+
+    /// Writes every note as a plain .md file into a user-chosen folder.
+    /// This is the manual backup path: plaintext by design, user-invoked only.
+    func exportAllNotesAsMarkdown() {
+        saveNow()
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = false
+        panel.canChooseDirectories = true
+        panel.canCreateDirectories = true
+        panel.prompt = "Export"
+        panel.message = "Choose a folder for the markdown export. Files are written as plain text — store them somewhere you trust."
+        guard panel.runModal() == .OK, let folder = panel.url else { return }
+
+        let formatter = ISO8601DateFormatter()
+        for note in notes {
+            let safeTitle = note.title
+                .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>"))
+                .joined()
+                .trimmingCharacters(in: .whitespaces)
+                .prefix(60)
+            let name = "\(safeTitle.isEmpty ? "Untitled" : String(safeTitle)) — \(note.id.uuidString.prefix(8)).md"
+            let header = "<!-- noschen:id=\(note.id.uuidString) created=\(formatter.string(from: note.createdAt)) -->\n"
+            let url = folder.appendingPathComponent(name)
+            try? (header + note.content).data(using: .utf8)?.write(to: url, options: .atomic)
+        }
+    }
+
+    /// Imports .md / .txt files as new notes (or updates the existing note
+    /// when the file carries a noschen:id header from a previous export).
+    func importMarkdownNotes() {
+        let panel = NSOpenPanel()
+        panel.canChooseFiles = true
+        panel.canChooseDirectories = false
+        panel.allowsMultipleSelection = true
+        panel.allowedContentTypes = [.plainText]
+        panel.prompt = "Import"
+        guard panel.runModal() == .OK else { return }
+
+        for url in panel.urls {
+            guard var text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            var noteID = UUID()
+            var createdAt = Date()
+            // Recover identity from our own export header, if present.
+            if text.hasPrefix("<!-- noschen:"), let headerEnd = text.range(of: "-->\n") {
+                let header = String(text[..<headerEnd.lowerBound])
+                if let idMatch = header.range(of: "id="),
+                   let id = UUID(uuidString: String(header[idMatch.upperBound...].prefix(36))) {
+                    noteID = id
+                }
+                if let createdMatch = header.range(of: "created=") {
+                    let stamp = String(header[createdMatch.upperBound...].prefix(25))
+                    createdAt = ISO8601DateFormatter().date(from: stamp) ?? createdAt
+                }
+                text.removeSubrange(..<headerEnd.upperBound)
+            }
+            let note = Note(id: noteID, content: text, createdAt: createdAt, updatedAt: Date())
+            notes.removeAll { $0.id == note.id }
+            notes.insert(note, at: 0)
+            persist(note)
+        }
+        if selectedNoteID == nil { selectedNoteID = notes.first?.id }
     }
 }
 #endif

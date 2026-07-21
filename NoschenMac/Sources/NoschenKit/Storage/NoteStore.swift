@@ -8,6 +8,9 @@ public actor NoteStore {
 
     private let encoder: JSONEncoder
     private let decoder: JSONDecoder
+    /// When set, files are sealed with the vault master key on write and
+    /// opened on read. Nil = plaintext mode (vault disabled or locked).
+    private var encryptionKey: Data?
 
     public init(directory: URL) {
         self.directory = directory
@@ -16,6 +19,10 @@ public actor NoteStore {
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         decoder = JSONDecoder()
         decoder.dateDecodingStrategy = .iso8601
+    }
+
+    public func setEncryptionKey(_ key: Data?) {
+        encryptionKey = key
     }
 
     /// Default notes directory: ~/Library/Application Support/Noschen/Notes
@@ -41,7 +48,8 @@ public actor NoteStore {
             .filter { $0.pathExtension.lowercased() == "json" }
         var notes: [Note] = []
         for file in files {
-            guard let data = try? Data(contentsOf: file),
+            guard let raw = try? Data(contentsOf: file),
+                  let data = try? decrypt(raw),
                   let note = try? decoder.decode(Note.self, from: data) else { continue }
             notes.append(note)
         }
@@ -50,7 +58,7 @@ public actor NoteStore {
 
     public func save(_ note: Note) throws {
         try ensureDirectory()
-        let data = try encoder.encode(note)
+        let data = try encrypt(try encoder.encode(note))
         try data.write(to: fileURL(for: note.id), options: .atomic)
     }
 
@@ -59,6 +67,61 @@ public actor NoteStore {
         if FileManager.default.fileExists(atPath: url.path) {
             try FileManager.default.removeItem(at: url)
         }
+    }
+
+    // MARK: - At-rest encryption
+
+    private func encrypt(_ data: Data) throws -> Data {
+        #if canImport(CryptoKit)
+        guard let key = encryptionKey else { return data }
+        return try VaultCrypto.seal(data, masterKey: key)
+        #else
+        return data
+        #endif
+    }
+
+    private func decrypt(_ data: Data) throws -> Data {
+        #if canImport(CryptoKit)
+        guard VaultCrypto.isSealed(data) else { return data }
+        guard let key = encryptionKey else { throw VaultError.corruptData }
+        return try VaultCrypto.open(data, masterKey: key)
+        #else
+        return data
+        #endif
+    }
+
+    /// One-time migrations when protection is turned on or off. Both rewrite
+    /// every note file atomically with the target representation.
+    public func encryptAllOnDisk(masterKey: Data) throws {
+        #if canImport(CryptoKit)
+        try ensureDirectory()
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension.lowercased() == "json" }
+        for file in files {
+            let raw = try Data(contentsOf: file)
+            guard !VaultCrypto.isSealed(raw) else { continue }
+            try VaultCrypto.seal(raw, masterKey: masterKey).write(to: file, options: .atomic)
+        }
+        encryptionKey = masterKey
+        #else
+        throw VaultError.unsupportedPlatform
+        #endif
+    }
+
+    public func decryptAllOnDisk(masterKey: Data) throws {
+        #if canImport(CryptoKit)
+        try ensureDirectory()
+        let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            .filter { $0.pathExtension.lowercased() == "json" }
+        for file in files {
+            let raw = try Data(contentsOf: file)
+            guard VaultCrypto.isSealed(raw) else { continue }
+            try VaultCrypto.open(raw, masterKey: masterKey).write(to: file, options: .atomic)
+        }
+        encryptionKey = nil
+        #else
+        throw VaultError.unsupportedPlatform
+        #endif
     }
 }
 

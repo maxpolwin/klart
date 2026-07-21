@@ -9,6 +9,14 @@ struct ContentView: View {
     @State private var pillPulse = false
 
     var body: some View {
+        if state.isLocked {
+            LockView()
+        } else {
+            mainInterface
+        }
+    }
+
+    private var mainInterface: some View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)

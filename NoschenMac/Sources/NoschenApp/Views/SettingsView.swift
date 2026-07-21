@@ -9,6 +9,8 @@ struct SettingsView: View {
                 .tabItem { Label("AI Provider", systemImage: "cpu") }
             CoachingSettingsView()
                 .tabItem { Label("Coaching", systemImage: "sparkles") }
+            SecuritySettingsView()
+                .tabItem { Label("Security", systemImage: "lock.shield") }
         }
         .frame(width: 520, height: 480)
     }
@@ -19,8 +21,16 @@ struct SettingsView: View {
 private struct ProviderSettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var apiKey = ""
+    @State private var showKeyInfo = false
 
     private var kind: ProviderKind { state.settings.activeProvider }
+
+    private var usesPlainHTTP: Bool {
+        state.settings.activeConfig.baseURL
+            .trimmingCharacters(in: .whitespaces)
+            .lowercased()
+            .hasPrefix("http:")
+    }
 
     private var config: Binding<ProviderConfig> {
         Binding(
@@ -47,15 +57,39 @@ private struct ProviderSettingsView: View {
                     .textFieldStyle(.roundedBorder)
                     .autocorrectionDisabled()
 
+                if usesPlainHTTP {
+                    Label {
+                        Text("Unencrypted connection — fine for this Mac; on a shared network other devices can read this traffic. Noschen only allows http:// to local hosts.")
+                            .font(.caption)
+                    } icon: {
+                        Image(systemName: "network.badge.shield.half.filled")
+                            .font(.caption)
+                    }
+                    .foregroundStyle(.secondary)
+                }
+
                 if kind.usesAPIKey {
-                    SecureField("API Key", text: $apiKey)
-                        .textFieldStyle(.roundedBorder)
-                        .onChange(of: apiKey) { _, newValue in
-                            state.setAPIKey(newValue, for: kind)
+                    HStack(spacing: 6) {
+                        SecureField("API Key", text: $apiKey)
+                            .textFieldStyle(.roundedBorder)
+                            .onChange(of: apiKey) { _, newValue in
+                                state.setAPIKey(newValue, for: kind)
+                            }
+                        Button {
+                            showKeyInfo.toggle()
+                        } label: {
+                            Image(systemName: "info.circle")
+                                .foregroundStyle(.secondary)
                         }
-                    Text("Stored in the macOS Keychain — never written to settings files.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .buttonStyle(.plain)
+                        .help("Where is this key stored?")
+                        .popover(isPresented: $showKeyInfo, arrowEdge: .trailing) {
+                            Text("Paste your key here — that's all. Noschen saves it straight to the macOS Keychain (service “com.noschen.mac”) and reads it from there on every request. It is never written to settings files or notes. To remove it, clear this field; to inspect it, search for “noschen” in Keychain Access.")
+                                .font(.caption)
+                                .frame(width: 260)
+                                .padding(12)
+                        }
+                    }
                 }
             } header: {
                 Text("Connection")
@@ -231,6 +265,296 @@ private struct CoachingSettingsView: View {
         case .clarity: return "Vague or unsupported claims"
         case .question: return "Socratic questions that push further"
         case .other: return ""
+        }
+    }
+}
+
+// MARK: - Security tab
+
+private struct SecuritySettingsView: View {
+    @EnvironmentObject var state: AppState
+
+    private enum ActiveSheet: Identifiable {
+        case setup, changePassword, disable, enableBiometric
+        var id: Int { hashValue }
+    }
+
+    @State private var activeSheet: ActiveSheet?
+
+    private var vaultEnabled: Bool { state.settings.vault != nil }
+
+    var body: some View {
+        Form {
+            Section {
+                if vaultEnabled {
+                    Label {
+                        Text("Notes are encrypted on disk")
+                            .font(.system(size: 13, weight: .medium))
+                    } icon: {
+                        Image(systemName: "checkmark.shield.fill")
+                            .foregroundStyle(.green)
+                    }
+                    Text("Every note file is sealed with ChaCha20-Poly1305. The key is derived from your password and never stored in plain form. Lock any time with ⌘L; the app starts locked.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+
+                    Toggle("Unlock with Touch ID", isOn: biometricBinding)
+
+                    HStack(spacing: 10) {
+                        Button("Change Password…") { activeSheet = .changePassword }
+                        Button("Turn Off Protection…") { activeSheet = .disable }
+                    }
+                } else {
+                    Text("Encrypt your notes on disk and require a password (optionally Touch ID) to open Noschen. Recommended if your notes hold anything personal or critical.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Button("Set Up Protection…") { activeSheet = .setup }
+                }
+            } header: {
+                Text("Note protection")
+            } footer: {
+                if vaultEnabled {
+                    Text("If you forget the password and Touch ID unlock is off, your notes cannot be recovered — there is no backdoor. Keep a markdown export (File → Export Notes as Markdown…) somewhere safe.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+        .formStyle(.grouped)
+        .sheet(item: $activeSheet) { sheet in
+            switch sheet {
+            case .setup:
+                SetupProtectionSheet()
+            case .changePassword:
+                ChangePasswordSheet()
+            case .disable:
+                DisableProtectionSheet()
+            case .enableBiometric:
+                EnableBiometricSheet()
+            }
+        }
+    }
+
+    private var biometricBinding: Binding<Bool> {
+        Binding(
+            get: { state.settings.vault?.biometricUnlock ?? false },
+            set: { enable in
+                if enable {
+                    activeSheet = .enableBiometric   // needs the password once
+                } else {
+                    Task { try? await state.setBiometricUnlock(false, password: nil) }
+                }
+            }
+        )
+    }
+}
+
+/// Shared scaffolding for the password sheets: title, fields, error line,
+/// busy state, cancel/confirm.
+private struct VaultSheetChrome<Fields: View>: View {
+    let title: String
+    let confirmLabel: String
+    let confirmDisabled: Bool
+    let busy: Bool
+    let error: String?
+    let onConfirm: () -> Void
+    @ViewBuilder let fields: Fields
+
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Text(title)
+                .font(.system(size: 15, weight: .semibold))
+            fields
+            if let error {
+                Text(error)
+                    .font(.caption)
+                    .foregroundStyle(.red)
+            }
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .keyboardShortcut(.cancelAction)
+                Button {
+                    onConfirm()
+                } label: {
+                    if busy {
+                        ProgressView().controlSize(.small)
+                    } else {
+                        Text(confirmLabel)
+                    }
+                }
+                .keyboardShortcut(.defaultAction)
+                .buttonStyle(.borderedProminent)
+                .disabled(confirmDisabled || busy)
+            }
+        }
+        .padding(20)
+        .frame(width: 380)
+    }
+}
+
+private struct SetupProtectionSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var confirm = ""
+    @State private var useBiometrics = true
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VaultSheetChrome(
+            title: "Protect your notes",
+            confirmLabel: "Encrypt Notes",
+            confirmDisabled: password.count < 8 || password != confirm,
+            busy: busy,
+            error: error,
+            onConfirm: run
+        ) {
+            SecureField("Password (min. 8 characters)", text: $password)
+                .textFieldStyle(.roundedBorder)
+            SecureField("Repeat password", text: $confirm)
+                .textFieldStyle(.roundedBorder)
+            Toggle("Also allow Touch ID to unlock", isOn: $useBiometrics)
+            Text("All note files are encrypted with this password. If you forget it (and Touch ID is off), the notes are unrecoverable.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func run() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                try await state.enableProtection(password: password, biometricUnlock: useBiometrics)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+}
+
+private struct ChangePasswordSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var current = ""
+    @State private var newPassword = ""
+    @State private var confirm = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VaultSheetChrome(
+            title: "Change vault password",
+            confirmLabel: "Change Password",
+            confirmDisabled: current.isEmpty || newPassword.count < 8 || newPassword != confirm,
+            busy: busy,
+            error: error,
+            onConfirm: run
+        ) {
+            SecureField("Current password", text: $current)
+                .textFieldStyle(.roundedBorder)
+            SecureField("New password (min. 8 characters)", text: $newPassword)
+                .textFieldStyle(.roundedBorder)
+            SecureField("Repeat new password", text: $confirm)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func run() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                try await state.changeVaultPassword(current: current, new: newPassword)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+}
+
+private struct DisableProtectionSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VaultSheetChrome(
+            title: "Turn off protection?",
+            confirmLabel: "Decrypt Notes",
+            confirmDisabled: password.isEmpty,
+            busy: busy,
+            error: error,
+            onConfirm: run
+        ) {
+            Text("Notes will be rewritten as plain, unencrypted files and Noschen will no longer ask for a password.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func run() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                try await state.disableProtection(password: password)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
+        }
+    }
+}
+
+private struct EnableBiometricSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+    @State private var password = ""
+    @State private var busy = false
+    @State private var error: String?
+
+    var body: some View {
+        VaultSheetChrome(
+            title: "Enable Touch ID unlock",
+            confirmLabel: "Enable",
+            confirmDisabled: password.isEmpty,
+            busy: busy,
+            error: error,
+            onConfirm: run
+        ) {
+            Text("Your password is needed once to store the key behind Touch ID. Reading it back always requires you to authenticate.")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            SecureField("Password", text: $password)
+                .textFieldStyle(.roundedBorder)
+        }
+    }
+
+    private func run() {
+        busy = true
+        error = nil
+        Task {
+            do {
+                try await state.setBiometricUnlock(true, password: password)
+                dismiss()
+            } catch {
+                self.error = error.localizedDescription
+            }
+            busy = false
         }
     }
 }

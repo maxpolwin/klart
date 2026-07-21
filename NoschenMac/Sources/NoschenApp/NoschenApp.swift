@@ -45,6 +45,15 @@ struct AppCommands: Commands {
             Button("Save Now") { state.saveNow() }
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
+            Divider()
+            Button("Export Notes as Markdown…") { state.exportAllNotesAsMarkdown() }
+                .disabled(state.isLocked || state.notes.isEmpty)
+            Button("Import Markdown Notes…") { state.importMarkdownNotes() }
+                .disabled(state.isLocked)
+            Divider()
+            Button("Lock Notes") { state.lockNow() }
+                .keyboardShortcut("l", modifiers: .command)
+                .disabled(state.settings.vault == nil || state.isLocked)
         }
         CommandMenu("Coach") {
             Button("Analyze Note") { state.requestFeedback(manual: true) }

@@ -70,5 +70,47 @@ public final class KeychainSecretStore: SecretStore {
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
         SecItemAdd(attributes as CFDictionary, nil)
     }
+
+    // MARK: - User-presence protected items (vault master key)
+
+    /// Stores data behind a user-presence access control: reading it back
+    /// makes the system demand Touch ID / Apple Watch / the login password
+    /// first. Used for the vault master key so biometric unlock never
+    /// weakens the encryption below "this user, present, on this Mac".
+    public func setProtectedData(_ value: Data?, for account: String) {
+        SecItemDelete(baseQuery(account: account) as CFDictionary)
+        guard let value, !value.isEmpty else { return }
+        guard let access = SecAccessControlCreateWithFlags(
+            nil,
+            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
+            .userPresence,
+            nil
+        ) else { return }
+        var attributes = baseQuery(account: account)
+        attributes[kSecValueData as String] = value
+        attributes[kSecAttrAccessControl as String] = access
+        SecItemAdd(attributes as CFDictionary, nil)
+    }
+
+    /// Reads a user-presence protected item. Blocks while the system runs
+    /// the auth prompt — call it off the main thread. Returns nil if the
+    /// user cancels or the item doesn't exist.
+    public func protectedData(for account: String, prompt: String) -> Data? {
+        var query = baseQuery(account: account)
+        query[kSecReturnData as String] = true
+        query[kSecMatchLimit as String] = kSecMatchLimitOne
+        query[kSecUseOperationPrompt as String] = prompt
+        var result: AnyObject?
+        let status = SecItemCopyMatching(query as CFDictionary, &result)
+        guard status == errSecSuccess, let data = result as? Data else { return nil }
+        return data
+    }
+
+    public func hasProtectedData(for account: String) -> Bool {
+        var query = baseQuery(account: account)
+        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        let status = SecItemCopyMatching(query as CFDictionary, nil)
+        return status == errSecSuccess || status == errSecInteractionNotAllowed
+    }
 }
 #endif

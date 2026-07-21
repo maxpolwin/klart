@@ -149,6 +149,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var autoFeedback: Bool
     public var temperature: Double
     public var maxTokens: Int
+    /// Non-nil when at-rest note encryption is enabled. Holds only salt and
+    /// the password-wrapped master key — no secret material.
+    public var vault: VaultConfig?
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -158,7 +161,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         debounceSeconds: Double = 2.5,
         autoFeedback: Bool = true,
         temperature: Double = 0.4,
-        maxTokens: Int = 1024
+        maxTokens: Int = 1024,
+        vault: VaultConfig? = nil
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -168,6 +172,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoFeedback = autoFeedback
         self.temperature = temperature
         self.maxTokens = maxTokens
+        self.vault = vault
     }
 
     public init(from decoder: Decoder) throws {
@@ -181,6 +186,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoFeedback = try c.decodeIfPresent(Bool.self, forKey: .autoFeedback) ?? defaults.autoFeedback
         temperature = min(2, max(0, try c.decodeIfPresent(Double.self, forKey: .temperature) ?? defaults.temperature))
         maxTokens = min(8192, max(64, try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? defaults.maxTokens))
+        vault = try c.decodeIfPresent(VaultConfig.self, forKey: .vault)
     }
 
     /// Connection details for the given provider, falling back to defaults.
