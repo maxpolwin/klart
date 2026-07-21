@@ -2,7 +2,7 @@
 
 **A thinking coach that lives in your notes.**
 
-Noschen is a minimal, dark, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of giving answers.
+Noschen is a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of giving answers.
 
 This is the native Swift/SwiftUI rebuild of the original Electron app (still in the repository root). It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
 
@@ -10,7 +10,8 @@ This is the native Swift/SwiftUI rebuild of the original Electron app (still in 
 
 ## Highlights
 
-- **Native SwiftUI, dark-first design** — one accent color, quiet surfaces, built for long reading and writing sessions. No Electron, no web view.
+- **Native SwiftUI, "Quiet" design** — follows the system light/dark appearance, one accent color, a translucent sidebar, and no persistent AI chrome: suggestions wait behind a small pill in the toolbar ("3 ready") until summoned with a click or `⌘.`. No Electron, no web view.
+- **Markdown-ready editor** — headings resize live as you type (`#`, `##`, `###`), list markers and quotes are tinted, and `**bold**`, `*italic*`, and `` `code` `` style inline while the text stays plain markdown.
 - **Local-first** — notes are plain JSON-wrapped markdown files in `~/Library/Application Support/Noschen/Notes`. Nothing leaves your machine unless you choose a cloud provider.
 - **Any LLM** — Ollama (native API), LM Studio, OpenRouter, or any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, corporate gateways). Model lists are fetched live from the provider.
 - **Coaching, not ghostwriting** — feedback types: **Gap**, **MECE**, **Source**, **Structure**, **Clarity**, and **Question** (Socratic). Plus one-tap coach actions: *Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps* (streamed live).
@@ -58,9 +59,9 @@ The last step needs a paid Apple Developer Program membership and one-time notar
 ## Using Noschen
 
 1. Create a note (`⌘N`). Give it a `# Topic` heading and `## Sub-question` sections.
-2. Write. After a pause (configurable, default 2.5 s), the coach analyzes the section you're in.
-3. In the coach panel: **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **Dismiss** hides that tip permanently for this note.
-4. Use the coach actions any time — they answer in a live stream in the panel, and are also in the **Coach** menu.
+2. Write. After a pause (configurable, default 2.5 s), the coach analyzes the section you're in. Nothing appears mid-screen — the toolbar pill just changes to "N ready".
+3. Click the pill (or press `⌘.`) to open the coach popover: **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **Dismiss** hides that tip permanently for this note.
+4. Use the coach actions any time — they answer in a live stream in the popover, and are also in the **Coach** menu.
 5. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
 6. Add `[no-ai]` to a heading (e.g. `## Private notes [no-ai]`) to keep the coach out of that section.
 

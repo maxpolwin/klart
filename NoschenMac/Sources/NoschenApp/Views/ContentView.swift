@@ -16,8 +16,6 @@ struct ContentView: View {
         .background(Theme.background)
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                statusPill
-
                 Button {
                     state.requestFeedback(manual: true)
                 } label: {
@@ -26,12 +24,7 @@ struct ContentView: View {
                 .help("Ask the coach to analyze this note now (⌘R)")
                 .disabled(state.selectedNoteID == nil)
 
-                Button {
-                    state.showInspector.toggle()
-                } label: {
-                    Label("Coach Panel", systemImage: "sidebar.right")
-                }
-                .help("Show or hide the coaching panel")
+                coachPill
             }
         }
     }
@@ -40,22 +33,22 @@ struct ContentView: View {
     private var detail: some View {
         if state.selectedNoteID != nil {
             EditorView()
-                .inspector(isPresented: $state.showInspector) {
-                    FeedbackPanelView()
-                        .inspectorColumnWidth(min: 280, ideal: 330, max: 440)
-                }
         } else {
             EmptyStateView()
         }
     }
 
-    private var statusPill: some View {
+    /// The one visible trace of AI while writing: a small pill that reports
+    /// readiness and opens the coach popover only when asked.
+    private var coachPill: some View {
         Button {
-            openSettings()
+            state.showCoachPopover.toggle()
         } label: {
             HStack(spacing: 6) {
-                StatusDot(status: state.connection)
-                Text(statusText)
+                Circle()
+                    .fill(pillDotColor)
+                    .frame(width: 6, height: 6)
+                Text(pillText)
                     .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(Theme.textSecondary)
                     .lineLimit(1)
@@ -65,17 +58,28 @@ struct ContentView: View {
             .background(Theme.surfaceRaised, in: Capsule())
         }
         .buttonStyle(.plain)
-        .help("AI provider status — click to open Settings")
+        .help("Coach suggestions — click to open (⌘.)")
+        .disabled(state.selectedNoteID == nil)
+        .popover(isPresented: $state.showCoachPopover, arrowEdge: .bottom) {
+            FeedbackPanelView()
+                .frame(width: 360)
+                .frame(maxHeight: 520)
+        }
     }
 
-    private var statusText: String {
-        let model = state.settings.activeConfig.model
-        let provider = state.settings.activeProvider.displayName
-        switch state.connection {
-        case .failed: return "\(provider) · offline"
-        case .checking: return "\(provider) · checking…"
-        default: return model.isEmpty ? provider : "\(provider) · \(model)"
-        }
+    private var pillDotColor: Color {
+        if case .failed = state.connection { return Theme.color(for: .question) }
+        if state.feedbackPhase == .analyzing || state.coachRunning { return Theme.color(for: .structure) }
+        if !state.feedbackItems.isEmpty { return Theme.accent }
+        return Theme.textTertiary
+    }
+
+    private var pillText: String {
+        if case .failed = state.connection { return "Offline" }
+        if state.feedbackPhase == .analyzing || state.coachRunning { return "Thinking…" }
+        let count = state.feedbackItems.count
+        if count > 0 { return count == 1 ? "1 ready" : "\(count) ready" }
+        return "Coach"
     }
 }
 
@@ -84,11 +88,11 @@ struct EmptyStateView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Image(systemName: "brain.head.profile")
-                .font(.system(size: 42, weight: .light))
+            Image(systemName: "square.and.pencil")
+                .font(.system(size: 38, weight: .light))
                 .foregroundStyle(Theme.accent.opacity(0.7))
             Text("Think in writing.")
-                .font(.system(size: 22, weight: .semibold, design: .serif))
+                .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             Text("Start a note with a `# Topic` heading and `## Questions`.\nNoschen coaches you toward clearer, more complete thinking as you write.")
                 .font(.system(size: 13))
@@ -103,7 +107,7 @@ struct EmptyStateView: View {
             }
             .controlSize(.large)
             .buttonStyle(.borderedProminent)
-            .tint(Theme.accent.opacity(0.8))
+            .tint(Theme.accent)
             .padding(.top, 6)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)

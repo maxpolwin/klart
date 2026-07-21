@@ -43,7 +43,9 @@ final class AppState: ObservableObject {
     @Published var coachOutput = ""
     @Published var coachAction: CoachAction? = nil
     @Published var coachRunning = false
-    @Published var showInspector = true
+    /// The Quiet coach popover — closed by default, only ever opened by the
+    /// user (or by running a coach action, whose output lives inside it).
+    @Published var showCoachPopover = false
 
     // MARK: Settings / provider
 
@@ -268,7 +270,7 @@ final class AppState: ObservableObject {
 
     func runCoach(_ action: CoachAction) {
         coachTask?.cancel()
-        showInspector = true
+        showCoachPopover = true
         coachAction = action
         coachOutput = ""
         coachRunning = true

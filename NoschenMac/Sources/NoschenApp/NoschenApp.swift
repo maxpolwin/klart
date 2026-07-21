@@ -19,7 +19,6 @@ struct NoschenApp: App {
         WindowGroup {
             ContentView()
                 .environmentObject(state)
-                .preferredColorScheme(.dark)
                 .frame(minWidth: 880, minHeight: 560)
         }
         .windowToolbarStyle(.unified)
@@ -30,7 +29,6 @@ struct NoschenApp: App {
         Settings {
             SettingsView()
                 .environmentObject(state)
-                .preferredColorScheme(.dark)
         }
     }
 }
@@ -51,6 +49,9 @@ struct AppCommands: Commands {
         CommandMenu("Coach") {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)
+                .disabled(state.selectedNoteID == nil)
+            Button("Coach Suggestions") { state.showCoachPopover.toggle() }
+                .keyboardShortcut(".", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
             Divider()
             ForEach(CoachAction.allCases) { action in

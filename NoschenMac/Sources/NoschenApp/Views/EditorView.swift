@@ -44,7 +44,7 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = true
         textView.usesFindBar = true
         textView.drawsBackground = false
-        textView.insertionPointColor = NSColor(Theme.accent)
+        textView.insertionPointColor = Theme.nsAccent
         textView.textContainerInset = NSSize(width: 32, height: 28)
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
@@ -100,9 +100,29 @@ struct MarkdownEditor: NSViewRepresentable {
 
 enum EditorStyler {
     static let bodyFont = NSFont.systemFont(ofSize: 15)
-    static let textColor = NSColor(Theme.textPrimary)
-    static let quoteColor = NSColor(Theme.textSecondary)
-    static let markerColor = NSColor(Theme.accent).withAlphaComponent(0.85)
+    static let boldFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
+    static let italicFont: NSFont = {
+        let descriptor = NSFont.systemFont(ofSize: 15).fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: 15) ?? .systemFont(ofSize: 15)
+    }()
+    static let codeFont = NSFont.monospacedSystemFont(ofSize: 13.5, weight: .regular)
+    static let textColor = Theme.nsTextPrimary
+    static let quoteColor = Theme.nsTextSecondary
+    static let syntaxColor = Theme.nsTextTertiary
+    static let markerColor = Theme.nsAccentMuted
+
+    private static let listMarkerRegex = try! NSRegularExpression(
+        pattern: #"^\s{0,8}(?:[-*+]|\d{1,3}[.)])(?=\s)"#
+    )
+    private static let boldRegex = try! NSRegularExpression(
+        pattern: #"\*\*(?!\s)(?:[^*\n]|\*(?!\*))+?(?<!\s)\*\*"#
+    )
+    private static let italicRegex = try! NSRegularExpression(
+        pattern: #"(?<![\w*_])[*_](?![\s*_])[^*_\n]+?(?<![\s*_])[*_](?![\w*_])"#
+    )
+    private static let codeRegex = try! NSRegularExpression(
+        pattern: #"`[^`\n]+`"#
+    )
 
     static var paragraphStyle: NSParagraphStyle {
         let style = NSMutableParagraphStyle()
@@ -121,9 +141,9 @@ enum EditorStyler {
 
     static func headingFont(level: Int) -> NSFont {
         switch level {
-        case 1: return .systemFont(ofSize: 25, weight: .bold)
-        case 2: return .systemFont(ofSize: 19, weight: .semibold)
-        case 3: return .systemFont(ofSize: 16.5, weight: .semibold)
+        case 1: return .systemFont(ofSize: 26, weight: .semibold)
+        case 2: return .systemFont(ofSize: 20, weight: .semibold)
+        case 3: return .systemFont(ofSize: 17, weight: .semibold)
         default: return .systemFont(ofSize: 15, weight: .semibold)
         }
     }
@@ -165,9 +185,65 @@ enum EditorStyler {
                     .foregroundColor: quoteColor,
                     .font: NSFont.systemFont(ofSize: 14),
                 ], range: lineRange)
+            } else {
+                styleListMarker(line, lineRange: lineRange, in: storage)
+                styleInline(line, lineRange: lineRange, in: storage)
             }
         }
         storage.endEditing()
+    }
+
+    /// Tints `- ` / `* ` / `+ ` / `1. ` markers so lists read as lists.
+    private static func styleListMarker(_ line: String, lineRange: NSRange, in storage: NSTextStorage) {
+        let full = NSRange(location: 0, length: (line as NSString).length)
+        guard let match = listMarkerRegex.firstMatch(in: line, range: full) else { return }
+        storage.addAttribute(
+            .foregroundColor,
+            value: markerColor,
+            range: NSRange(location: lineRange.location + match.range.location, length: match.range.length)
+        )
+    }
+
+    /// Live inline markdown: **bold**, *italic* / _italic_, `code`.
+    /// The surrounding syntax markers are dimmed rather than hidden, so the
+    /// text stays plain markdown while reading like the rendered result.
+    private static func styleInline(_ line: String, lineRange: NSRange, in storage: NSTextStorage) {
+        let full = NSRange(location: 0, length: (line as NSString).length)
+
+        codeRegex.enumerateMatches(in: line, range: full) { match, _, _ in
+            guard let match else { return }
+            let range = shifted(match.range, by: lineRange.location)
+            storage.addAttributes([.font: codeFont, .foregroundColor: quoteColor], range: range)
+            dimEdges(of: range, width: 1, in: storage)
+        }
+        boldRegex.enumerateMatches(in: line, range: full) { match, _, _ in
+            guard let match else { return }
+            let range = shifted(match.range, by: lineRange.location)
+            storage.addAttribute(.font, value: boldFont, range: range)
+            dimEdges(of: range, width: 2, in: storage)
+        }
+        italicRegex.enumerateMatches(in: line, range: full) { match, _, _ in
+            guard let match else { return }
+            let range = shifted(match.range, by: lineRange.location)
+            storage.addAttribute(.font, value: italicFont, range: range)
+            dimEdges(of: range, width: 1, in: storage)
+        }
+    }
+
+    private static func shifted(_ range: NSRange, by offset: Int) -> NSRange {
+        NSRange(location: range.location + offset, length: range.length)
+    }
+
+    private static func dimEdges(of range: NSRange, width: Int, in storage: NSTextStorage) {
+        guard range.length >= width * 2 else { return }
+        storage.addAttribute(
+            .foregroundColor, value: syntaxColor,
+            range: NSRange(location: range.location, length: width)
+        )
+        storage.addAttribute(
+            .foregroundColor, value: syntaxColor,
+            range: NSRange(location: range.location + range.length - width, length: width)
+        )
     }
 
     private static func headingLevel(of line: String) -> Int? {

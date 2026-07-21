@@ -1,28 +1,78 @@
 #if os(macOS)
 import SwiftUI
+import AppKit
 import NoschenKit
 
-/// Noschen's dark, minimal palette. One accent, muted surfaces,
-/// generous contrast for long reading sessions.
+/// Noschen's "Quiet" palette: system-adaptive light/dark, one accent,
+/// hairlines and air instead of chrome. Colors are dynamic NSColors so
+/// both SwiftUI views and the AppKit editor re-resolve on appearance
+/// changes.
 enum Theme {
-    static let background = Color(red: 0.055, green: 0.066, blue: 0.086)   // #0E1116
-    static let surface = Color(red: 0.085, green: 0.098, blue: 0.125)      // #161A20
-    static let surfaceRaised = Color(red: 0.115, green: 0.13, blue: 0.165)
-    static let border = Color.white.opacity(0.08)
-    static let accent = Color(red: 0.62, green: 0.68, blue: 1.0)           // soft periwinkle
-    static let textPrimary = Color(red: 0.92, green: 0.93, blue: 0.95)
-    static let textSecondary = Color.white.opacity(0.55)
-    static let textTertiary = Color.white.opacity(0.32)
+    static func dynamicNSColor(light: NSColor, dark: NSColor) -> NSColor {
+        NSColor(name: nil) { appearance in
+            appearance.bestMatch(from: [.darkAqua, .aqua]) == .darkAqua ? dark : light
+        }
+    }
+
+    private static func dynamic(_ light: NSColor, _ dark: NSColor) -> Color {
+        Color(nsColor: dynamicNSColor(light: light, dark: dark))
+    }
+
+    private static func rgb(_ r: Double, _ g: Double, _ b: Double, _ a: Double = 1) -> NSColor {
+        NSColor(srgbRed: r, green: g, blue: b, alpha: a)
+    }
+
+    // MARK: NSColor variants (editor)
+
+    static let nsBackground = dynamicNSColor(
+        light: rgb(0.961, 0.961, 0.953),          // #F5F5F3
+        dark: rgb(0.118, 0.118, 0.125)            // #1E1E20
+    )
+    static let nsTextPrimary = dynamicNSColor(
+        light: rgb(0.114, 0.114, 0.122),          // #1D1D1F
+        dark: rgb(0.961, 0.961, 0.969)            // #F5F5F7
+    )
+    static let nsTextSecondary = dynamicNSColor(
+        light: rgb(0.525, 0.525, 0.545),          // #86868B
+        dark: rgb(0.596, 0.596, 0.616)            // #98989D
+    )
+    static let nsTextTertiary = dynamicNSColor(
+        light: NSColor.black.withAlphaComponent(0.32),
+        dark: NSColor.white.withAlphaComponent(0.35)
+    )
+    static let nsAccent = dynamicNSColor(
+        light: rgb(0.169, 0.373, 0.678),          // #2B5FAD
+        dark: rgb(0.435, 0.627, 0.918)            // #6FA0EA
+    )
+    /// Accent at 85% for markdown syntax markers. Defined as its own dynamic
+    /// color: withAlphaComponent on a dynamic NSColor freezes its variant.
+    static let nsAccentMuted = dynamicNSColor(
+        light: rgb(0.169, 0.373, 0.678, 0.85),
+        dark: rgb(0.435, 0.627, 0.918, 0.85)
+    )
+
+    // MARK: SwiftUI colors
+
+    static let background = Color(nsColor: nsBackground)
+    static let textPrimary = Color(nsColor: nsTextPrimary)
+    static let textSecondary = Color(nsColor: nsTextSecondary)
+    static let textTertiary = Color(nsColor: nsTextTertiary)
+    static let accent = Color(nsColor: nsAccent)
+
+    /// Subtle raised surface: black-on-light, white-on-dark.
+    static let surfaceRaised = Color.primary.opacity(0.055)
+    /// Hairline.
+    static let border = Color.primary.opacity(0.08)
 
     static func color(for kind: FeedbackKind) -> Color {
         switch kind {
-        case .gap: return Color(red: 0.45, green: 0.68, blue: 1.0)
-        case .mece: return Color(red: 0.76, green: 0.55, blue: 0.99)
-        case .source: return Color(red: 0.4, green: 0.83, blue: 0.6)
-        case .structure: return Color(red: 0.98, green: 0.68, blue: 0.35)
-        case .clarity: return Color(red: 0.35, green: 0.82, blue: 0.83)
-        case .question: return Color(red: 0.97, green: 0.55, blue: 0.66)
-        case .other: return Color.white.opacity(0.6)
+        case .gap: return dynamic(rgb(0.145, 0.376, 0.722), rgb(0.451, 0.678, 1.0))
+        case .mece: return dynamic(rgb(0.424, 0.247, 0.659), rgb(0.761, 0.549, 0.988))
+        case .source: return dynamic(rgb(0.118, 0.478, 0.275), rgb(0.4, 0.831, 0.6))
+        case .structure: return dynamic(rgb(0.604, 0.353, 0.09), rgb(0.961, 0.663, 0.361))
+        case .clarity: return dynamic(rgb(0.059, 0.463, 0.475), rgb(0.361, 0.82, 0.831))
+        case .question: return dynamic(rgb(0.686, 0.227, 0.333), rgb(0.969, 0.549, 0.659))
+        case .other: return textSecondary
         }
     }
 }
@@ -37,7 +87,7 @@ struct KindBadge: View {
             .foregroundStyle(Theme.color(for: kind))
             .padding(.horizontal, 7)
             .padding(.vertical, 3)
-            .background(Theme.color(for: kind).opacity(0.14), in: Capsule())
+            .background(Theme.color(for: kind).opacity(0.12), in: Capsule())
     }
 }
 
@@ -46,9 +96,9 @@ struct StatusDot: View {
 
     private var color: Color {
         switch status {
-        case .connected: return Color(red: 0.4, green: 0.83, blue: 0.6)
-        case .failed: return Color(red: 0.95, green: 0.45, blue: 0.45)
-        case .checking: return .yellow
+        case .connected: return Theme.color(for: .source)
+        case .failed: return Theme.color(for: .question)
+        case .checking: return Theme.color(for: .structure)
         case .unknown: return Theme.textTertiary
         }
     }

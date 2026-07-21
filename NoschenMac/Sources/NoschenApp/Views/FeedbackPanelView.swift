@@ -2,9 +2,11 @@
 import SwiftUI
 import NoschenKit
 
-/// The coaching panel: live feedback cards plus one-tap coach actions.
+/// The coach popover: suggestions, one-tap coach actions, and coach output.
+/// Rendered inside an NSPopover, so the system material is the background.
 struct FeedbackPanelView: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.openSettings) private var openSettings
 
     var body: some View {
         ScrollView {
@@ -18,23 +20,32 @@ struct FeedbackPanelView: View {
             .padding(14)
             .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .background(Theme.surface)
     }
 
     private var header: some View {
-        HStack {
-            Label("Thinking Coach", systemImage: "sparkles")
+        HStack(spacing: 8) {
+            Label("Coach", systemImage: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Spacer()
             if state.feedbackPhase == .analyzing || state.coachRunning {
                 ProgressView().controlSize(.small)
             }
+            Spacer()
+            StatusDot(status: state.connection)
+            Button {
+                openSettings()
+            } label: {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 11))
+                    .foregroundStyle(Theme.textTertiary)
+            }
+            .buttonStyle(.plain)
+            .help("AI provider settings")
         }
     }
 
     private var coachActions: some View {
-        VStack(alignment: .leading, spacing: 6) {
+        VStack(alignment: .leading, spacing: 2) {
             ForEach(CoachAction.allCases) { action in
                 Button {
                     state.runCoach(action)
@@ -49,11 +60,11 @@ struct FeedbackPanelView: View {
                             .foregroundStyle(Theme.textPrimary)
                         Spacer()
                     }
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 7)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 6)
                     .background(
-                        state.coachAction == action ? Theme.accent.opacity(0.12) : Theme.surfaceRaised,
-                        in: RoundedRectangle(cornerRadius: 8)
+                        state.coachAction == action ? Theme.accent.opacity(0.12) : .clear,
+                        in: RoundedRectangle(cornerRadius: 7)
                     )
                     .contentShape(Rectangle())
                 }
@@ -67,7 +78,7 @@ struct FeedbackPanelView: View {
     private var phaseBanner: some View {
         switch state.feedbackPhase {
         case .error(let message):
-            banner(text: message, systemImage: "exclamationmark.triangle", color: .orange)
+            banner(text: message, systemImage: "exclamationmark.triangle", color: Theme.color(for: .structure))
         case .skipped(let reason):
             banner(text: reason, systemImage: "moon.zzz", color: Theme.textTertiary)
         case .waiting:
@@ -94,13 +105,17 @@ struct FeedbackPanelView: View {
     @ViewBuilder
     private var feedbackList: some View {
         if !state.feedbackItems.isEmpty {
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("SUGGESTIONS")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1.2)
                     .foregroundStyle(Theme.textTertiary)
+                    .padding(.bottom, 6)
                 ForEach(state.feedbackItems) { item in
-                    FeedbackCard(item: item)
+                    FeedbackRow(item: item)
+                    if item.id != state.feedbackItems.last?.id {
+                        Divider().overlay(Theme.border)
+                    }
                 }
             }
         } else if state.feedbackPhase == .idle && state.coachOutput.isEmpty {
@@ -155,15 +170,23 @@ struct FeedbackPanelView: View {
     }
 }
 
-private struct FeedbackCard: View {
+/// One suggestion as a quiet row: kind label, observation, hairline
+/// separation — no card chrome.
+private struct FeedbackRow: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
     @State private var showSuggestion = false
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 6) {
                 KindBadge(kind: item.kind)
+                if let section = item.section, !section.isEmpty {
+                    Text(section)
+                        .font(.system(size: 10.5))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                }
                 Spacer()
             }
             Text(item.text)
@@ -185,7 +208,7 @@ private struct FeedbackCard: View {
                 } label: {
                     Text("Suggested content")
                         .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.accent.opacity(0.9))
+                        .foregroundStyle(Theme.accent)
                 }
             }
 
@@ -213,12 +236,7 @@ private struct FeedbackCard: View {
                 Spacer()
             }
         }
-        .padding(11)
-        .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 9))
-        .overlay(
-            RoundedRectangle(cornerRadius: 9)
-                .strokeBorder(Theme.color(for: item.kind).opacity(0.25), lineWidth: 1)
-        )
+        .padding(.vertical, 9)
     }
 }
 #endif

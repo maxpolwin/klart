@@ -37,7 +37,6 @@ struct SidebarView: View {
             .buttonStyle(.plain)
             .foregroundStyle(Theme.textSecondary)
         }
-        .background(Theme.surface)
         .searchable(text: $state.searchText, placement: .sidebar, prompt: "Search notes")
         .navigationTitle("Noschen")
         .confirmationDialog(
