@@ -385,12 +385,16 @@ final class AppState: ObservableObject {
         let (masterKey, config) = try await Task.detached(priority: .userInitiated) {
             try VaultCrypto.createVault(password: password, biometricUnlock: biometricUnlock)
         }.value
-        try await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        // Persist the wrapped key BEFORE sealing any file: if the app dies
+        // mid-migration the vault config already exists, the app relaunches
+        // locked, and unlock handles the mixed plaintext/sealed state — the
+        // reverse order would seal notes under a key persisted nowhere.
+        vaultKey = masterKey
+        settings.vault = config
         if biometricUnlock {
             (secrets as? KeychainSecretStore)?.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
         }
-        vaultKey = masterKey
-        settings.vault = config
+        try await noteStore.encryptAllOnDisk(masterKey: masterKey)
     }
 
     /// Turns protection off after verifying the password; notes are rewritten

@@ -62,9 +62,12 @@ public enum VaultCrypto {
     }
 
     /// PBKDF2-HMAC-SHA256. CryptoKit has no PBKDF2, so this uses CommonCrypto.
+    /// The password is canonically normalized (NFC) first so the same visual
+    /// password always derives the same key regardless of how the input
+    /// method composed its characters.
     public static func deriveKEK(password: String, salt: Data, iterations: Int) -> SymmetricKey {
         var derived = [UInt8](repeating: 0, count: 32)
-        let passwordBytes = Array(password.utf8)
+        let passwordBytes = Array(password.precomposedStringWithCanonicalMapping.utf8)
         salt.withUnsafeBytes { saltBuffer in
             _ = CCKeyDerivationPBKDF(
                 CCPBKDFAlgorithm(kCCPBKDF2),

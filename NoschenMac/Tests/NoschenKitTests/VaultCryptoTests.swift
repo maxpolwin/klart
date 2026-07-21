@@ -66,6 +66,19 @@ final class VaultCryptoTests: XCTestCase {
         XCTAssertNotEqual(a, c)
     }
 
+    func testUnicodePasswordFormsDeriveTheSameKey() {
+        // "ü" typed as one precomposed scalar vs. "u" + combining diaeresis:
+        // visually identical, different UTF-8 — must derive the same key.
+        let salt = VaultCrypto.generateSalt()
+        let precomposed = "gl\u{00FC}ck"
+        let decomposed = "glu\u{0308}ck"
+        XCTAssertNotEqual(Array(precomposed.utf8), Array(decomposed.utf8))
+        XCTAssertEqual(
+            VaultCrypto.deriveKEK(password: precomposed, salt: salt, iterations: iterations),
+            VaultCrypto.deriveKEK(password: decomposed, salt: salt, iterations: iterations)
+        )
+    }
+
     func testNoteStoreEncryptDecryptMigration() async throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("noschen-vault-test-\(UUID().uuidString)")
