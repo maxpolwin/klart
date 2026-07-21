@@ -10,29 +10,28 @@
   }
   @media (prefers-color-scheme: dark) {
     :root {
-      --shell-bg: #16161A;
-      --shell-surface: #1D1D21;
-      --shell-ink: #ECECE7;
-      --shell-mute: #9A998F;
-      --shell-line: #2B2B2F;
-      --shell-focus: #7FA8E6;
+      --shell-bg: #16161A; --shell-surface: #1D1D21; --shell-ink: #ECECE7;
+      --shell-mute: #9A998F; --shell-line: #2B2B2F; --shell-focus: #7FA8E6;
     }
   }
   :root[data-theme="dark"] {
-    --shell-bg: #16161A;
-    --shell-surface: #1D1D21;
-    --shell-ink: #ECECE7;
-    --shell-mute: #9A998F;
-    --shell-line: #2B2B2F;
-    --shell-focus: #7FA8E6;
+    --shell-bg: #16161A; --shell-surface: #1D1D21; --shell-ink: #ECECE7;
+    --shell-mute: #9A998F; --shell-line: #2B2B2F; --shell-focus: #7FA8E6;
   }
   :root[data-theme="light"] {
-    --shell-bg: #F6F6F3;
-    --shell-surface: #FFFFFF;
-    --shell-ink: #1B1B18;
-    --shell-mute: #6B6A62;
-    --shell-line: #E3E2DB;
-    --shell-focus: #2B5FAD;
+    --shell-bg: #F6F6F3; --shell-surface: #FFFFFF; --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62; --shell-line: #E3E2DB; --shell-focus: #2B5FAD;
+  }
+  /* Local "preview theme" toggle — independent of the platform theme, lets you
+     force either mode while reviewing regardless of OS setting. Wins ties by
+     appearing after the blocks above. */
+  :root[data-preview-theme="dark"] {
+    --shell-bg: #16161A; --shell-surface: #1D1D21; --shell-ink: #ECECE7;
+    --shell-mute: #9A998F; --shell-line: #2B2B2F; --shell-focus: #7FA8E6;
+  }
+  :root[data-preview-theme="light"] {
+    --shell-bg: #F6F6F3; --shell-surface: #FFFFFF; --shell-ink: #1B1B18;
+    --shell-mute: #6B6A62; --shell-line: #E3E2DB; --shell-focus: #2B5FAD;
   }
 
   * { box-sizing: border-box; }
@@ -58,56 +57,41 @@
     padding: clamp(28px, 5vw, 64px) clamp(18px, 4vw, 40px) 80px;
   }
 
-  /* ---------- Intro ---------- */
-  .intro { max-width: 720px; margin-bottom: clamp(28px, 4vw, 44px); }
+  /* ---------- Header row: intro + theme toggle ---------- */
+  .page-head {
+    display: flex; justify-content: space-between; align-items: flex-start; gap: 20px;
+    flex-wrap: wrap; margin-bottom: clamp(28px, 4vw, 44px);
+  }
+  .intro { max-width: 680px; }
   .eyebrow {
-    margin: 0 0 10px;
-    font-size: 12px;
-    font-weight: 600;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--shell-mute);
+    margin: 0 0 10px; font-size: 12px; font-weight: 600; letter-spacing: 0.09em;
+    text-transform: uppercase; color: var(--shell-mute);
   }
   .intro h1 {
-    margin: 0 0 14px;
-    font-size: clamp(28px, 4vw, 40px);
-    line-height: 1.12;
-    letter-spacing: -0.01em;
-    text-wrap: balance;
+    margin: 0 0 14px; font-size: clamp(28px, 4vw, 40px); line-height: 1.12;
+    letter-spacing: -0.01em; text-wrap: balance;
   }
-  .intro p {
-    margin: 0;
-    font-size: 16px;
-    line-height: 1.6;
-    color: var(--shell-mute);
-    max-width: 62ch;
+  .intro p { margin: 0; font-size: 16px; line-height: 1.6; color: var(--shell-mute); max-width: 62ch; }
+  .theme-toggle {
+    display: flex; gap: 2px; padding: 3px; border: 1px solid var(--shell-line);
+    border-radius: 999px; background: var(--shell-surface); flex-shrink: 0;
   }
+  .theme-toggle button {
+    border: none; background: none; padding: 6px 13px; border-radius: 999px;
+    font-size: 12.5px; font-weight: 600; color: var(--shell-mute); cursor: pointer;
+  }
+  .theme-toggle button[aria-pressed="true"] { background: var(--shell-ink); color: var(--shell-bg); }
 
   /* ---------- Tabs ---------- */
   .tabs {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 4px;
-    border-bottom: 1px solid var(--shell-line);
+    display: flex; flex-wrap: wrap; gap: 4px; border-bottom: 1px solid var(--shell-line);
     margin-bottom: clamp(22px, 3vw, 34px);
   }
   .tabs button {
-    appearance: none;
-    background: none;
-    border: none;
-    padding: 10px 4px;
-    margin-right: 22px;
-    font-size: 14.5px;
-    font-weight: 600;
-    color: var(--shell-mute);
-    cursor: pointer;
-    position: relative;
-    top: 1px;
+    appearance: none; background: none; border: none; padding: 10px 4px; margin-right: 22px;
+    font-size: 14.5px; font-weight: 600; color: var(--shell-mute); cursor: pointer; position: relative; top: 1px;
   }
-  .tabs button[aria-selected="true"] {
-    color: var(--shell-ink);
-    box-shadow: inset 0 -2px 0 var(--shell-ink);
-  }
+  .tabs button[aria-selected="true"] { color: var(--shell-ink); box-shadow: inset 0 -2px 0 var(--shell-ink); }
   .tabs button:hover { color: var(--shell-ink); }
 
   /* ---------- Panel meta ---------- */
@@ -117,37 +101,18 @@
   .panel-meta .tagline { margin: 0 0 12px; font-size: 15px; color: var(--shell-mute); font-style: italic; }
   .panel-meta .rationale { margin: 0 0 14px; font-size: 15px; line-height: 1.6; color: var(--shell-ink); }
   .verdict-row {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 10px 28px;
-    font-size: 13px;
-    color: var(--shell-mute);
-    border-top: 1px solid var(--shell-line);
-    padding-top: 12px;
+    display: flex; flex-wrap: wrap; gap: 10px 28px; font-size: 13px; color: var(--shell-mute);
+    border-top: 1px solid var(--shell-line); padding-top: 12px;
   }
   .verdict-row strong { color: var(--shell-ink); font-weight: 600; margin-right: 6px; }
 
   /* ---------- Mock frame (shared scaffold) ---------- */
   .mock-frame {
-    overflow-x: auto;
-    border-radius: 14px;
-    background: var(--shell-surface);
-    border: 1px solid var(--shell-line);
+    overflow-x: auto; border-radius: 14px; background: var(--shell-surface); border: 1px solid var(--shell-line);
     box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 18px 40px -22px rgba(0,0,0,0.25);
   }
-  .mock {
-    min-width: 900px;
-    min-height: 600px;
-    display: flex;
-    flex-direction: column;
-  }
-  .chrome {
-    display: flex;
-    align-items: center;
-    gap: 7px;
-    padding: 11px 16px;
-    flex-shrink: 0;
-  }
+  .mock { min-width: 900px; min-height: 600px; display: flex; flex-direction: column; }
+  .chrome { display: flex; align-items: center; gap: 7px; padding: 11px 16px; flex-shrink: 0; }
   .chrome .dot { width: 10px; height: 10px; border-radius: 50%; }
 
   /* ================================================================
@@ -162,42 +127,35 @@
     background: var(--q-bg); color: var(--q-ink);
   }
   .concept-ive .chrome { border-bottom: 1px solid var(--q-line); }
-  .concept-ive .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-ive .chrome .dot { background: color-mix(in srgb, currentColor 14%, transparent); }
   .concept-ive .body-row { display: flex; flex: 1; min-height: 0; }
   .concept-ive .sidebar {
-    width: 208px; flex-shrink: 0; padding: 18px 10px;
-    background: var(--q-panel); border-right: 1px solid var(--q-line);
-    backdrop-filter: blur(20px);
+    width: 208px; flex-shrink: 0; padding: 18px 10px; background: var(--q-panel);
+    border-right: 1px solid var(--q-line); backdrop-filter: blur(20px);
   }
   .concept-ive .sidebar h3 {
     margin: 4px 8px 10px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em;
     text-transform: uppercase; color: var(--q-mute);
   }
-  .concept-ive .note-row {
-    padding: 7px 8px; border-radius: 6px; font-size: 13px; color: var(--q-ink);
-    margin-bottom: 1px;
+  .concept-ive .note-row { padding: 7px 8px; border-radius: 6px; font-size: 13px; color: var(--q-ink); margin-bottom: 1px; }
+  .concept-ive .note-row.active {
+    background: color-mix(in srgb, var(--q-accent) 14%, transparent); color: var(--q-accent); font-weight: 500;
   }
-  .concept-ive .note-row.active { background: rgba(43,95,173,0.12); color: var(--q-accent); font-weight: 500; }
   .concept-ive .content { flex: 1; padding: 40px 56px 40px; position: relative; overflow-y: auto; }
-  .concept-ive .content h1 {
-    margin: 0 0 22px; font-size: 27px; font-weight: 600; letter-spacing: -0.01em; max-width: 46ch;
-  }
+  .concept-ive .content h1 { margin: 0 0 22px; font-size: 27px; font-weight: 600; letter-spacing: -0.01em; max-width: 46ch; }
   .concept-ive .content h4 {
     margin: 26px 0 10px; font-size: 13px; font-weight: 600; color: var(--q-mute);
     text-transform: uppercase; letter-spacing: 0.05em;
   }
   .concept-ive .content p { margin: 0 0 13px; font-size: 15px; line-height: 1.7; max-width: 60ch; color: var(--q-ink); }
-  .concept-ive .ai-affordance {
-    position: absolute; top: 34px; right: 48px; display: flex; align-items: center; gap: 7px;
-  }
+  .concept-ive .ai-affordance { position: absolute; top: 34px; right: 48px; display: flex; align-items: center; gap: 7px; }
   .concept-ive .ai-dot-btn {
-    display: flex; align-items: center; gap: 6px; border: none; background: rgba(0,0,0,0.045);
+    display: flex; align-items: center; gap: 6px; border: none;
+    background: color-mix(in srgb, currentColor 6%, transparent);
     padding: 5px 10px 5px 8px; border-radius: 999px; cursor: pointer; font-size: 12px; color: var(--q-mute);
   }
-  .concept-ive .ai-dot-btn::before {
-    content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--q-accent);
-  }
-  .concept-ive .ai-dot-btn:hover { background: rgba(0,0,0,0.08); color: var(--q-ink); }
+  .concept-ive .ai-dot-btn::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--q-accent); }
+  .concept-ive .ai-dot-btn:hover { background: color-mix(in srgb, currentColor 10%, transparent); color: var(--q-ink); }
   .concept-ive .ai-popover {
     position: absolute; top: 60px; right: 48px; width: 260px; background: var(--q-panel);
     backdrop-filter: blur(24px); border: 1px solid var(--q-line); border-radius: 10px;
@@ -219,15 +177,15 @@
   }
   .concept-gazette .mock { background: var(--g-paper); color: var(--g-ink); }
   .concept-gazette .chrome { border-bottom: 1px solid var(--g-rule); }
-  .concept-gazette .chrome .dot { background: rgba(0,0,0,0.14); }
+  .concept-gazette .chrome .dot { background: color-mix(in srgb, currentColor 16%, transparent); }
   .concept-gazette .masthead { text-align: center; padding: 8px 0 14px; border-bottom: 3px double var(--g-rule); }
   .concept-gazette .masthead .name {
     font-family: Georgia, "Iowan Old Style", "Palatino Linotype", Palatino, serif;
     font-size: 26px; font-weight: 700; letter-spacing: 0.02em;
   }
   .concept-gazette .masthead .issue {
-    font-family: "Helvetica Neue", Arial, system-ui, sans-serif;
-    font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--g-mute); margin-top: 4px;
+    font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 10.5px; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--g-mute); margin-top: 4px;
   }
   .concept-gazette .spread { display: flex; flex: 1; min-height: 0; }
   .concept-gazette .toc { width: 190px; flex-shrink: 0; padding: 26px 20px; border-right: 1px solid var(--g-rule); }
@@ -252,24 +210,18 @@
     margin: 0 0 18px; max-width: 20ch;
   }
   .concept-gazette .lede {
-    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink);
-    max-width: 52ch; margin: 0 0 12px;
+    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink); max-width: 52ch; margin: 0 0 12px;
   }
-  .concept-gazette .lede::first-letter {
-    font-size: 3.4em; font-weight: 700; float: left; line-height: 0.82; padding: 4px 6px 0 0;
-  }
+  .concept-gazette .lede::first-letter { font-size: 3.4em; font-weight: 700; float: left; line-height: 0.82; padding: 4px 6px 0 0; }
   .concept-gazette p.body-text {
-    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink);
-    max-width: 52ch; margin: 0 0 12px;
+    font-family: Georgia, serif; font-size: 14.5px; line-height: 1.75; color: var(--g-ink); max-width: 52ch; margin: 0 0 12px;
   }
   .concept-gazette h2.section {
     font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 11px; letter-spacing: 0.1em;
     text-transform: uppercase; color: var(--g-accent); margin: 22px 0 8px; font-weight: 700;
   }
   .concept-gazette .margin { width: 200px; flex-shrink: 0; padding: 30px 20px; border-left: 1px solid var(--g-rule); }
-  .concept-gazette .note {
-    margin-bottom: 22px; padding-left: 12px; border-left: 2px solid var(--g-accent);
-  }
+  .concept-gazette .note { margin-bottom: 22px; padding-left: 12px; border-left: 2px solid var(--g-accent); }
   .concept-gazette .note .label {
     font-family: "Helvetica Neue", Arial, system-ui, sans-serif; font-size: 9.5px; letter-spacing: 0.12em;
     text-transform: uppercase; color: var(--g-accent); font-weight: 700; margin-bottom: 3px; display: block;
@@ -284,16 +236,11 @@
   .concept-desk {
     --d-bg: #FFFFFF; --d-surface: #FAFAF8; --d-ink: #2B2B26; --d-mute: #83807A; --d-line: #E9E7DF; --d-accent: #3E8079;
   }
-  .concept-desk .mock {
-    background: var(--d-bg); color: var(--d-ink);
-    font-family: "Avenir Next", -apple-system, system-ui, sans-serif;
-  }
+  .concept-desk .mock { background: var(--d-bg); color: var(--d-ink); font-family: "Avenir Next", -apple-system, system-ui, sans-serif; }
   .concept-desk .chrome { border-bottom: 1px solid var(--d-line); }
-  .concept-desk .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-desk .chrome .dot { background: color-mix(in srgb, currentColor 14%, transparent); }
   .concept-desk .desk-app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .concept-desk .toolbar {
-    display: flex; align-items: center; gap: 12px; padding: 16px 28px; flex-shrink: 0;
-  }
+  .concept-desk .toolbar { display: flex; align-items: center; gap: 12px; padding: 16px 28px; flex-shrink: 0; }
   .concept-desk .search {
     flex: 1; max-width: 300px; padding: 8px 14px; border-radius: 999px; background: var(--d-surface);
     border: 1px solid var(--d-line); font-size: 13px; color: var(--d-mute);
@@ -304,19 +251,14 @@
   }
   .concept-desk .new-btn:hover { filter: brightness(1.08); }
   .concept-desk .grid-view { padding: 4px 28px 28px; overflow-y: auto; }
-  .concept-desk .grid {
-    display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px;
-  }
+  .concept-desk .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
   .concept-desk .card {
     background: var(--d-surface); border: 1px solid var(--d-line); border-radius: 14px; padding: 16px;
     cursor: pointer; text-align: left; display: flex; flex-direction: column; gap: 8px;
     transition: transform 160ms ease, box-shadow 160ms ease;
   }
   .concept-desk .card:hover { transform: translateY(-2px); box-shadow: 0 10px 22px -14px rgba(0,0,0,0.25); }
-  .concept-desk .tag {
-    align-self: flex-start; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
-    padding: 3px 9px; border-radius: 999px;
-  }
+  .concept-desk .tag { align-self: flex-start; font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em; padding: 3px 9px; border-radius: 999px; }
   .concept-desk .tag.sage { background: #E4EBDF; color: #3E5136; }
   .concept-desk .tag.lav { background: #E7E2EF; color: #4C4468; }
   .concept-desk .tag.ochre { background: #F1E8D2; color: #6B5323; }
@@ -325,14 +267,8 @@
   .concept-desk .card p { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--d-mute); }
   .concept-desk .card .date { font-size: 11px; color: var(--d-mute); margin-top: auto; }
   .concept-desk .focus-view { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .concept-desk .status-line {
-    display: flex; align-items: center; gap: 10px; padding: 14px 40px; font-size: 12px; color: var(--d-mute);
-    flex-shrink: 0;
-  }
-  .concept-desk .status-line button {
-    border: none; background: none; color: var(--d-accent); font-weight: 600; cursor: pointer; padding: 0;
-    font-size: 12px;
-  }
+  .concept-desk .status-line { display: flex; align-items: center; gap: 10px; padding: 14px 40px; font-size: 12px; color: var(--d-mute); flex-shrink: 0; }
+  .concept-desk .status-line button { border: none; background: none; color: var(--d-accent); font-weight: 600; cursor: pointer; padding: 0; font-size: 12px; }
   .concept-desk .focus-body { padding: 6px 64px 40px; overflow-y: auto; max-width: 720px; }
   .concept-desk .focus-body h1 { font-size: 26px; margin: 0 0 18px; font-weight: 700; letter-spacing: -0.01em; }
   .concept-desk .focus-body h4 { font-size: 13px; color: var(--d-accent); margin: 24px 0 8px; font-weight: 700; }
@@ -346,14 +282,14 @@
      ================================================================ */
   .concept-throughline {
     --t-bg: #F1F0EC; --t-surface: #FFFFFF; --t-ink: #23241F; --t-mute: #77786F; --t-line: #DFDED6;
-    --t-steady: #5C7A6B; --t-thin: #B98A46;
+    --t-steady: #5C7A6B; --t-thin: #B98A46; --t-note: #5E7699;
   }
   .concept-throughline .mock {
     background: var(--t-bg); color: var(--t-ink);
     font-family: Optima, "Trebuchet MS", -apple-system, system-ui, sans-serif;
   }
   .concept-throughline .chrome { border-bottom: 1px solid var(--t-line); }
-  .concept-throughline .chrome .dot { background: rgba(0,0,0,0.12); }
+  .concept-throughline .chrome .dot { background: color-mix(in srgb, currentColor 14%, transparent); }
   .concept-throughline .pin-bar {
     display: flex; align-items: center; gap: 14px; padding: 16px 32px; border-bottom: 1px solid var(--t-line);
     flex-shrink: 0; position: relative;
@@ -368,18 +304,20 @@
     font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 11px; color: var(--t-mute);
   }
   .concept-throughline .clarity-btn .signal { width: 8px; height: 8px; border-radius: 50%; background: var(--t-steady); }
+  .concept-throughline .clarity-btn.is-thin .signal { background: var(--t-thin); }
   .concept-throughline .clarity-pop {
-    position: absolute; top: 52px; right: 32px; width: 240px; background: var(--t-surface);
-    border: 1px solid var(--t-line); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.5;
-    box-shadow: 0 12px 24px -14px rgba(0,0,0,0.25);
+    position: absolute; top: 52px; right: 32px; width: 250px; background: var(--t-surface);
+    border: 1px solid var(--t-line); border-radius: 10px; padding: 12px 14px; font-size: 12.5px; line-height: 1.6;
+    box-shadow: 0 12px 24px -14px rgba(0,0,0,0.25); z-index: 8;
   }
   .concept-throughline .clarity-pop[hidden] { display: none; }
-  .concept-throughline .clarity-pop b { color: var(--t-thin); }
-  .concept-throughline .body-row { display: flex; flex: 1; min-height: 0; }
-  .concept-throughline .spine {
-    width: 210px; flex-shrink: 0; padding: 30px 20px; display: flex; flex-direction: column; gap: 22px;
-    position: relative;
+  .concept-throughline .clarity-pop .jump {
+    background: none; border: none; padding: 0; font: inherit; font-weight: 700; color: var(--t-ink);
+    text-decoration: underline; text-underline-offset: 2px; cursor: pointer;
   }
+  .concept-throughline .clarity-pop .jump:hover { color: var(--t-note); }
+  .concept-throughline .body-row { display: flex; flex: 1; min-height: 0; }
+  .concept-throughline .spine { width: 210px; flex-shrink: 0; padding: 30px 20px; display: flex; flex-direction: column; gap: 20px; position: relative; }
   .concept-throughline .spine::before {
     content: ""; position: absolute; left: 25px; top: 34px; bottom: 34px; width: 1px; background: var(--t-line);
   }
@@ -391,7 +329,33 @@
   .concept-throughline .node.thin .ring { border-color: var(--t-thin); background: var(--t-bg); }
   .concept-throughline .node span.label { font-size: 12.5px; line-height: 1.4; }
   .concept-throughline .node.active span.label { font-weight: 700; }
-  .concept-throughline .node.thin span.hint { display: block; font-size: 10.5px; color: var(--t-thin); margin-top: 2px; }
+  .concept-throughline .node span.hint { display: block; font-size: 10.5px; margin-top: 2px; }
+  .concept-throughline .node.thin span.hint { color: var(--t-thin); }
+  .concept-throughline .node span.hint.flag { color: var(--t-note); }
+  .concept-throughline .node-trigger {
+    display: flex; align-items: flex-start; gap: 10px; width: 100%; background: none; border: none;
+    padding: 4px 6px; margin: -4px -6px; border-radius: 8px; cursor: pointer; text-align: left; font: inherit; color: inherit;
+  }
+  .concept-throughline .node-trigger:hover, .concept-throughline .node-trigger:focus-visible {
+    background: color-mix(in srgb, currentColor 6%, transparent);
+  }
+  .concept-throughline .node-pop {
+    position: absolute; left: 100%; top: -10px; margin-left: 12px; width: 240px; z-index: 8;
+    background: var(--t-surface); border: 1px solid var(--t-line); border-radius: 10px; padding: 12px 13px;
+    box-shadow: 0 14px 28px -14px rgba(0,0,0,0.3);
+  }
+  .concept-throughline .node-pop[hidden] { display: none; }
+  .concept-throughline .node-pop .type {
+    font-family: ui-monospace, "SF Mono", Menlo, monospace; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
+    color: var(--t-note); font-weight: 700;
+  }
+  .concept-throughline .node.thin .node-pop .type { color: var(--t-thin); }
+  .concept-throughline .node-pop p { margin: 6px 0 10px; font-size: 12.5px; line-height: 1.5; color: var(--t-ink); }
+  .concept-throughline .node-pop-actions { display: flex; gap: 14px; }
+  .concept-throughline .node-pop-actions button {
+    border: none; background: none; padding: 0; font-size: 11.5px; font-weight: 600; color: var(--t-mute); cursor: pointer;
+  }
+  .concept-throughline .node-pop-actions button:hover { color: var(--t-ink); }
   .concept-throughline .content { flex: 1; padding: 30px 44px; overflow-y: auto; }
   .concept-throughline .content p { font-size: 15px; line-height: 1.8; max-width: 58ch; margin: 0 0 14px; }
   .concept-throughline .content h4 { font-size: 13px; font-weight: 700; margin: 22px 0 8px; }
@@ -407,18 +371,14 @@
     font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
   }
   .concept-archive .chrome { border-bottom: 1px solid var(--a-line); }
-  .concept-archive .chrome .dot { background: rgba(0,0,0,0.16); }
+  .concept-archive .chrome .dot { background: color-mix(in srgb, currentColor 18%, transparent); }
   .concept-archive .archive-app { flex: 1; display: flex; flex-direction: column; min-height: 0; }
-  .concept-archive .shelf-head {
-    display: flex; align-items: baseline; justify-content: space-between; padding: 20px 32px 6px; flex-shrink: 0;
-  }
+  .concept-archive .shelf-head { display: flex; align-items: baseline; justify-content: space-between; padding: 20px 32px 6px; flex-shrink: 0; }
   .concept-archive .shelf-head h3 { margin: 0; font-size: 16px; font-weight: 700; }
   .concept-archive .shelf-head span {
     font-family: "Courier New", ui-monospace, monospace; font-size: 11px; color: var(--a-mute); letter-spacing: 0.03em;
   }
-  .concept-archive .shelf {
-    display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 16px; padding: 18px 32px 32px; overflow-y: auto;
-  }
+  .concept-archive .shelf { display: grid; grid-template-columns: repeat(4, 1fr); gap: 22px 16px; padding: 18px 32px 32px; overflow-y: auto; }
   .concept-archive .index-card {
     background: var(--a-card); border: 1px solid var(--a-line); border-radius: 3px; padding: 14px 14px 12px;
     cursor: pointer; box-shadow: 2px 3px 0 rgba(42,36,22,0.06); transition: transform 160ms ease;
@@ -434,9 +394,7 @@
     font-family: "Courier New", ui-monospace, monospace; font-size: 9.5px; color: var(--a-accent);
     border: 1px solid var(--a-accent); padding: 1px 5px; border-radius: 2px; letter-spacing: 0.02em;
   }
-  .concept-archive .call-no {
-    font-family: "Courier New", ui-monospace, monospace; font-size: 9.5px; color: var(--a-mute);
-  }
+  .concept-archive .call-no { font-family: "Courier New", ui-monospace, monospace; font-size: 9.5px; color: var(--a-mute); }
   .concept-archive .index-card h4 { margin: 0; font-size: 13.5px; line-height: 1.3; font-weight: 700; }
   .concept-archive .index-card p { margin: 0; font-size: 11.5px; line-height: 1.45; color: var(--a-mute); }
   .concept-archive .note-view { flex: 1; display: flex; min-height: 0; }
@@ -460,17 +418,80 @@
   .concept-archive .mini-card p.rel { margin: 0 0 4px; font-size: 10px; color: var(--a-accent); font-style: italic; }
   .concept-archive .mini-card h6 { margin: 0; font-size: 12px; font-weight: 700; line-height: 1.3; }
   .concept-archive .archive-app:not(.is-open) .note-view { display: none; }
-  .concept-archive .archive-app.is-open .shelf-head,
-  .concept-archive .archive-app.is-open .shelf { display: none; }
+  .concept-archive .archive-app.is-open .shelf-head, .concept-archive .archive-app.is-open .shelf { display: none; }
+
+  /* ================================================================
+     CONCEPT 6 — ASK  (Dia-inspired)
+     ================================================================ */
+  .concept-ask {
+    --k-bg: #F6F5F2; --k-card: #FFFFFF; --k-ink: #221E23; --k-mute: #8A8690; --k-line: #E7E4DD; --k-accent: #A98FD1;
+    --k-grad: linear-gradient(135deg, #F5A8B8 0%, #F3C179 45%, #B9A0EA 100%);
+  }
+  .concept-ask .mock {
+    background: var(--k-bg); color: var(--k-ink);
+    font-family: -apple-system, "SF Pro Rounded", ui-rounded, system-ui, sans-serif;
+  }
+  .concept-ask .chrome { border-bottom: 1px solid var(--k-line); }
+  .concept-ask .chrome .dot { background: color-mix(in srgb, currentColor 14%, transparent); }
+  .concept-ask .body-row { display: flex; flex: 1; min-height: 0; }
+  .concept-ask .ask-sidebar { width: 190px; flex-shrink: 0; padding: 26px 22px; }
+  .concept-ask .ask-sidebar h3 {
+    margin: 0 0 14px; font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--k-mute);
+  }
+  .concept-ask .ask-row { padding: 7px 0; font-size: 13px; color: var(--k-mute); }
+  .concept-ask .ask-row.active { color: var(--k-ink); font-weight: 600; }
+  .concept-ask .ask-desktop { flex: 1; padding: 26px 30px 22px; display: flex; flex-direction: column; min-height: 0; }
+  .concept-ask .note-card {
+    background: var(--k-card); border-radius: 20px; padding: 30px 38px;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.04), 0 20px 40px -28px rgba(0,0,0,0.35);
+    flex: 1; overflow-y: auto; margin-bottom: 16px;
+  }
+  .concept-ask .note-card h1 { font-size: 22px; margin: 0 0 16px; font-weight: 700; letter-spacing: -0.01em; }
+  .concept-ask .note-card h4 {
+    font-size: 12px; margin: 20px 0 8px; font-weight: 700; color: var(--k-mute);
+    text-transform: uppercase; letter-spacing: 0.04em;
+  }
+  .concept-ask .note-card p { font-size: 14.5px; line-height: 1.7; margin: 0 0 12px; max-width: 56ch; }
+  .concept-ask .ask-dock { flex-shrink: 0; }
+  .concept-ask .ask-thread[hidden] { display: none; }
+  .concept-ask .ask-thread { display: flex; flex-direction: column; gap: 8px; margin-bottom: 10px; }
+  .concept-ask .bubble { max-width: 80%; padding: 9px 13px; border-radius: 16px; font-size: 13px; line-height: 1.5; }
+  .concept-ask .bubble.user {
+    align-self: flex-end; background: color-mix(in srgb, var(--k-accent) 18%, var(--k-card)); border-bottom-right-radius: 5px;
+  }
+  .concept-ask .bubble.ai {
+    align-self: flex-start; background: var(--k-card); border: 1px solid var(--k-line); border-bottom-left-radius: 5px;
+    display: flex; gap: 8px; align-items: flex-start;
+  }
+  .concept-ask .orb { width: 16px; height: 16px; border-radius: 50%; flex-shrink: 0; background: var(--k-grad); margin-top: 2px; }
+  .concept-ask .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 10px; }
+  .concept-ask .chip {
+    border: 1px solid var(--k-line); background: var(--k-card); color: var(--k-ink); font-size: 12px; padding: 7px 13px;
+    border-radius: 999px; cursor: pointer; transition: transform 220ms cubic-bezier(.34,1.56,.64,1), background 160ms ease;
+  }
+  .concept-ask .chip:hover { background: color-mix(in srgb, var(--k-accent) 12%, var(--k-card)); transform: scale(1.03); }
+  .concept-ask .chip[aria-expanded="true"] { border-color: var(--k-accent); }
+  .concept-ask .ask-bar {
+    display: flex; align-items: center; gap: 10px; background: var(--k-card); border: 1px solid var(--k-line);
+    border-radius: 999px; padding: 9px 9px 9px 16px; box-shadow: 0 10px 24px -16px rgba(0,0,0,0.3);
+  }
+  .concept-ask .ask-bar .orb { width: 20px; height: 20px; margin-top: 0; }
+  .concept-ask .ask-placeholder { flex: 1; font-size: 13.5px; color: var(--k-mute); }
+  .concept-ask .ask-send {
+    width: 26px; height: 26px; border-radius: 50%; background: var(--k-grad); color: #fff; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center; font-size: 13px;
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .concept-ask .ask-bar .orb { animation: ask-breathe 3.6s ease-in-out infinite; }
+  }
+  @keyframes ask-breathe { 0%, 100% { transform: scale(1); } 50% { transform: scale(1.15); } }
 
   /* ---------- Comparison table ---------- */
   .compare { margin-top: 56px; }
   .compare h2 { font-size: 19px; margin: 0 0 14px; }
   .compare-scroll { overflow-x: auto; border: 1px solid var(--shell-line); border-radius: 10px; }
-  table.compare-table { width: 100%; border-collapse: collapse; min-width: 780px; font-size: 13.5px; }
-  table.compare-table th, table.compare-table td {
-    text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--shell-line);
-  }
+  table.compare-table { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 13.5px; }
+  table.compare-table th, table.compare-table td { text-align: left; padding: 11px 16px; border-bottom: 1px solid var(--shell-line); }
   table.compare-table th {
     font-size: 11px; letter-spacing: 0.05em; text-transform: uppercase; color: var(--shell-mute); font-weight: 600;
     background: var(--shell-surface);
@@ -478,15 +499,83 @@
   table.compare-table tr:last-child td { border-bottom: none; }
   table.compare-table td:first-child { font-weight: 600; }
   table.compare-table tbody { background: var(--shell-surface); }
+
+  /* ================================================================
+     DARK MODE — token overrides per concept
+     Order matters: media query, then explicit platform theme, then the
+     local preview toggle (which wins ties by being declared last).
+     ================================================================ */
+  @media (prefers-color-scheme: dark) {
+    .concept-ive { --q-bg: #1E1E20; --q-panel: rgba(255,255,255,0.06); --q-ink: #F5F5F7; --q-mute: #98989D; --q-line: rgba(255,255,255,0.09); --q-accent: #6FA0EA; }
+    .concept-gazette { --g-paper: #1C1917; --g-ink: #EDE7DC; --g-mute: #A79E8E; --g-rule: #3A352C; --g-accent: #D98276; }
+    .concept-desk { --d-bg: #1C1C1A; --d-surface: #242422; --d-ink: #EEEDE7; --d-mute: #9C9A90; --d-line: #34342F; --d-accent: #5FA79E; }
+    .concept-desk .tag.sage { background: #2C3A2A; color: #B7D1AE; }
+    .concept-desk .tag.lav { background: #322C3D; color: #CBC0E6; }
+    .concept-desk .tag.ochre { background: #3A331F; color: #E3C77E; }
+    .concept-desk .tag.blue { background: #24313A; color: #A9CBDD; }
+    .concept-throughline { --t-bg: #1A1B18; --t-surface: #212220; --t-ink: #EDEDE7; --t-mute: #93948A; --t-line: #33342E; --t-steady: #7FA08D; --t-thin: #D4A566; --t-note: #93B0D9; }
+    .concept-archive { --a-paper: #1E1A14; --a-card: #272119; --a-ink: #E8DFC8; --a-mute: #A69B80; --a-line: #4A4131; --a-accent: #8BA3C7; }
+    .concept-ask { --k-bg: #18161B; --k-card: #221F26; --k-ink: #ECE9F0; --k-mute: #9E99A6; --k-line: #322E38; --k-accent: #C3AEEA; }
+  }
+  :root[data-theme="dark"] .concept-ive { --q-bg: #1E1E20; --q-panel: rgba(255,255,255,0.06); --q-ink: #F5F5F7; --q-mute: #98989D; --q-line: rgba(255,255,255,0.09); --q-accent: #6FA0EA; }
+  :root[data-theme="dark"] .concept-gazette { --g-paper: #1C1917; --g-ink: #EDE7DC; --g-mute: #A79E8E; --g-rule: #3A352C; --g-accent: #D98276; }
+  :root[data-theme="dark"] .concept-desk { --d-bg: #1C1C1A; --d-surface: #242422; --d-ink: #EEEDE7; --d-mute: #9C9A90; --d-line: #34342F; --d-accent: #5FA79E; }
+  :root[data-theme="dark"] .concept-desk .tag.sage { background: #2C3A2A; color: #B7D1AE; }
+  :root[data-theme="dark"] .concept-desk .tag.lav { background: #322C3D; color: #CBC0E6; }
+  :root[data-theme="dark"] .concept-desk .tag.ochre { background: #3A331F; color: #E3C77E; }
+  :root[data-theme="dark"] .concept-desk .tag.blue { background: #24313A; color: #A9CBDD; }
+  :root[data-theme="dark"] .concept-throughline { --t-bg: #1A1B18; --t-surface: #212220; --t-ink: #EDEDE7; --t-mute: #93948A; --t-line: #33342E; --t-steady: #7FA08D; --t-thin: #D4A566; --t-note: #93B0D9; }
+  :root[data-theme="dark"] .concept-archive { --a-paper: #1E1A14; --a-card: #272119; --a-ink: #E8DFC8; --a-mute: #A69B80; --a-line: #4A4131; --a-accent: #8BA3C7; }
+  :root[data-theme="dark"] .concept-ask { --k-bg: #18161B; --k-card: #221F26; --k-ink: #ECE9F0; --k-mute: #9E99A6; --k-line: #322E38; --k-accent: #C3AEEA; }
+
+  :root[data-theme="light"] .concept-ive { --q-bg: #F5F5F3; --q-panel: rgba(255,255,255,0.55); --q-ink: #1D1D1F; --q-mute: #86868B; --q-line: rgba(0,0,0,0.08); --q-accent: #2B5FAD; }
+  :root[data-theme="light"] .concept-gazette { --g-paper: #EDEAE1; --g-ink: #201C18; --g-mute: #6E655A; --g-rule: #C9C2B4; --g-accent: #7B2E28; }
+  :root[data-theme="light"] .concept-desk { --d-bg: #FFFFFF; --d-surface: #FAFAF8; --d-ink: #2B2B26; --d-mute: #83807A; --d-line: #E9E7DF; --d-accent: #3E8079; }
+  :root[data-theme="light"] .concept-desk .tag.sage { background: #E4EBDF; color: #3E5136; }
+  :root[data-theme="light"] .concept-desk .tag.lav { background: #E7E2EF; color: #4C4468; }
+  :root[data-theme="light"] .concept-desk .tag.ochre { background: #F1E8D2; color: #6B5323; }
+  :root[data-theme="light"] .concept-desk .tag.blue { background: #DEE7ED; color: #33566B; }
+  :root[data-theme="light"] .concept-throughline { --t-bg: #F1F0EC; --t-surface: #FFFFFF; --t-ink: #23241F; --t-mute: #77786F; --t-line: #DFDED6; --t-steady: #5C7A6B; --t-thin: #B98A46; --t-note: #5E7699; }
+  :root[data-theme="light"] .concept-archive { --a-paper: #E4DFCE; --a-card: #EFEBDD; --a-ink: #2A2416; --a-mute: #756B54; --a-line: #C9C0A4; --a-accent: #2E3A52; }
+  :root[data-theme="light"] .concept-ask { --k-bg: #F6F5F2; --k-card: #FFFFFF; --k-ink: #221E23; --k-mute: #8A8690; --k-line: #E7E4DD; --k-accent: #A98FD1; }
+
+  :root[data-preview-theme="dark"] .concept-ive { --q-bg: #1E1E20; --q-panel: rgba(255,255,255,0.06); --q-ink: #F5F5F7; --q-mute: #98989D; --q-line: rgba(255,255,255,0.09); --q-accent: #6FA0EA; }
+  :root[data-preview-theme="dark"] .concept-gazette { --g-paper: #1C1917; --g-ink: #EDE7DC; --g-mute: #A79E8E; --g-rule: #3A352C; --g-accent: #D98276; }
+  :root[data-preview-theme="dark"] .concept-desk { --d-bg: #1C1C1A; --d-surface: #242422; --d-ink: #EEEDE7; --d-mute: #9C9A90; --d-line: #34342F; --d-accent: #5FA79E; }
+  :root[data-preview-theme="dark"] .concept-desk .tag.sage { background: #2C3A2A; color: #B7D1AE; }
+  :root[data-preview-theme="dark"] .concept-desk .tag.lav { background: #322C3D; color: #CBC0E6; }
+  :root[data-preview-theme="dark"] .concept-desk .tag.ochre { background: #3A331F; color: #E3C77E; }
+  :root[data-preview-theme="dark"] .concept-desk .tag.blue { background: #24313A; color: #A9CBDD; }
+  :root[data-preview-theme="dark"] .concept-throughline { --t-bg: #1A1B18; --t-surface: #212220; --t-ink: #EDEDE7; --t-mute: #93948A; --t-line: #33342E; --t-steady: #7FA08D; --t-thin: #D4A566; --t-note: #93B0D9; }
+  :root[data-preview-theme="dark"] .concept-archive { --a-paper: #1E1A14; --a-card: #272119; --a-ink: #E8DFC8; --a-mute: #A69B80; --a-line: #4A4131; --a-accent: #8BA3C7; }
+  :root[data-preview-theme="dark"] .concept-ask { --k-bg: #18161B; --k-card: #221F26; --k-ink: #ECE9F0; --k-mute: #9E99A6; --k-line: #322E38; --k-accent: #C3AEEA; }
+
+  :root[data-preview-theme="light"] .concept-ive { --q-bg: #F5F5F3; --q-panel: rgba(255,255,255,0.55); --q-ink: #1D1D1F; --q-mute: #86868B; --q-line: rgba(0,0,0,0.08); --q-accent: #2B5FAD; }
+  :root[data-preview-theme="light"] .concept-gazette { --g-paper: #EDEAE1; --g-ink: #201C18; --g-mute: #6E655A; --g-rule: #C9C2B4; --g-accent: #7B2E28; }
+  :root[data-preview-theme="light"] .concept-desk { --d-bg: #FFFFFF; --d-surface: #FAFAF8; --d-ink: #2B2B26; --d-mute: #83807A; --d-line: #E9E7DF; --d-accent: #3E8079; }
+  :root[data-preview-theme="light"] .concept-desk .tag.sage { background: #E4EBDF; color: #3E5136; }
+  :root[data-preview-theme="light"] .concept-desk .tag.lav { background: #E7E2EF; color: #4C4468; }
+  :root[data-preview-theme="light"] .concept-desk .tag.ochre { background: #F1E8D2; color: #6B5323; }
+  :root[data-preview-theme="light"] .concept-desk .tag.blue { background: #DEE7ED; color: #33566B; }
+  :root[data-preview-theme="light"] .concept-throughline { --t-bg: #F1F0EC; --t-surface: #FFFFFF; --t-ink: #23241F; --t-mute: #77786F; --t-line: #DFDED6; --t-steady: #5C7A6B; --t-thin: #B98A46; --t-note: #5E7699; }
+  :root[data-preview-theme="light"] .concept-archive { --a-paper: #E4DFCE; --a-card: #EFEBDD; --a-ink: #2A2416; --a-mute: #756B54; --a-line: #C9C0A4; --a-accent: #2E3A52; }
+  :root[data-preview-theme="light"] .concept-ask { --k-bg: #F6F5F2; --k-card: #FFFFFF; --k-ink: #221E23; --k-mute: #8A8690; --k-line: #E7E4DD; --k-accent: #A98FD1; }
 </style>
 
 <div class="page">
 
-  <header class="intro">
-    <p class="eyebrow">Interface study · Noschen</p>
-    <h1>Same note, five treatments</h1>
-    <p>One research note — the same title, the same four sections, the same AI observations — run through five different interface philosophies. All five start from the same brief: the writing is the product, and the interface's only job is to get out of its way. Switch between them below.</p>
-  </header>
+  <div class="page-head">
+    <header class="intro">
+      <p class="eyebrow">Interface study · Noschen</p>
+      <h1>Same note, six treatments</h1>
+      <p>One research note — the same title, the same four sections, the same AI observations — run through six different interface philosophies. All six start from the same brief: the writing is the product, and the interface's only job is to get out of its way. Switch between them below.</p>
+    </header>
+    <div class="theme-toggle" role="group" aria-label="Preview theme">
+      <button type="button" data-theme-choice="auto" aria-pressed="true">Auto</button>
+      <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+      <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+    </div>
+  </div>
 
   <nav class="tabs" role="tablist" aria-label="Interface direction">
     <button role="tab" id="tab-ive" aria-controls="panel-ive" aria-selected="true" data-target="ive">Quiet</button>
@@ -494,6 +583,7 @@
     <button role="tab" id="tab-desk" aria-controls="panel-desk" aria-selected="false" tabindex="-1" data-target="desk">The Desk</button>
     <button role="tab" id="tab-throughline" aria-controls="panel-throughline" aria-selected="false" tabindex="-1" data-target="throughline">Throughline</button>
     <button role="tab" id="tab-archive" aria-controls="panel-archive" aria-selected="false" tabindex="-1" data-target="archive">The Archive</button>
+    <button role="tab" id="tab-ask" aria-controls="panel-ask" aria-selected="false" tabindex="-1" data-target="ask">Ask</button>
   </nav>
 
   <div class="panels">
@@ -631,30 +721,49 @@
     <article class="panel concept-throughline" id="panel-throughline" role="tabpanel" aria-labelledby="tab-throughline" hidden>
       <div class="panel-meta">
         <h2>Throughline</h2>
-        <p class="tagline">Built to help you keep hold of your own argument.</p>
-        <p class="rationale">Starts from a different question: not "how do we show AI feedback" but "how do we stop the writer from losing their argument." The research question stays pinned at the top at all times. A quiet spine down the left turns your outline into a structure map — thin ring where a section is underdeveloped. AI doesn't file a report; it changes the color of one ambient dot.</p>
+        <p class="tagline">Built to help you keep hold of whatever you're writing toward.</p>
+        <p class="rationale">The bar at the top isn't locked to a question — it holds whatever anchors the note: a research question, a thesis, a topic, a project brief. Suggestions don't live in a separate feed either. They attach to the exact point on the spine they concern — a quiet flag on "Hybrid Meeting Norms", another on "Trust Without Proximity" — and stay invisible everywhere else. A small counter up top gives the same picture at a glance, for when you just want to know if anything needs a look before diving in.</p>
         <div class="verdict-row">
           <span><strong>Best for</strong>Long, structurally demanding writing — literature reviews, thesis chapters.</span>
-          <span><strong>Trade-off</strong>Needs real H1/H2 structure to be useful; has little to say about a short, flat note.</span>
+          <span><strong>Trade-off</strong>Needs real section structure to hang a suggestion, or a spine, on — a flat block of text has nowhere for either to attach.</span>
         </div>
       </div>
       <div class="mock-frame">
         <div class="mock">
           <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
           <div class="pin-bar">
-            <span class="q-label">Your question</span>
+            <span class="q-label">Focus</span>
             <span class="q-text">Do Remote Teams Communicate Worse?</span>
-            <button class="clarity-btn" id="t-clarity-trigger" data-popover-trigger aria-expanded="false" aria-controls="t-clarity-pop"><span class="signal"></span>Steady</button>
+            <button class="clarity-btn is-thin" id="t-clarity-trigger" data-popover-trigger aria-expanded="false" aria-controls="t-clarity-pop"><span class="signal"></span>2 notes</button>
           </div>
           <div class="clarity-pop" id="t-clarity-pop" hidden>
-            One section is thin: <b>"Trust Without Proximity"</b> is two lines and no sources. Everything else is holding its weight.
+            <button type="button" class="jump" data-jump="t-node-hybrid-trigger">Hybrid Meeting Norms</button> overlaps the section above it, and
+            <button type="button" class="jump" data-jump="t-node-trust-trigger">Trust Without Proximity</button> is thin and under-sourced. Everything else is holding its weight.
           </div>
           <div class="body-row">
             <nav class="spine">
               <div class="node active"><span class="ring"></span><span class="label">Synchronous vs. Asynchronous Patterns</span></div>
               <div class="node"><span class="ring"></span><span class="label">Time-Zone Friction</span></div>
-              <div class="node"><span class="ring"></span><span class="label">Hybrid Meeting Norms</span></div>
-              <div class="node thin"><span class="ring"></span><span class="label">Trust Without Proximity<span class="hint">thin — 2 lines</span></span></div>
+              <div class="node has-note">
+                <button class="node-trigger" id="t-node-hybrid-trigger" data-popover-trigger aria-expanded="false" aria-controls="t-node-hybrid-pop">
+                  <span class="ring"></span><span class="label">Hybrid Meeting Norms<span class="hint flag">MECE overlap</span></span>
+                </button>
+                <div class="node-pop" id="t-node-hybrid-pop" hidden>
+                  <span class="type">MECE</span>
+                  <p>Overlaps with "Synchronous vs. Asynchronous Patterns" above — hybrid isn't clearly separated from the sync/async split yet.</p>
+                  <div class="node-pop-actions"><button type="button">Mark done</button><button type="button">Dismiss</button></div>
+                </div>
+              </div>
+              <div class="node thin has-note">
+                <button class="node-trigger" id="t-node-trust-trigger" data-popover-trigger aria-expanded="false" aria-controls="t-node-trust-pop">
+                  <span class="ring"></span><span class="label">Trust Without Proximity<span class="hint">thin — 2 lines</span></span>
+                </button>
+                <div class="node-pop" id="t-node-trust-pop" hidden>
+                  <span class="type">Gap</span>
+                  <p>Two lines, no sources — and it's the section your later argument leans on most. Worth developing before this one moves on.</p>
+                  <div class="node-pop-actions"><button type="button">Mark done</button><button type="button">Dismiss</button></div>
+                </div>
+              </div>
             </nav>
             <div class="content">
               <h4>Synchronous vs. Asynchronous Patterns</h4>
@@ -713,6 +822,65 @@
       </div>
     </article>
 
+    <!-- ============ CONCEPT 6 — ASK ============ -->
+    <article class="panel concept-ask" id="panel-ask" role="tabpanel" aria-labelledby="tab-ask" hidden>
+      <div class="panel-meta">
+        <h2>Ask</h2>
+        <p class="tagline">A companion you talk to, in the spirit of Dia.</p>
+        <p class="rationale">Borrows Dia's central move: the conversation is the interface, not a control panel bolted onto one. The note sits as a single rounded card on a quiet desktop; a pill-shaped "Ask" bar with a small gradient companion orb waits below it, always available, never in the way. Suggestions arrive as a short, specific exchange instead of a list of alerts — native macOS materials and a spring in the small details, kept subtle rather than showy.</p>
+        <div class="verdict-row">
+          <span><strong>Best for</strong>Writers who'd rather ask a direct question than parse a report.</span>
+          <span><strong>Trade-off</strong>A conversation is slower to scan than a badge — fine for one nagging question, worse for reviewing ten at once.</span>
+        </div>
+      </div>
+      <div class="mock-frame">
+        <div class="mock">
+          <div class="chrome"><span class="dot"></span><span class="dot"></span><span class="dot"></span></div>
+          <div class="body-row">
+            <aside class="ask-sidebar">
+              <h3>Notes</h3>
+              <div class="ask-row active">Do Remote Teams Communicate Worse?</div>
+              <div class="ask-row">Platform Governance &amp; Institutional Economics</div>
+              <div class="ask-row">The Attention Economy</div>
+              <div class="ask-row">Trust Without Proximity</div>
+            </aside>
+            <div class="ask-desktop">
+              <div class="note-card">
+                <h1>Do Remote Teams Communicate Worse? A Structural Review</h1>
+                <h4>Synchronous vs. Asynchronous Patterns</h4>
+                <p>Remote work hasn't eliminated communication so much as redistributed it. Teams that once relied on a five-minute hallway exchange now default to asynchronous, written coordination — Slack threads, shared docs, the occasional recorded video.</p>
+                <p>The literature is split on whether this is a net loss. Some argue that writing things down forces clearer thinking; others point to the erosion of the informal exchange that used to catch problems early.</p>
+              </div>
+              <div class="ask-dock">
+                <div class="ask-thread" id="ask-pop-1" hidden>
+                  <div class="bubble user">Where's this thin?</div>
+                  <div class="bubble ai"><span class="orb"></span>"Trust Without Proximity" — two lines, no sources. That's the one I'd flag first.</div>
+                </div>
+                <div class="ask-thread" id="ask-pop-2" hidden>
+                  <div class="bubble user">Any sources I'm missing?</div>
+                  <div class="bubble ai"><span class="orb"></span>For the trust section, look at Bailenson on Zoom fatigue and Handy's classic piece on trust in virtual teams.</div>
+                </div>
+                <div class="ask-thread" id="ask-pop-3" hidden>
+                  <div class="bubble user">Does this hold together?</div>
+                  <div class="bubble ai"><span class="orb"></span>Mostly — but "Hybrid Meeting Norms" overlaps your sync/async split above. Worth drawing a clearer line.</div>
+                </div>
+                <div class="chips">
+                  <button type="button" class="chip" data-popover-trigger aria-expanded="false" aria-controls="ask-pop-1">Where's this thin?</button>
+                  <button type="button" class="chip" data-popover-trigger aria-expanded="false" aria-controls="ask-pop-2">Any sources I'm missing?</button>
+                  <button type="button" class="chip" data-popover-trigger aria-expanded="false" aria-controls="ask-pop-3">Does this hold together?</button>
+                </div>
+                <div class="ask-bar">
+                  <span class="orb"></span>
+                  <span class="ask-placeholder">Ask about this note…</span>
+                  <span class="ask-send">↑</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
+
   </div>
 
   <section class="compare">
@@ -726,8 +894,9 @@
           <tr><td>Quiet</td><td>Apple's own apps</td><td>One dot, summoned</td><td>Lowest</td><td>Low</td></tr>
           <tr><td>The Gazette</td><td>Print magazine</td><td>Margin pencil marks</td><td>Low</td><td>Medium</td></tr>
           <tr><td>The Desk</td><td>Evernote-style desk</td><td>Panel, focus mode only</td><td>Low in focus, higher in overview</td><td>Medium</td></tr>
-          <tr><td>Throughline</td><td>An outline you can feel</td><td>One ambient signal</td><td>Lowest</td><td>Medium–high</td></tr>
+          <tr><td>Throughline</td><td>An outline you can feel</td><td>Ambient counter, detail on the spine</td><td>Lowest</td><td>Medium–high</td></tr>
           <tr><td>The Archive</td><td>Zettelkasten card catalog</td><td>Related cards, not alerts</td><td>Low</td><td>High</td></tr>
+          <tr><td>Ask</td><td>Dia's chat-first browser</td><td>A pill-shaped chat, on request</td><td>Low — a conversation, not a feed</td><td>Medium–high</td></tr>
         </tbody>
       </table>
     </div>
@@ -766,14 +935,29 @@
       });
     });
 
-    // Popovers (Quiet + Throughline)
-    document.querySelectorAll('[data-popover-trigger]').forEach(function (btn) {
+    // Popovers — every trigger closes every other open popover before toggling itself,
+    // so only one flyout/thread/panel is ever open at a time.
+    var popoverTriggers = Array.prototype.slice.call(document.querySelectorAll('[data-popover-trigger]'));
+    popoverTriggers.forEach(function (btn) {
       var pop = document.getElementById(btn.getAttribute('aria-controls'));
       if (!pop) return;
       btn.addEventListener('click', function () {
         var willShow = pop.hidden;
+        popoverTriggers.forEach(function (other) {
+          if (other === btn) return;
+          var otherPop = document.getElementById(other.getAttribute('aria-controls'));
+          if (otherPop) { otherPop.hidden = true; other.setAttribute('aria-expanded', 'false'); }
+        });
         pop.hidden = !willShow;
         btn.setAttribute('aria-expanded', willShow ? 'true' : 'false');
+      });
+    });
+
+    // Digest links that open a specific popover elsewhere in the panel (Throughline).
+    document.querySelectorAll('[data-jump]').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var target = document.getElementById(btn.getAttribute('data-jump'));
+        if (target) { target.click(); target.focus(); }
       });
     });
 
@@ -786,6 +970,18 @@
     document.querySelectorAll('[data-close-note]').forEach(function (btn) {
       btn.addEventListener('click', function () {
         document.querySelector(btn.getAttribute('data-close-note')).classList.remove('is-open');
+      });
+    });
+
+    // Local light/dark preview toggle — independent of the platform theme.
+    var root = document.documentElement;
+    var themeButtons = Array.prototype.slice.call(document.querySelectorAll('[data-theme-choice]'));
+    themeButtons.forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var choice = btn.getAttribute('data-theme-choice');
+        if (choice === 'auto') { root.removeAttribute('data-preview-theme'); }
+        else { root.setAttribute('data-preview-theme', choice); }
+        themeButtons.forEach(function (b) { b.setAttribute('aria-pressed', b === btn ? 'true' : 'false'); });
       });
     });
   })();
