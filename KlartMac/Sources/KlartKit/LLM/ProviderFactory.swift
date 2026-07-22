@@ -33,7 +33,7 @@ public enum ProviderFactory {
                 baseURL: config.baseURL,
                 apiKey: secrets.secret(for: kind.keychainAccount),
                 extraHeaders: [
-                    "HTTP-Referer": "https://github.com/maxpolwin/Klart",
+                    "HTTP-Referer": "https://github.com/maxpolwin/klart",
                     "X-Title": "Klårt",
                 ],
                 allowInsecure: false
