@@ -48,6 +48,26 @@ swift test
 bash Scripts/make-app.sh
 ```
 
+### Develop in Xcode
+
+**Fastest — open the Swift package directly** (no extra tooling):
+
+```bash
+cd KlartMac
+xed .            # equivalently: open Package.swift
+```
+
+Xcode indexes the package and gives you a **Klart** run scheme, breakpoints, and live rebuilds. Running this way launches the bare executable rather than a sandboxed `.app`, so notes land in `~/Library/Application Support/Klart` and the vault/Touch-ID features behave like an unsandboxed dev build.
+
+**Full-fidelity app bundle** — to run Klårt in Xcode exactly as it ships (App Sandbox, entitlements, Keychain container), generate a real app target with [XcodeGen](https://github.com/yonaskolb/XcodeGen):
+
+```bash
+brew install xcodegen
+bash Scripts/generate-xcodeproj.sh   # writes Klart.xcodeproj (git-ignored) and opens it
+```
+
+The project is described by [`project.yml`](project.yml) and regenerated on demand, so it never drifts from the sources — **edit `project.yml`, not the generated `.xcodeproj`.** On first run, open the **Klart** target's *Signing & Capabilities* tab and pick your Team (a free Apple ID works) so the sandboxed build can reach the Keychain. Unit tests still run from the command line with `swift test`.
+
 CI builds and tests the app on every push (see `.github/workflows/macos-app.yml`) and uploads a ready-to-run `Klart.app` and `Klart.dmg` as both a workflow artifact and, on pushes to `main`, a rolling GitHub Release — always downloadable at:
 
 ```

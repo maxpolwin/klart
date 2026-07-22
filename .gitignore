@@ -15,6 +15,11 @@ build/icon.iconset/
 *.swp
 *.swo
 
+# Generated Xcode project (from KlartMac/project.yml via XcodeGen)
+*.xcodeproj/
+*.xcworkspace/
+xcuserdata/
+
 # OS
 .DS_Store
 Thumbs.db

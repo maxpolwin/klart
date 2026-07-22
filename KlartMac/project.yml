@@ -1,0 +1,75 @@
+# XcodeGen spec for a full-fidelity Klårt app target.
+#
+# Klårt's source of truth is the Swift package (Package.swift). This file
+# describes a native Xcode *application* target that wraps the same sources in
+# a real .app bundle — App Sandbox, entitlements, and a Keychain container —
+# so features that only work in a signed bundle (the encrypted vault, Touch ID
+# unlock, screenshot exclusion) can be exercised exactly as they ship.
+#
+# The generated Klart.xcodeproj is disposable and git-ignored. Regenerate it
+# any time with `bash Scripts/generate-xcodeproj.sh`; never hand-edit it — edit
+# this file instead. For quick UI iteration you can skip Xcode projects
+# entirely and just open the package: `xed .`.
+name: Klart
+
+options:
+  bundleIdPrefix: com.klart
+  deploymentTarget:
+    macOS: "14.0"
+  createIntermediateGroups: true
+  minimumXcodeGenVersion: "2.38.0"
+
+# The local Swift package supplies KlartKit (core logic + vendored Argon2).
+# The app target compiles the SwiftUI shell (Sources/KlartApp) itself and links
+# KlartKit as a product — so there is exactly one @main and no duplication.
+packages:
+  KlartCore:
+    path: .
+
+targets:
+  Klart:
+    type: application
+    platform: macOS
+    deploymentTarget: "14.0"
+    sources:
+      - path: Sources/KlartApp
+        excludes:
+          # The bundle's real Info.plist is wired in via INFOPLIST_FILE below,
+          # not copied as a loose resource.
+          - Resources/Info.plist
+    dependencies:
+      - package: KlartCore
+        product: KlartKit
+    settings:
+      base:
+        PRODUCT_NAME: Klart
+        PRODUCT_BUNDLE_IDENTIFIER: com.klart.mac
+        INFOPLIST_FILE: Sources/KlartApp/Resources/Info.plist
+        # We ship a hand-written Info.plist; don't let Xcode synthesize one.
+        GENERATE_INFOPLIST_FILE: NO
+        CODE_SIGN_ENTITLEMENTS: Scripts/Klart.entitlements
+        # Automatic "Sign to Run Locally" works out of the box; to run the
+        # sandboxed build with Keychain access, pick your Team (a free Apple ID
+        # is enough) once in Signing & Capabilities.
+        CODE_SIGN_STYLE: Automatic
+        MARKETING_VERSION: "2.0.0"
+        CURRENT_PROJECT_VERSION: 1
+        SWIFT_VERSION: "5.9"
+        ENABLE_PREVIEWS: YES
+        # Debug builds stay debuggable (KlartApp only denies debugger
+        # attachment in release); the shipped bundle from make-app.sh is the
+        # one that adds the Hardened Runtime at sign time.
+
+schemes:
+  Klart:
+    build:
+      targets:
+        Klart: all
+    run:
+      config: Debug
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
