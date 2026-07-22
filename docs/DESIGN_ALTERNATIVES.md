@@ -4,6 +4,13 @@ This document ideates three design directions for how Noschen presents AI assist
 All three follow the same cross-cutting best practices (below) and differ in *where* AI
 lives in the interface and *how much attention* it is allowed to demand.
 
+> **Status:** design-history record. This ideation predates the native Swift/SwiftUI
+> rebuild. **Alternative 3 — "Ambient Focus"** is the direction that shipped: the app
+> has no persistent AI chrome, only a toolbar pill ("N ready") that opens the coach on
+> click or `⌘.`. Implementation references below that mention web mechanics (CSS,
+> ARIA roles, ProseMirror) describe the earlier Electron prototype; the SwiftUI app
+> achieves the same goals with native equivalents (see the note under each principle).
+
 ## Cross-cutting best practices (apply to every alternative)
 
 **AI-UX principles** (drawn from HAX / people-centered AI guidelines):
@@ -20,19 +27,21 @@ lives in the interface and *how much attention* it is allowed to demand.
 4. **Graceful error and empty states** — errors are announced via `role="alert"`, are
    dismissible, and self-expire. An empty result is a state, not a bug: say so.
 5. **Local-first privacy framing** — the UI should state clearly when analysis runs
-   on-device (built-in / Ollama) versus in the cloud (Mistral), e.g. a small
-   "on-device" / "cloud" chip next to the AI status.
+   on-device (Ollama / LM Studio) versus in the cloud (OpenRouter or a remote custom
+   endpoint), e.g. a small "on-device" / "cloud" chip next to the AI status.
 
 **Accessibility baseline (WCAG 2.2 AA):**
 
 - Text contrast ≥ 4.5:1 (3:1 for large text); never encode meaning by color alone —
   tip badges combine color + label text.
 - Full keyboard paths for every action (accept/reject/edit tips, open settings,
-  navigate notes); visible `:focus-visible` outlines (already in `global.css`).
+  navigate notes); visible focus outlines.
 - Pointer targets ≥ 24×24 px (WCAG 2.2 "Target Size (Minimum)").
-- `aria-live="polite"` for AI status changes, `role="alert"` for failures; suggestion
-  lists as real lists (`<ul>/<li>`), panels as labelled `<section>`s.
-- Respect `prefers-reduced-motion` (already implemented) and `prefers-color-scheme`
+- Status changes announced politely and failures announced assertively; suggestions
+  exposed as a list and panels as labelled regions. *(SwiftUI: `accessibilityLabel` /
+  `.accessibilityAddTraits`, and an `accessibility(announcement:)`-style live region for
+  the tip count — the SwiftUI analogue of the web build's `aria-live`/`role="alert"`.)*
+- Respect Reduce Motion and follow the system light/dark appearance
   (Alternative 3 makes theming a first-class feature).
 - Announce, don't move focus: new tips must never steal focus from the editor.
 
