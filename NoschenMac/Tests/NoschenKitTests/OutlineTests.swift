@@ -90,6 +90,28 @@ final class OutlineTests: XCTestCase {
         XCTAssertNil(outline.section(atUTF16Offset: 0))
     }
 
+    func testHeadingsInsideCodeFencesAreIgnored() {
+        let text = """
+        # Real Topic
+
+        ## Real Section
+        ```bash
+        # not a heading, just a shell comment
+        echo hi
+        ```
+        More text.
+
+        ## Another Real Section
+        """
+        let outline = DocumentOutline.parse(text)
+        XCTAssertEqual(outline.topic, "Real Topic")
+        XCTAssertEqual(outline.sections.map(\.title), [
+            "Real Topic",
+            "Real Section",
+            "Another Real Section",
+        ])
+    }
+
     func testUnicodeOffsets() {
         let text = "# Über 🧠 Denken\n\n## Erste Frage\nInhalt äöü."
         let outline = DocumentOutline.parse(text)

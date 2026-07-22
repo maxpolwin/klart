@@ -35,6 +35,14 @@ final class NoschenTextView: NSTextView {
         scheduleClipboardClear()
     }
 
+    override func paste(_ sender: Any?) {
+        super.paste(sender)
+        // A paste can drop in many lines at once (a whole snippet, a code
+        // block); the delegate's textDidChange only restyles the current
+        // paragraph, so re-style everything to catch the rest.
+        EditorStyler.restyleAll(self)
+    }
+
     private func scheduleClipboardClear() {
         guard clearsClipboardAfterCopy else { return }
         let pasteboard = NSPasteboard.general
@@ -165,14 +173,26 @@ enum EditorStyler {
     private static let listMarkerRegex = try! NSRegularExpression(
         pattern: #"^\s{0,8}(?:[-*+]|\d{1,3}[.)])(?=\s)"#
     )
+    private static let taskCheckboxRegex = try! NSRegularExpression(
+        pattern: #"^\[([ xX])\]\s"#
+    )
     private static let boldRegex = try! NSRegularExpression(
-        pattern: #"\*\*(?!\s)(?:[^*\n]|\*(?!\*))+?(?<!\s)\*\*"#
+        pattern: #"(?<!\\)\*\*(?!\s)(?:[^*\n]|\*(?!\*))+?(?<!\s)\*\*"#
     )
     private static let italicRegex = try! NSRegularExpression(
-        pattern: #"(?<![\w*_])[*_](?![\s*_])[^*_\n]+?(?<![\s*_])[*_](?![\w*_])"#
+        pattern: #"(?<![\w*_\\])[*_](?![\s*_])[^*_\n]+?(?<![\s*_])[*_](?![\w*_])"#
     )
     private static let codeRegex = try! NSRegularExpression(
-        pattern: #"`[^`\n]+`"#
+        pattern: #"(?<!\\)`[^`\n]+`"#
+    )
+    private static let strikethroughRegex = try! NSRegularExpression(
+        pattern: #"(?<!\\)~~(?!\s)[^~\n]+?(?<!\s)~~"#
+    )
+    private static let codeFenceRegex = try! NSRegularExpression(
+        pattern: #"^\s{0,3}(?:`{3,}|~{3,})"#
+    )
+    private static let horizontalRuleRegex = try! NSRegularExpression(
+        pattern: #"^\s{0,3}(?:-\s*){3,}$|^\s{0,3}(?:\*\s*){3,}$|^\s{0,3}(?:_\s*){3,}$"#
     )
 
     static var paragraphStyle: NSParagraphStyle {
@@ -220,8 +240,29 @@ enum EditorStyler {
         let ns = storage.string as NSString
         storage.beginEditing()
         storage.addAttributes(bodyAttributes, range: range)
+
+        // Fenced code blocks span multiple lines, so a per-paragraph restyle
+        // needs to know whether it's starting inside an already-open fence —
+        // found by scanning fence markers from the top of the document. This
+        // is a plain string scan (no attribute writes), so it's cheap even
+        // though it reruns on every edit.
+        var insideCodeBlock = codeBlockOpen(before: range.location, in: ns)
+
         ns.enumerateSubstrings(in: range, options: [.byLines, .substringNotRequired]) { _, lineRange, _, _ in
             let line = ns.substring(with: lineRange)
+
+            if isCodeFenceLine(line) {
+                insideCodeBlock.toggle()
+                storage.addAttributes([.font: codeFont, .foregroundColor: syntaxColor], range: lineRange)
+                return
+            }
+            if insideCodeBlock {
+                // Inside a fence, the line is verbatim code — never headings,
+                // lists, or emphasis, no matter what characters it contains.
+                storage.addAttributes([.font: codeFont, .foregroundColor: textColor], range: lineRange)
+                return
+            }
+
             if let level = headingLevel(of: line) {
                 // Keep the leading # marker at body size and dimmed, so only the
                 // actual heading text is enlarged — otherwise the marker itself
@@ -235,11 +276,16 @@ enum EditorStyler {
                 storage.addAttribute(.font, value: bodyFont, range: markerRange)
                 storage.addAttribute(.foregroundColor, value: markerColor, range: markerRange)
                 storage.addAttribute(.font, value: headingFont(level: level), range: textRange)
+            } else if isHorizontalRule(line) {
+                storage.addAttribute(.foregroundColor, value: markerColor, range: lineRange)
             } else if line.hasPrefix(">") {
                 storage.addAttributes([
                     .foregroundColor: quoteColor,
                     .font: NSFont.systemFont(ofSize: 14),
                 ], range: lineRange)
+                // Quoted text can still carry emphasis, code, etc. — style it
+                // the same as a normal line so it isn't silently dropped.
+                styleInline(line, lineRange: lineRange, in: storage)
             } else {
                 styleListMarker(line, lineRange: lineRange, in: storage)
                 styleInline(line, lineRange: lineRange, in: storage)
@@ -248,15 +294,66 @@ enum EditorStyler {
         storage.endEditing()
     }
 
-    /// Tints `- ` / `* ` / `+ ` / `1. ` markers so lists read as lists.
-    private static func styleListMarker(_ line: String, lineRange: NSRange, in storage: NSTextStorage) {
+    private static func isCodeFenceLine(_ line: String) -> Bool {
         let full = NSRange(location: 0, length: (line as NSString).length)
+        return codeFenceRegex.firstMatch(in: line, range: full) != nil
+    }
+
+    private static func isHorizontalRule(_ line: String) -> Bool {
+        let full = NSRange(location: 0, length: (line as NSString).length)
+        return horizontalRuleRegex.firstMatch(in: line, range: full) != nil
+    }
+
+    /// Whether an unclosed code fence is open at `location`, determined by
+    /// counting fence-marker lines from the start of the document.
+    private static func codeBlockOpen(before location: Int, in ns: NSString) -> Bool {
+        guard location > 0 else { return false }
+        var open = false
+        ns.enumerateSubstrings(
+            in: NSRange(location: 0, length: location),
+            options: [.byLines, .substringNotRequired]
+        ) { _, lineRange, _, _ in
+            if isCodeFenceLine(ns.substring(with: lineRange)) {
+                open.toggle()
+            }
+        }
+        return open
+    }
+
+    /// Tints `- ` / `* ` / `+ ` / `1. ` markers so lists read as lists, and
+    /// renders `- [ ]` / `- [x]` as a task item — dimming the checkbox and,
+    /// once checked, striking through the item's text.
+    private static func styleListMarker(_ line: String, lineRange: NSRange, in storage: NSTextStorage) {
+        let ns = line as NSString
+        let full = NSRange(location: 0, length: ns.length)
         guard let match = listMarkerRegex.firstMatch(in: line, range: full) else { return }
         storage.addAttribute(
             .foregroundColor,
             value: markerColor,
             range: NSRange(location: lineRange.location + match.range.location, length: match.range.length)
         )
+
+        let afterMarker = match.range.location + match.range.length + 1 // skip the required space
+        guard afterMarker <= ns.length else { return }
+        let remainder = ns.substring(from: afterMarker)
+        guard let checkbox = taskCheckboxRegex.firstMatch(
+            in: remainder,
+            range: NSRange(location: 0, length: (remainder as NSString).length)
+        ) else { return }
+
+        let checkboxRange = NSRange(location: lineRange.location + afterMarker, length: checkbox.range.length)
+        storage.addAttribute(.foregroundColor, value: markerColor, range: checkboxRange)
+
+        let isChecked = (remainder as NSString).substring(with: checkbox.range(at: 1)).lowercased() == "x"
+        if isChecked {
+            let textStart = checkboxRange.location + checkboxRange.length
+            let textRange = NSRange(location: textStart, length: lineRange.location + lineRange.length - textStart)
+            guard textRange.length > 0 else { return }
+            storage.addAttributes([
+                .strikethroughStyle: NSUnderlineStyle.single.rawValue,
+                .foregroundColor: quoteColor,
+            ], range: textRange)
+        }
     }
 
     private struct ListMarker {
@@ -295,6 +392,12 @@ enum EditorStyler {
         ns.getParagraphStart(&start, end: nil, contentsEnd: &contentsEnd, for: NSRange(location: min(selection.location, ns.length), length: 0))
         let lineRange = NSRange(location: start, length: contentsEnd - start)
         let line = ns.substring(with: lineRange)
+        // Don't treat a "- " line inside a fenced code block as a list —
+        // it's verbatim code (e.g. YAML), not markdown. Likewise a horizontal
+        // rule like "- - -" matches the list-marker pattern but is styled and
+        // meant as a rule, not a list item.
+        guard !codeBlockOpen(before: lineRange.location, in: ns) else { return false }
+        guard !isHorizontalRule(line) else { return false }
         guard let listMarker = matchListMarker(in: line) else { return false }
 
         let contentStart = min(listMarker.markerEndLocation + 1, (line as NSString).length)
@@ -343,6 +446,12 @@ enum EditorStyler {
             let range = shifted(match.range, by: lineRange.location)
             storage.addAttribute(.font, value: italicFont, range: range)
             dimEdges(of: range, width: 1, in: storage)
+        }
+        strikethroughRegex.enumerateMatches(in: line, range: full) { match, _, _ in
+            guard let match else { return }
+            let range = shifted(match.range, by: lineRange.location)
+            storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
+            dimEdges(of: range, width: 2, in: storage)
         }
     }
 

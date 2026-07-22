@@ -41,6 +41,7 @@ public struct DocumentOutline: Equatable, Sendable {
         var sections: [OutlineSection] = []
         var topic: String? = nil
         var offset = 0
+        var insideCodeBlock = false
         let totalLength = text.utf16.count
 
         // Split preserving structure; each line's UTF-16 length + 1 newline
@@ -50,6 +51,14 @@ public struct DocumentOutline: Equatable, Sendable {
             let lineLength = line.utf16.count
             let hasNewline = index < lines.count - 1
             defer { offset += lineLength + (hasNewline ? 1 : 0) }
+
+            if isCodeFenceLine(line) {
+                insideCodeBlock.toggle()
+                continue
+            }
+            // A "# comment" inside a fenced code block isn't a real heading —
+            // skip it so it doesn't corrupt the section map used for AI feedback.
+            guard !insideCodeBlock else { continue }
 
             guard let heading = parseHeadingLine(line) else { continue }
             let bodyStart = offset + lineLength + (hasNewline ? 1 : 0)
@@ -81,6 +90,21 @@ public struct DocumentOutline: Equatable, Sendable {
         self.topic = topic
         self.sections = sections
         self.length = length
+    }
+
+    /// A fenced code block delimiter: up to 3 leading spaces, then 3+
+    /// backticks or tildes. Mirrors EditorStyler's fence detection so the
+    /// outline and the live editor agree on what counts as code.
+    private static func isCodeFenceLine(_ line: String) -> Bool {
+        var rest = Substring(line)
+        var indent = 0
+        while indent < 3, rest.first == " " {
+            indent += 1
+            rest = rest.dropFirst()
+        }
+        let fenceChar = rest.first
+        guard fenceChar == "`" || fenceChar == "~" else { return false }
+        return rest.prefix { $0 == fenceChar }.count >= 3
     }
 
     private static func parseHeadingLine(_ line: String) -> (level: Int, title: String, excluded: Bool)? {
