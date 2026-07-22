@@ -424,13 +424,6 @@ final class AppState: ObservableObject {
         scheduleAutosave()
     }
 
-    /// Puts a suggestion away without judging it: it leaves the screen but
-    /// records nothing, so the editor may raise the point again on a later
-    /// analysis. (The Teleprompter rail's ×.)
-    func hide(_ item: FeedbackItem) {
-        feedbackItems.removeAll { $0.id == item.id }
-    }
-
     /// Rejects a suggestion for good: its fingerprint is remembered per note
     /// and it will not be shown again.
     func reject(_ item: FeedbackItem) {
@@ -569,7 +562,7 @@ final class AppState: ObservableObject {
 
     /// Turns protection on: encrypts every note on disk under a fresh master
     /// key wrapped by `password`. The app stays unlocked afterwards.
-    /// Key derivation (600k PBKDF2 rounds) runs off the main actor.
+    /// Key derivation (Argon2id, 128 MiB) runs off the main actor.
     func enableProtection(password: String, biometricUnlock: Bool) async throws {
         await flushEditorToStoreNow()
         let (masterKey, config) = try await Task.detached(priority: .userInitiated) {

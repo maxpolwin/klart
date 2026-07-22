@@ -4,7 +4,7 @@
 
 Klårt is a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of writing your notes for you.
 
-It's fast and light (~5 MB app, no bundled browser) and talks to **Ollama**, **LM Studio**, **OpenRouter**, or any OpenAI-compatible endpoint. Notes are plain markdown on your machine; nothing leaves it unless you choose a cloud provider.
+It's fast and light (~5 MB app, no bundled browser) and talks to **Ollama**, **LM Studio**, **OpenRouter**, or any OpenAI-compatible endpoint. Notes are JSON-wrapped markdown on your machine, exportable as plain `.md` at any time; nothing leaves it unless you choose a cloud provider.
 
 > **The app lives in [`KlartMac/`](KlartMac/).** See **[KlartMac/README.md](KlartMac/README.md)** for the full guide — highlights, build & distribution, provider setup, architecture, and the security/encryption model. This page is the short version.
 
@@ -12,8 +12,8 @@ It's fast and light (~5 MB app, no bundled browser) and talks to **Ollama**, **L
 
 ## Highlights
 
-- **Native SwiftUI, "Teleprompter" design** — by default one centered, monochrome column and nothing else on screen: notes wait behind the left edge (dots → hover 0.8 s → full panel with search), the AI editor's suggestions appear as margin notes on the right — matched to the text sections they refer to, marked with glyphs instead of colored pills — when summoned via `⌘.` or by typing `/editor`, and fade away again while you keep writing. Optional word count/reading time at the foot; the classic sidebar + accent-color layout is one toggle away in Settings → Interface.
-- **Live markdown editor** — headings resize as you type (`#`, `##`, `###`), list markers and quotes are tinted, fenced code blocks and `**bold**` / `*italic*` / `` `code` `` style inline while the text stays plain markdown. Lists continue on <kbd>Enter</kbd>.
+- **Native SwiftUI, "Teleprompter" design** — by default one centered, monochrome column and nothing else on screen: notes wait behind the left edge (dots → hover 0.8 s → full panel with search), the AI editor's suggestions appear as margin notes on the right — matched to the text sections they refer to, marked with glyphs instead of colored pills — when summoned via `⌘E` or by typing `/editor`, and fade away again while you keep writing. Optional word count/reading time at the foot; the classic sidebar + accent-color layout is one toggle away in Settings → Interface.
+- **Live markdown editor** — headings resize as you type (`#`, `##`, `###`), list markers are tinted and quote lines dimmed, `- [ ]` task items get a dimmed checkbox and strike through once checked, and fenced code blocks and `**bold**` / `*italic*` / `` `code` `` / `~~strike~~` style inline — the syntax markers themselves are hidden on every line but the one the cursor is on, so a note reads like the rendered result while the text stays plain markdown. Lists continue on <kbd>Enter</kbd>.
 - **Coaching, not ghostwriting** — feedback types: **Gap**, **MECE**, **Source**, **Structure**, **Clarity**, and **Question** (Socratic), plus one-tap coach actions (*Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps*).
 - **Local-first & private** — notes live in `~/Library/Application Support/Klart/Notes`; API keys live in the macOS Keychain; no telemetry. Optional at-rest note encryption with app lock, Touch ID unlock, and auto-lock.
 - **Any LLM** — Ollama, LM Studio, OpenRouter, or any OpenAI-compatible server. Model lists are fetched live from the provider.
@@ -35,7 +35,7 @@ swift test                 # run the unit tests
 bash Scripts/make-app.sh   # build a distributable Klart.app → dist/
 ```
 
-CI builds, tests, and packages the app on every push — see [`.github/workflows/macos-app.yml`](.github/workflows/macos-app.yml). Full build, signing, and notarization instructions are in [KlartMac/README.md](KlartMac/README.md#build--run).
+CI builds, tests, and packages the app on every push to `main` or a `claude/**` branch that touches `KlartMac/` — see [`.github/workflows/macos-app.yml`](.github/workflows/macos-app.yml). Full build, signing, and notarization instructions are in [KlartMac/README.md](KlartMac/README.md#build--run).
 
 ## Repository layout
 

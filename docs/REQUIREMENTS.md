@@ -31,7 +31,7 @@ Klårt is a **thinking coach that lives in your notes** — a minimal, native ma
 ### 1.2 Key Value Propositions
 
 - **Coaching, not ghostwriting** — the AI critiques and questions; it never edits the document without an explicit accept.
-- **Local-first & private** — notes are plain markdown files on your machine; API keys live in the macOS Keychain; no telemetry. Optional at-rest encryption with app lock.
+- **Local-first & private** — notes are plain JSON-wrapped markdown files on your machine; API keys live in the macOS Keychain; no telemetry. Optional at-rest encryption with app lock.
 - **Any LLM** — Ollama, LM Studio, OpenRouter, or any OpenAI-compatible endpoint; model lists fetched live from the provider.
 - **Native & light** — ~5 MB app, no bundled browser; follows the system light/dark appearance.
 
@@ -126,15 +126,15 @@ Notes are stored as markdown (not HTML). See §7 for the model.
 | `clarity` | Clarity | ✅ | Vague or ambiguous claims |
 | `question` | Question | ✅ | A probing Socratic question |
 | `source` | Source | ⬜ | Missing citations / evidence |
-| `other` | Note | ⬜ | Uncategorized (filtered out of results) |
+| `other` | Note | ⬜ | Uncategorized — never requested, but the parser's fallback for a `type` Klårt doesn't recognize |
 
 Default enabled set is `[gap, mece, structure, clarity, question]`.
 
-**Item actions:** **Insert** (adds the suggestion into the note as a `> ✎ <label>:` blockquote at the section end) or **Dismiss** (hidden permanently for that note). Dismissals are remembered by a content **fingerprint** (FNV-1a over `kind + normalized text`), so regeneration doesn't resurface them.
+**Item actions:** **Insert** (adds the suggestion into the note as a `> ✎ <label>:` blockquote at the end of the section the cursor is in — `NoteEditing.insertSuggestion`, not necessarily the section the tip names) or **Dismiss** (hidden permanently for that note). Dismissals are remembered by a content **fingerprint** (FNV-1a over `kind + normalized text`), so regeneration doesn't resurface them.
 
 ### 3.3 Coach actions
 
-Four one-tap actions (`CoachAction`), also in the **Coach** menu, that stream a response (< 250 words) into the popover:
+Four one-tap actions (`CoachAction`), also in the **Editor** menu, that stream a response (< 250 words) into the classic layout's coach popover:
 
 | Action | Label |
 |--------|-------|
@@ -145,7 +145,7 @@ Four one-tap actions (`CoachAction`), also in the **Coach** menu, that stream a 
 
 ### 3.4 Section control
 
-Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis. Any note can be marked **sensitive** (toolbar shield in the classic layout; **File ▸ Mark Sensitive** in either layout); sensitive notes refuse all non-local AI requests in code (see §4.3).
+Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis. Any note can be marked **sensitive** (toolbar shield in the classic layout, the shield beside the pinned title in the Teleprompter; **File ▸ Mark Sensitive** in either layout); sensitive notes refuse all non-local AI requests in code (see §4.3).
 
 ### 3.5 Interface modes (`TeleprompterView.swift`, `ContentView.swift`)
 
@@ -154,10 +154,10 @@ Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`
 **Teleprompter (default).** One centered column (max 720 pt) of text in a chromeless window (hidden title bar, full-size content view); monochrome — no accent hue anywhere on the surface (see §6). Requirements:
 
 - **Left edge — notes.** Nothing visible while writing. Pointer at the left edge (≤ 26 pt) reveals a spine of dots, one per note (max 14, newest first; current note in full ink; click switches directly). Dwelling on the dots for **0.8 s** expands the panel: note title, last-modified date, shield mark when sensitive, search field (`⌘F` opens it directly), delete via context menu, New Note + Settings in the footer. Typing collapses dots and panel immediately.
-- **The editor (AI) is summoned, never ambient.** Analysis runs in the background as always, but its results appear only on demand: the **¶** button above the panel's search field ("Show editor" on hover, with a count when suggestions wait), `⌘.`, or typing **`/editor`** in the note (the command text is stripped before the note is saved — `MarkdownEditor.onCommand`).
-- **Right margin rail.** Each suggestion renders as a card vertically **anchored to the section it refers to** (heading line position via the AppKit layout manager through `EditorBridge`, live on scroll/edit, single downward collision pass so cards never overlap). Cards carry a monochrome kind glyph (§6) instead of a colored pill, the observation, **Insert** (when content exists), **Dismiss** (permanent, fingerprint recorded), and **→** which sets the card aside without recording anything — it slides out toward the right edge and may return on a later analysis.
+- **The editor (AI) is summoned, never ambient.** Analysis runs in the background as always, but its results appear only on demand: the **¶** button above the panel's search field ("Show editor" on hover, with a count when suggestions wait), `⌘E`, or typing **`/editor`** in the note (the command text is stripped before the note is saved — `MarkdownEditor.onCommand`).
+- **Right margin rail.** Each suggestion renders as a card vertically **anchored to the section it refers to** (heading line position via the AppKit layout manager through `EditorBridge`, live on scroll/edit, single downward collision pass so cards never overlap), in a rail as wide as its widest current note needs — `EditorRailMetrics` measures the text, clamped to 200–264 pt — so a short round of notes reserves less margin than a long one. Cards carry a monochrome kind glyph (§6) instead of a colored pill, the observation, **Insert** (when content exists) and **Dismiss** (permanent, fingerprint recorded) — and nothing else, so a card that is only read costs no decision. A handled card slides out toward the right edge as it leaves. A chevron at the rail's near edge, level with the pinned title, closes it — the one control on the rail itself, so putting the notes away doesn't mean reaching for `⌘E` or the panel at the far edge.
 - **Fade-out.** If the user keeps typing, the rail fades after **5 minutes over 20 seconds** (Reduce Motion: near-instant at the same moment) and the surface returns to focus mode. Hovering the rail, or fresh suggestions, restores it and resets the countdown; an untouched rail with no typing stays.
-- **Pinned title.** The note's derived title stays visible at the top (under a background-fog gradient), with the shield mark when sensitive.
+- **Pinned title.** The note's derived title stays visible at the top (under a background-fog gradient), with a shield beside it: outlined normally, filled when the note is sensitive, and clicking it toggles the mark — so it stays discoverable instead of appearing only once set.
 - **Word count (optional).** `settings.showWordCount` (default off) shows "N words · M min read" at the foot (`NoteMetrics`, §5 — markdown-aware, 200 wpm).
 
 **Classic.** The pre-Teleprompter layout: Constellation sidebar, unified toolbar (Analyze, shield, coach pill), coach popover. Unchanged behavior.
@@ -186,7 +186,7 @@ Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`
 
 - **`PromptBuilder`** — assembles the coaching prompt from the current section plus the outline; budgets: `sectionBudget = 8000`, `coachBudget = 12000` chars (over-budget text is head+tail clipped with `[…]`). The system prompt demands strict JSON: `{"feedback":[{"type":"gap","text":"…","suggestion":"…"}]}`.
 - **`FeedbackParser`** — forgiving: strips code fences, extracts the first balanced JSON value (string/escape aware), and salvages complete items from a truncated array. Loose `type` strings are mapped onto `FeedbackKind` by substring.
-- **`FeedbackEngine`** — skips content under 80 chars (`SkipReason.tooShort`), excluded sections, or when no kinds are enabled; runs in JSON mode; caps results at `tipStyle.maxTips`; filters rejected fingerprints and drops `.other`.
+- **`FeedbackEngine`** — skips content under 80 chars (`SkipReason.tooShort`), excluded sections, or when no kinds are enabled; runs in JSON mode; caps results at `tipStyle.maxTips`; filters rejected fingerprints. `.other` is never among the kinds it asks the model for, though the parser still falls back to it when the model names a type Klårt doesn't recognize.
 
 ### 4.3 Transport security & sensitive-note enforcement
 
@@ -198,18 +198,18 @@ Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`
 
 ## 5. Editor & Markdown
 
-The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextView` (`KlartTextView`) with live, per-paragraph styling — markdown stays markdown, it is never converted to rich text. It re-styles per paragraph while typing and fully on paste / note-switch. A fresh editor (and undo stack) is created per note.
+The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextView` (`KlartTextView`) with live, per-paragraph styling — markdown stays markdown, it is never converted to rich text. It re-styles per paragraph while typing, fully on paste / note-switch, and on both sides of every cursor move. Syntax markers are hidden from layout on every line except the one the cursor is in (tagged `.klartHiddenMarker`, nulled by the layout-manager delegate), so the page reads as rendered markdown while the characters stay in the file and the line being edited stays raw. A fresh editor (and undo stack) is created per note.
 
 **Constructs styled/handled** (`EditorStyler`):
 
 | Construct | Behavior |
 |-----------|----------|
-| ATX headings `#`–`######` | Leading marker kept body-size and dimmed; only heading text enlarged. H1 26 / H2 20 / H3 17 / H4–H6 15 pt, semibold; inline emphasis still applied inside, scaled to the heading's size. A `#` not followed by a space/tab (a hashtag, "C#", "#1") is left as plain text, not a heading |
+| ATX headings `#`–`######` | Leading marker kept body-size and dimmed on the line being edited, hidden from layout on every other line; only heading text enlarged. H1 26 / H2 20 / H3 17 / H4–H6 15 pt, semibold; inline emphasis still applied inside, scaled to the heading's size. A `#` not followed by a space/tab (a hashtag, "C#", "#1") is left as plain text, not a heading |
 | Fenced code blocks ` ``` ` / `~~~` | Rendered verbatim in code font; contents never parsed as headings/lists/emphasis. Open-fence state scanned from top of document |
 | Lists `-` `*` `+` `1.` `1)` | Markers tinted; continue on <kbd>Enter</kbd> (ordered numbers increment, indent preserved); empty item + Enter exits the list; suppressed inside code fences and on horizontal rules |
 | Task lists `- [ ]` / `- [x]` | Checkbox dimmed; checked items struck through and dimmed |
-| Inline `**bold**` / `*italic*` / `_italic_` / `` `code` `` | Styled inline; syntax markers dimmed at the edges |
-| Strikethrough `~~text~~` | Single strikethrough; edge markers dimmed |
+| Inline `**bold**` / `*italic*` / `_italic_` / `` `code` `` | Styled inline; syntax markers at the edges dimmed on the line being edited, hidden from layout elsewhere |
+| Strikethrough `~~text~~` | Single strikethrough; edge markers dimmed on the line being edited, hidden elsewhere |
 | Blockquote `>` | Dimmed 14 pt; inline emphasis still applied inside |
 | Horizontal rules `---` / `***` / `___` | Dimmed |
 | Escaped `\*` `` \` `` `\_` | Not treated as emphasis/code |
@@ -372,8 +372,8 @@ Settings UI (`Sources/KlartApp/Views/SettingsView.swift`) covers:
 
 1. **Interface** — Teleprompter mode on/off (§3.5), word count + estimated reading time on/off.
 2. **AI Provider** — active provider (Ollama / LM Studio / OpenRouter / Custom), endpoint, model (with live **Test Connection** model list), API key (stored in Keychain), temperature, max tokens.
-3. **Coaching** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
-4. **Security** — enable/disable the encrypted vault, Touch ID unlock, auto-lock timeout, lock-on-sleep, exclude-from-capture, key rotation.
+3. **Editor** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
+4. **Security** — enable/disable the encrypted vault, Touch ID unlock, auto-lock timeout, lock-on-sleep, exclude-from-capture, change password, key rotation.
 
 Out-of-range values are clamped on decode (see §7.3).
 
@@ -394,13 +394,13 @@ bash Scripts/notarize-app.sh   # submit to Apple + staple
 
 ### 10.2 Distribution
 
-- **Format:** signed `Klart.app` and `Klart.dmg`. Single platform: **macOS** (universal, per Xcode toolchain).
+- **Format:** signed `Klart.app` and `Klart.dmg`. Single platform: **macOS**, built for the architecture of the build machine — `make-app.sh` is a plain `swift build -c release`, so nothing here produces a universal binary.
 - **Signing:** Developer ID + **Hardened Runtime** + **App Sandbox** (outgoing network only, plus user-picked files for export/import). `make-app.sh` fails the build if either flag is missing from the signature.
-- **CI:** `.github/workflows/macos-app.yml` builds, tests, and packages on every push; uploads `Klart.app` and (ad-hoc or Developer-ID-signed) `Klart.dmg` artifacts. Full signing/notarization secrets are documented in `KlartMac/README.md`.
+- **CI:** `.github/workflows/macos-app.yml` builds, tests, and packages on every push to `main` or a `claude/**` branch that touches `KlartMac/`; uploads `Klart.app` and (ad-hoc or Developer-ID-signed) `Klart.dmg` artifacts, and on `main` refreshes the `latest` GitHub release with the DMG so there is one permanent download link that needs no login. Full signing/notarization secrets are documented in `KlartMac/README.md`.
 
 ### 10.3 Tests
 
-`Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), and end-to-end vault lifecycle (`VaultLifecycleTests`).
+`Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), end-to-end vault lifecycle (`VaultLifecycleTests`), the shared ATX heading rule (`MarkdownHeadingTests`), word count and reading time (`NoteMetricsTests`), and note titles and previews (`NoteTests`).
 
 ---
 

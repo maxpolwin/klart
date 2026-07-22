@@ -6,7 +6,7 @@ lives in the interface and *how much attention* it is allowed to demand.
 
 > **Status:** design-history record. This ideation predates the native Swift/SwiftUI
 > rebuild. **Alternative 3 — "Ambient Focus"** shipped first as the "Quiet" layout
-> (no persistent AI chrome, a toolbar pill that opens the coach on click or `⌘.`),
+> (no persistent AI chrome, a toolbar pill that opens the coach on click or `⌘E`),
 > and has since evolved into the **Teleprompter** surface — the current default —
 > which pushes the same calm-technology thesis further: zero persistent chrome,
 > monochrome, notes behind the left edge, and the coach's suggestions as
@@ -26,11 +26,13 @@ lives in the interface and *how much attention* it is allowed to demand.
    Never block typing while analyzing. Show *why* nothing appeared ("note too short",
    "model offline"), not just silence.
 2. **User control and consent** — auto-analysis must be a visible, reversible toggle
-   (implemented in the editor header as the "Auto" button). On-demand "Analyze" is always
-   available. AI never modifies the document without an explicit accept.
+   (implemented in Settings → Editor as "Analyze automatically while I write").
+   On-demand "Analyze" is always available. AI never modifies the document without an
+   explicit accept.
 3. **Explainability and provenance** — every tip carries its type (Gap, Source, …), what
    text it refers to, and which model produced it. Users can preview and *edit* generated
-   content before it enters their document (implemented in the feedback panel).
+   content before it enters their document (preview shipped as the feedback panel's
+   "Suggested content" disclosure; in-place editing did not).
 4. **Graceful error and empty states** — errors are announced via `role="alert"`, are
    dismissible, and self-expire. An empty result is a state, not a bug: say so.
 5. **Local-first privacy framing** — the UI should state clearly when analysis runs
@@ -60,8 +62,9 @@ lives in the interface and *how much attention* it is allowed to demand.
 
 **Layout.** The editor column stays centered. A slim annotation rail sits to its right.
 Each AI tip renders as a small marker (colored dot + type label) vertically aligned with
-the paragraph it refers to (`relevantText` anchoring). Hover/focus expands the marker
-into a card with the tip text, an editable suggestion, and Accept / Reject / Copy.
+the paragraph it refers to (anchored on the tip's `section` — the only locator a
+`FeedbackItem` carries). Hover/focus expands the marker into a card with the tip text,
+an editable suggestion, and Accept / Reject / Copy.
 
 **Interaction model.**
 - Tips appear where the problem is — no scrolling to a bottom panel.
@@ -79,8 +82,9 @@ labelled "AI suggestions"; each card is announced with its type and target sente
 rail is skippable via a skip-link; cards trap no focus.
 
 **Trade-offs / effort.** Highest layout complexity (position syncing while typing);
-needs ProseMirror decorations for anchor highlights. Effort: **high** — but most of the
-data model (per-tip `relevantText`) already exists.
+needs ProseMirror decorations for anchor highlights. Effort: **high** — but part of the
+data model already exists: a per-tip `section`, at section rather than paragraph
+granularity.
 
 ---
 
@@ -123,7 +127,7 @@ filter/refine controls, no anchoring math.
 **Metaphor:** writing first; AI as a quiet heads-up display.
 
 **Layout.** No persistent AI chrome at all. While writing, the only AI element is a
-small status pill in the header ("3 tips ready · on-device"). Pressing `⌘.` (or
+small status pill in the header ("3 tips ready · on-device"). Pressing `⌘E` (or
 clicking the pill) slides up a bottom drawer with the tips — the same editable cards —
 over a dimmed backdrop. The drawer also hosts a one-line "tip digest" summary
 ("Mostly missing sources in section 'Methods'").
@@ -132,7 +136,7 @@ over a dimmed backdrop. The drawer also hosts a one-line "tip digest" summary
 - Analysis runs silently in the background (or on demand when Auto is off); results
   *never* appear mid-viewport. The pill count incrementing is the only signal.
 - Drawer supports swipe-down / `Esc` dismissal; everything else matches the current
-  panel (accept, edit, copy, reject).
+  panel (Insert and Dismiss).
 - First-class theming: light/dark/system with tokens already defined in
   `global.css` — the calm aesthetic depends on correct `prefers-color-scheme` support
   and softer elevation instead of glows.

@@ -14,11 +14,22 @@ import KlartKit
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
 ///   the panel, ⌘E, or typing /editor — each aligned to the section of text
-///   it refers to, wearing a glyph instead of a colored pill. → moves a note
-///   out of sight for now; Dismiss retires it for good. Keep writing and the
-///   rail fades away on its own.
+///   it refers to, wearing a glyph instead of a colored pill. Dismiss retires
+///   a note for good; otherwise just keep writing and the whole rail fades
+///   away on its own.
 /// - The note's title stays pinned at the top; an optional word-count line
 ///   (Settings → Interface) sits at the bottom.
+///
+/// One spring drives every motion in this file — the left edge's dots→panel
+/// expand, the right rail's slide-in/reflow, and each suggestion card
+/// settling into its anchored position — so nothing here can drift out of
+/// sync with anything else the way `calmAnimation` and `EditorRail`'s own
+/// literal spring once quietly had.
+private enum TeleprompterMotion {
+    static let duration: Double = 0.3
+    static let bounce: Double = 0.1
+}
+
 struct TeleprompterView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.openSettings) private var openSettings
@@ -63,11 +74,6 @@ struct TeleprompterView: View {
         static let railFadeDelay: Double = 5 * 60
         /// …over this long, so focus returns gradually.
         static let railFadeDuration: Double = 20
-        /// Shared, unhurried pace for both slides — dots→panel and the
-        /// editor's margin rail — so summoning either always feels the same
-        /// calm speed.
-        static let calmAnimationDuration: Double = 0.45
-        static let calmAnimationBounce: Double = 0.12
     }
 
     var body: some View {
@@ -157,11 +163,11 @@ struct TeleprompterView: View {
         .animation(calmAnimation, value: railWidth)
     }
 
-    /// The shared, unhurried spring behind every slide in the Teleprompter
-    /// chrome — the dots→panel expand and the editor's margin rail — so both
-    /// always move at the same calm speed.
+    /// The shared spring behind every slide in the Teleprompter chrome — the
+    /// dots→panel expand and the editor's margin rail — so both always move
+    /// at exactly the same curve. See `TeleprompterMotion`.
     private var calmAnimation: Animation? {
-        reduceMotion ? nil : .spring(duration: Metrics.calmAnimationDuration, bounce: Metrics.calmAnimationBounce)
+        reduceMotion ? nil : .spring(duration: TeleprompterMotion.duration, bounce: TeleprompterMotion.bounce)
     }
 
     /// How wide the rail needs to be to hold its widest current note without
@@ -315,7 +321,11 @@ struct TeleprompterView: View {
         )
         .padding(.leading, 8)
         .frame(maxHeight: .infinity, alignment: .center)
-        .transition(.opacity.combined(with: .move(edge: .leading)))
+        // A pure slide, no fade: fading at the same time as the move hides
+        // most of the spring's travel behind low opacity, which is why the
+        // right rail (a plain numeric spring on the column's padding, no
+        // opacity at all) reads as springy and this didn't.
+        .transition(.move(edge: .leading))
         .onHover { inside in
             hoveringDots = inside
             if inside {
@@ -379,7 +389,10 @@ struct TeleprompterView: View {
             Rectangle().fill(Theme.border).frame(width: 1)
         }
         .shadow(color: .black.opacity(0.10), radius: 18, x: 6, y: 0)
-        .transition(.move(edge: .leading).combined(with: .opacity))
+        // Same reasoning as the dot spine: no opacity fade, so the spring
+        // actually carries the panel's 268 pt slide instead of hiding most
+        // of it behind translucency.
+        .transition(.move(edge: .leading))
         .onHover { inside in
             hoveringPanel = inside
             if inside {
@@ -599,6 +612,11 @@ struct TeleprompterView: View {
             Spacer(minLength: 0)
             EditorRail(bridge: bridge, topInset: Metrics.titleBarHeight + 8)
                 .frame(width: railWidth)
+                // The writing column's mirrored trailing padding (railWidth,
+                // above) already springs on width changes; without this the
+                // rail's own edge would snap to the new width instead of
+                // moving with it whenever the widest note changes mid-session.
+                .animation(calmAnimation, value: railWidth)
                 .opacity(railOpacity)
                 // Reaching for the notes restores them and resets the fade.
                 .onHover { inside in
@@ -676,7 +694,7 @@ struct TeleprompterView: View {
 
 // MARK: - Rail width measurement
 
-/// How wide a rail card's own chrome (padding, glyph column, set-aside arrow)
+/// How wide a rail card's own chrome (padding, glyph column, action row)
 /// needs beyond its text — not pixel-exact, just enough to keep the rail from
 /// hugging so tight the chrome clips. `TeleprompterView.railWidth` caps the
 /// result against `Metrics.railMaxWidth`, so long prose still wraps exactly
@@ -734,8 +752,9 @@ private struct EditorRail: View {
                         RailCard(item: placement.item)
                             .background(heightReader(for: placement.item.id))
                             .offset(y: placement.y)
-                            // Set-aside notes slide out to the right — moved,
-                            // not destroyed — matching the → that sent them.
+                            // A handled note leaves toward the margin it came
+                            // from, so the eye follows it out instead of
+                            // noticing a gap appear mid-rail.
                             .transition(.asymmetric(
                                 insertion: .opacity,
                                 removal: .move(edge: .trailing).combined(with: .opacity)
@@ -747,8 +766,10 @@ private struct EditorRail: View {
         }
         .padding(.trailing, 14)
         .onPreferenceChange(RailCardHeightKey.self) { cardHeights = $0 }
-        .animation(reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.1),
-                   value: state.feedbackItems)
+        .animation(
+            reduceMotion ? nil : .spring(duration: TeleprompterMotion.duration, bounce: TeleprompterMotion.bounce),
+            value: state.feedbackItems
+        )
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Editor suggestions")
     }
@@ -850,8 +871,8 @@ private struct RailCardHeightKey: PreferenceKey {
 
 /// One editor note: a monochrome glyph in place of the colored pill, the
 /// observation, then quiet actions — Insert when there is content to take,
-/// Dismiss to never see the point again, and a → that merely moves the note
-/// out of sight for now.
+/// and Dismiss to never see the point again. Nothing else: a card that is
+/// only read costs no decision, and the whole rail retires on its own.
 private struct RailCard: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
@@ -876,20 +897,6 @@ private struct RailCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
-                // An arrow, not an × — the note isn't destroyed, it's moved
-                // out of sight (and may return on a later analysis).
-                Button {
-                    state.hide(item)
-                } label: {
-                    Text("→")
-                        .font(.system(size: 12, weight: .medium, design: .monospaced))
-                        .foregroundStyle(hovering ? Theme.textSecondary : Theme.textTertiary)
-                        .frame(width: 16, height: 16)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help("Move this note out of sight for now — it may come back on a later analysis")
-                .accessibilityLabel("Set suggestion aside")
             }
 
             Text(item.text)
