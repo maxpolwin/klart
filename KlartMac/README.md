@@ -48,7 +48,13 @@ swift test
 bash Scripts/make-app.sh
 ```
 
-CI builds and tests the app on every push (see `.github/workflows/macos-app.yml`) and uploads a ready-to-run `Klart.app` and an ad-hoc-signed `Klart.dmg` artifact — fine for testing on your own Mac, but ad-hoc signing (no `SIGN_IDENTITY` secret is configured in CI) still shows a Gatekeeper warning for anyone else. For a DMG you can hand to other people with no warning, build and notarize it locally with your own Developer ID:
+CI builds and tests the app on every push (see `.github/workflows/macos-app.yml`) and uploads a ready-to-run `Klart.app` and `Klart.dmg` as both a workflow artifact and, on pushes to `main`, a rolling GitHub Release — always downloadable at:
+
+```
+https://github.com/maxpolwin/klart/releases/latest/download/Klart.dmg
+```
+
+Until the signing/notarization secrets below are configured, that DMG is only ad-hoc signed and still shows a Gatekeeper warning for anyone besides the machine that built it (the release notes on each build say which state it's in). For a DMG you can hand to other people with no warning, either configure the CI secrets (see "Distributing to testers" below) or build and notarize it locally with your own Developer ID:
 
 ```bash
 ID="Developer ID Application: Your Name (TEAM1234ID)"   # from: security find-identity -v -p codesigning
@@ -62,7 +68,7 @@ The last step needs a paid Apple Developer Program membership and one-time notar
 
 ## Distributing to testers (CI-signed builds)
 
-Once the following repository secrets exist (GitHub → Settings → Secrets and variables → Actions), every CI run produces a Developer-ID-signed — and, with the notary secrets, notarized and stapled — `Klart.dmg` artifact you can hand straight to testers, no Gatekeeper warning:
+Once the following repository secrets exist (GitHub → Settings → Secrets and variables → Actions), every CI run on `main` produces a Developer-ID-signed — and, with the notary secrets, notarized and stapled — `Klart.dmg`, published straight to the rolling release above, no Gatekeeper warning:
 
 | Secret | Value |
 |---|---|

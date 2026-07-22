@@ -10,6 +10,9 @@ on:
       - '.github/workflows/macos-app.yml'
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build-and-test:
     name: Build, test, and package Klart.app
@@ -93,3 +96,27 @@ jobs:
           name: Klart.dmg
           path: KlartMac/dist/Klart.dmg
           if-no-files-found: error
+
+      # Gives a stable, permanent download link (no GitHub login, no artifact
+      # expiry, no zip wrapper) instead of digging through Actions artifacts:
+      # https://github.com/<owner>/<repo>/releases/latest/download/Klart.dmg
+      - name: Publish latest release
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          if [ "$HAVE_SIGNING" = "true" ] && [ "$HAVE_NOTARY" = "true" ]; then
+            STATUS="✅ Signed with a Developer ID and notarized by Apple — installs with no Gatekeeper warning."
+          elif [ "$HAVE_SIGNING" = "true" ]; then
+            STATUS="⚠️ Signed with a Developer ID but not notarized (notarization secrets are missing) — first launch shows one Gatekeeper prompt."
+          else
+            STATUS="⚠️ Ad-hoc signed only (no Developer ID configured) — Gatekeeper will block it as from an unidentified developer until the signing secrets are added. See KlartMac/README.md → \"Distributing to testers\"."
+          fi
+          NOTES=$(printf '%s\n\nBuilt from commit %s on %s.' "$STATUS" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          if gh release view latest >/dev/null 2>&1; then
+            gh release upload latest dist/Klart.dmg --clobber
+            gh release edit latest --title "Klårt (latest build)" --notes "$NOTES"
+          else
+            gh release create latest dist/Klart.dmg --title "Klårt (latest build)" --notes "$NOTES"
+          fi
