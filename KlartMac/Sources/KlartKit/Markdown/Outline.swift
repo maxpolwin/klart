@@ -108,15 +108,8 @@ public struct DocumentOutline: Equatable, Sendable {
     }
 
     private static func parseHeadingLine(_ line: String) -> (level: Int, title: String, excluded: Bool)? {
-        var level = 0
-        var rest = Substring(line)
-        while rest.first == "#" {
-            level += 1
-            rest = rest.dropFirst()
-        }
-        guard level >= 1, level <= 6 else { return nil }
-        guard rest.first == " " || rest.first == "\t" else { return nil }
-        var title = rest.trimmingCharacters(in: .whitespaces)
+        guard let level = MarkdownHeading.level(of: line) else { return nil }
+        var title = Substring(line).dropFirst(level).trimmingCharacters(in: .whitespaces)
         var excluded = false
         // Strip a trailing [no-ai] tag (case-insensitive).
         if let range = title.range(of: "[no-ai]", options: [.caseInsensitive, .backwards]) {

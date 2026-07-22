@@ -159,11 +159,13 @@ struct MarkdownEditor: NSViewRepresentable {
 
 enum EditorStyler {
     static let bodyFont = NSFont.systemFont(ofSize: 15)
-    static let boldFont = NSFont.systemFont(ofSize: 15, weight: .semibold)
-    static let italicFont: NSFont = {
-        let descriptor = NSFont.systemFont(ofSize: 15).fontDescriptor.withSymbolicTraits(.italic)
-        return NSFont(descriptor: descriptor, size: 15) ?? .systemFont(ofSize: 15)
-    }()
+    static func boldFont(ofSize size: CGFloat) -> NSFont {
+        .systemFont(ofSize: size, weight: .semibold)
+    }
+    static func italicFont(ofSize size: CGFloat) -> NSFont {
+        let descriptor = NSFont.systemFont(ofSize: size).fontDescriptor.withSymbolicTraits(.italic)
+        return NSFont(descriptor: descriptor, size: size) ?? .systemFont(ofSize: size)
+    }
     static let codeFont = NSFont.monospacedSystemFont(ofSize: 13.5, weight: .regular)
     static let textColor = Theme.nsTextPrimary
     static let quoteColor = Theme.nsTextSecondary
@@ -263,7 +265,7 @@ enum EditorStyler {
                 return
             }
 
-            if let level = headingLevel(of: line) {
+            if let level = MarkdownHeading.level(of: line) {
                 // Keep the leading # marker at body size and dimmed, so only the
                 // actual heading text is enlarged — otherwise the marker itself
                 // renders at heading size and stays as visible as a plain "#".
@@ -276,6 +278,10 @@ enum EditorStyler {
                 storage.addAttribute(.font, value: bodyFont, range: markerRange)
                 storage.addAttribute(.foregroundColor, value: markerColor, range: markerRange)
                 storage.addAttribute(.font, value: headingFont(level: level), range: textRange)
+                // A heading can still carry bold/italic/code/strikethrough —
+                // style it at the heading's own size so emphasis doesn't
+                // shrink back down to body text.
+                styleInline(line, lineRange: lineRange, in: storage, emphasisFontSize: headingFont(level: level).pointSize)
             } else if isHorizontalRule(line) {
                 storage.addAttribute(.foregroundColor, value: markerColor, range: lineRange)
             } else if line.hasPrefix(">") {
@@ -426,8 +432,15 @@ enum EditorStyler {
     /// Live inline markdown: **bold**, *italic* / _italic_, `code`.
     /// The surrounding syntax markers are dimmed rather than hidden, so the
     /// text stays plain markdown while reading like the rendered result.
-    private static func styleInline(_ line: String, lineRange: NSRange, in storage: NSTextStorage) {
+    private static func styleInline(
+        _ line: String,
+        lineRange: NSRange,
+        in storage: NSTextStorage,
+        emphasisFontSize: CGFloat = bodyFont.pointSize
+    ) {
         let full = NSRange(location: 0, length: (line as NSString).length)
+        let emphasisBoldFont = boldFont(ofSize: emphasisFontSize)
+        let emphasisItalicFont = italicFont(ofSize: emphasisFontSize)
 
         codeRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
@@ -438,13 +451,13 @@ enum EditorStyler {
         boldRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
-            storage.addAttribute(.font, value: boldFont, range: range)
+            storage.addAttribute(.font, value: emphasisBoldFont, range: range)
             dimEdges(of: range, width: 2, in: storage)
         }
         italicRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
-            storage.addAttribute(.font, value: italicFont, range: range)
+            storage.addAttribute(.font, value: emphasisItalicFont, range: range)
             dimEdges(of: range, width: 1, in: storage)
         }
         strikethroughRegex.enumerateMatches(in: line, range: full) { match, _, _ in
@@ -469,17 +482,6 @@ enum EditorStyler {
             .foregroundColor, value: syntaxColor,
             range: NSRange(location: range.location + range.length - width, length: width)
         )
-    }
-
-    private static func headingLevel(of line: String) -> Int? {
-        var level = 0
-        var rest = Substring(line)
-        while rest.first == "#" {
-            level += 1
-            rest = rest.dropFirst()
-        }
-        guard level >= 1, level <= 6, rest.first == " " || rest.isEmpty else { return nil }
-        return level
     }
 }
 #endif

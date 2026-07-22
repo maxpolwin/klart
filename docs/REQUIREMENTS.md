@@ -106,8 +106,8 @@ The renderer/main-process split of the old Electron build is gone. `AppState` (a
 | Edit | Plain-text markdown with live styling |
 | Save | Debounced autosave (atomic writes); `⌘S` to save now |
 | Delete | Remove note |
-| Title | Computed: first non-empty line, leading `#` stripped, ≤80 chars, else "Untitled" |
-| Preview | Computed: first non-heading line after the title, ≤120 chars |
+| Title | Computed: first non-empty line, leading heading marker (`#`–`######`, valid ATX only) stripped, ≤80 chars, else "Untitled" |
+| Preview | Computed: first non-heading, non-empty line after the title (a "#" not followed by a space/tab is body text, not a heading), ≤120 chars |
 | Export / Import | File menu → Export Notes as Markdown… / Import Markdown Notes… (round-trips its own export headers so re-imports update rather than duplicate) |
 
 Notes are stored as markdown (not HTML). See §7 for the model.
@@ -189,7 +189,7 @@ The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextVi
 
 | Construct | Behavior |
 |-----------|----------|
-| ATX headings `#`–`######` | Leading marker kept body-size and dimmed; only heading text enlarged. H1 26 / H2 20 / H3 17 / H4–H6 15 pt, semibold |
+| ATX headings `#`–`######` | Leading marker kept body-size and dimmed; only heading text enlarged. H1 26 / H2 20 / H3 17 / H4–H6 15 pt, semibold; inline emphasis still applied inside, scaled to the heading's size. A `#` not followed by a space/tab (a hashtag, "C#", "#1") is left as plain text, not a heading |
 | Fenced code blocks ` ``` ` / `~~~` | Rendered verbatim in code font; contents never parsed as headings/lists/emphasis. Open-fence state scanned from top of document |
 | Lists `-` `*` `+` `1.` `1)` | Markers tinted; continue on <kbd>Enter</kbd> (ordered numbers increment, indent preserved); empty item + Enter exits the list; suppressed inside code fences and on horizontal rules |
 | Task lists `- [ ]` / `- [x]` | Checkbox dimmed; checked items struck through and dimmed |

@@ -40,21 +40,30 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
         isSensitive = try c.decodeIfPresent(Bool.self, forKey: .isSensitive) ?? false
     }
 
-    /// Human-readable title derived from the first non-empty line,
-    /// with markdown heading markers stripped.
+    /// Human-readable title derived from the first non-empty line, with a
+    /// leading markdown heading marker stripped — but only when the line is
+    /// actually a valid heading (`# `–`###### `). A "#" used as plain text
+    /// ("#idea", "C# notes", "#1 priority") is left exactly as typed.
     public var title: String {
         for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
-            var line = rawLine.trimmingCharacters(in: .whitespaces)
-            guard !line.isEmpty else { continue }
-            while line.hasPrefix("#") { line.removeFirst() }
-            line = line.trimmingCharacters(in: .whitespaces)
+            let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
+            guard !trimmed.isEmpty else { continue }
+            let line: String
+            if let level = MarkdownHeading.level(of: trimmed) {
+                line = Substring(trimmed).dropFirst(level).trimmingCharacters(in: .whitespaces)
+            } else {
+                line = trimmed
+            }
             guard !line.isEmpty else { continue }
             return String(line.prefix(80))
         }
         return "Untitled"
     }
 
-    /// Short body preview for list rows (first non-heading, non-empty line).
+    /// Short body preview for list rows (first non-heading, non-empty line
+    /// after the title). Only a real heading line is skipped — a line that
+    /// merely starts with "#" without being valid heading syntax counts as
+    /// body text, same as in the title above.
     public var preview: String {
         var sawTitle = false
         for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
@@ -64,7 +73,7 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
                 sawTitle = true
                 continue
             }
-            if line.hasPrefix("#") { continue }
+            if MarkdownHeading.level(of: line) != nil { continue }
             return String(line.prefix(120))
         }
         return ""
