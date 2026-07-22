@@ -5,11 +5,18 @@ All three follow the same cross-cutting best practices (below) and differ in *wh
 lives in the interface and *how much attention* it is allowed to demand.
 
 > **Status:** design-history record. This ideation predates the native Swift/SwiftUI
-> rebuild. **Alternative 3 — "Ambient Focus"** is the direction that shipped: the app
-> has no persistent AI chrome, only a toolbar pill ("N ready") that opens the coach on
-> click or `⌘.`. Implementation references below that mention web mechanics (CSS,
-> ARIA roles, ProseMirror) describe the earlier Electron prototype; the SwiftUI app
-> achieves the same goals with native equivalents (see the note under each principle).
+> rebuild. **Alternative 3 — "Ambient Focus"** shipped first as the "Quiet" layout
+> (no persistent AI chrome, a toolbar pill that opens the coach on click or `⌘.`),
+> and has since evolved into the **Teleprompter** surface — the current default —
+> which pushes the same calm-technology thesis further: zero persistent chrome,
+> monochrome, notes behind the left edge, and the coach's suggestions as
+> section-anchored margin notes that fade while you write (see
+> [`minimalist-monochrome-concepts.html`](minimalist-monochrome-concepts.html) for
+> the ideation and REQUIREMENTS §3.5 for what shipped; the Quiet layout remains as
+> the "classic" toggle in Settings → Interface). Implementation references below
+> that mention web mechanics (CSS, ARIA roles, ProseMirror) describe the earlier
+> Electron prototype; the SwiftUI app achieves the same goals with native
+> equivalents (see the note under each principle).
 
 ## Cross-cutting best practices (apply to every alternative)
 

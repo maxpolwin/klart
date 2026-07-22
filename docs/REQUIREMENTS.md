@@ -86,7 +86,7 @@ KlartMac/
 │   └── KlartApp/               SwiftUI app (macOS-only)
 │       ├── AppState.swift        Single source of truth, debounce/cancellation
 │       ├── Theme.swift           Design tokens
-│       └── Views/                Sidebar, editor, coach panel, settings, lock
+│       └── Views/                Teleprompter surface, sidebar, editor, coach panel, settings, lock
 └── Tests/KlartKitTests/
 ```
 
@@ -145,7 +145,22 @@ Four one-tap actions (`CoachAction`), also in the **Coach** menu, that stream a 
 
 ### 3.4 Section control
 
-Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis. Any note can be marked **sensitive** (toolbar shield); sensitive notes refuse all non-local AI requests in code (see §4.3).
+Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis. Any note can be marked **sensitive** (toolbar shield in the classic layout; **File ▸ Mark Sensitive** in either layout); sensitive notes refuse all non-local AI requests in code (see §4.3).
+
+### 3.5 Interface modes (`TeleprompterView.swift`, `ContentView.swift`)
+
+Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`, default **on**):
+
+**Teleprompter (default).** One centered column (max 720 pt) of text in a chromeless window (hidden title bar, full-size content view); monochrome — no accent hue anywhere on the surface (see §6). Requirements:
+
+- **Left edge — notes.** Nothing visible while writing. Pointer at the left edge (≤ 26 pt) reveals a spine of dots, one per note (max 14, newest first; current note in full ink; click switches directly). Dwelling on the dots for **0.8 s** expands the panel: note title, last-modified date, shield mark when sensitive, search field (`⌘F` opens it directly), delete via context menu, New Note + Settings in the footer. Typing collapses dots and panel immediately.
+- **The editor (AI) is summoned, never ambient.** Analysis runs in the background as always, but its results appear only on demand: the **¶** button above the panel's search field ("Show editor" on hover, with a count when suggestions wait), `⌘.`, or typing **`/editor`** in the note (the command text is stripped before the note is saved — `MarkdownEditor.onCommand`).
+- **Right margin rail.** Each suggestion renders as a card vertically **anchored to the section it refers to** (heading line position via the AppKit layout manager through `EditorBridge`, live on scroll/edit, single downward collision pass so cards never overlap). Cards carry a monochrome kind glyph (§6) instead of a colored pill, the observation, **Insert** (when content exists), **Dismiss** (permanent, fingerprint recorded), and **→** which sets the card aside without recording anything — it slides out toward the right edge and may return on a later analysis.
+- **Fade-out.** If the user keeps typing, the rail fades after **5 minutes over 20 seconds** (Reduce Motion: near-instant at the same moment) and the surface returns to focus mode. Hovering the rail, or fresh suggestions, restores it and resets the countdown; an untouched rail with no typing stays.
+- **Pinned title.** The note's derived title stays visible at the top (under a background-fog gradient), with the shield mark when sensitive.
+- **Word count (optional).** `settings.showWordCount` (default off) shows "N words · M min read" at the foot (`NoteMetrics`, §5 — markdown-aware, 200 wpm).
+
+**Classic.** The pre-Teleprompter layout: Constellation sidebar, unified toolbar (Analyze, shield, coach pill), coach popover. Unchanged behavior.
 
 ---
 
@@ -199,13 +214,31 @@ The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextVi
 | Horizontal rules `---` / `***` / `___` | Dimmed |
 | Escaped `\*` `` \` `` `\_` | Not treated as emphasis/code |
 
-**Outline** (`Sources/KlartKit/Markdown/Outline.swift`): `DocumentOutline.parse` builds `OutlineSection`s with **UTF-16 offsets** (matching the `NSTextView` cursor) — `level`, `title`, `headingStart`, `bodyStart`, `bodyEnd`, `excludedFromAI`. Headings inside code fences are ignored; a trailing `[no-ai]` marks a section excluded. This is the structure the coach uses to know your topic (first H1), which section you're editing, and what the other sections cover.
+**Outline** (`Sources/KlartKit/Markdown/Outline.swift`): `DocumentOutline.parse` builds `OutlineSection`s with **UTF-16 offsets** (matching the `NSTextView` cursor) — `level`, `title`, `headingStart`, `bodyStart`, `bodyEnd`, `excludedFromAI`. Headings inside code fences are ignored; a trailing `[no-ai]` marks a section excluded. This is the structure the coach uses to know your topic (first H1), which section you're editing, and what the other sections cover — and the Teleprompter rail uses `headingStart` to anchor each suggestion card to its section on screen (§3.5).
+
+**Metrics** (`Sources/KlartKit/Markdown/NoteMetrics.swift`): markdown-aware word count (heading markers, bullets, emphasis characters, and fenced code don't count as words) and estimated reading time at 200 wpm — the optional "512 words · 3 min read" line at the foot of the Teleprompter surface.
+
+**Slash commands** (`MarkdownEditor.onCommand`): typing `/editor` at a word boundary summons the editor rail; the command text is removed from the note before the binding updates, so it never reaches disk.
 
 ---
 
 ## 6. Design System
 
 `Sources/KlartApp/Theme.swift` — the "Quiet" palette: system-adaptive light/dark via dynamic `NSColor`s, one accent color, hairline borders, no glass/glow chrome.
+
+**Monochrome (Teleprompter).** While the Teleprompter surface is active (`Theme.monochrome`, kept in sync with settings by `AppState` before any view builds), every hue collapses to ink: `nsMarker` (markdown syntax markers) resolves to `nsTextSecondary` instead of `nsAccentMuted`, `nsInsertionPoint` to `nsTextPrimary` instead of `nsAccent`, and the surface itself uses only the text/background/border tokens. Feedback kinds are distinguished by **glyph + label + tone, never hue** (which also removes the color-blind dependency):
+
+| Kind | Glyph | Drawn from |
+|------|-------|------------|
+| Gap | `◇` | something missing — an unfilled shape |
+| MECE | `⧉` | two frames colliding — overlap |
+| Source | `❝` | a citation to add |
+| Structure | `≡` | stacked, level rules — order |
+| Clarity | `◎` | a mark resolving into focus |
+| Question | `?` | an open, Socratic ask |
+| Other | `·` | — |
+
+(`Theme.glyph(for:)`; light/dark still adapts inside monochrome via the dynamic ink tokens.)
 
 **Core tokens** (light / dark):
 
@@ -280,6 +313,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var autoLockMinutes: Int                       // default 15 (clamped 0…240; 0 = never)
     public var lockOnScreenSleep: Bool                    // default true
     public var excludeFromCapture: Bool                   // default true
+    public var teleprompterMode: Bool                     // default true (§3.5; off = classic layout)
+    public var showWordCount: Bool                        // default false (word count + reading time)
 }
 
 public struct TipStyle: Codable, Equatable, Sendable {
@@ -335,9 +370,10 @@ Optional, off by default (`vault == nil`). Files: `Storage/VaultCrypto.swift`, `
 
 Settings UI (`Sources/KlartApp/Views/SettingsView.swift`) covers:
 
-1. **AI Provider** — active provider (Ollama / LM Studio / OpenRouter / Custom), endpoint, model (with live **Test Connection** model list), API key (stored in Keychain), temperature, max tokens.
-2. **Coaching** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
-3. **Security** — enable/disable the encrypted vault, Touch ID unlock, auto-lock timeout, lock-on-sleep, exclude-from-capture, key rotation.
+1. **Interface** — Teleprompter mode on/off (§3.5), word count + estimated reading time on/off.
+2. **AI Provider** — active provider (Ollama / LM Studio / OpenRouter / Custom), endpoint, model (with live **Test Connection** model list), API key (stored in Keychain), temperature, max tokens.
+3. **Coaching** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
+4. **Security** — enable/disable the encrypted vault, Touch ID unlock, auto-lock timeout, lock-on-sleep, exclude-from-capture, key rotation.
 
 Out-of-range values are clamped on decode (see §7.3).
 

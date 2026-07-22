@@ -67,6 +67,15 @@ struct AppCommands: Commands {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
             Divider()
+            // The Teleprompter surface has no toolbar, so the sensitive
+            // toggle needs a menu home that works in both layouts.
+            Button(
+                state.selectedNote?.isSensitive == true
+                    ? "Unmark Sensitive (Allow Cloud AI)"
+                    : "Mark Sensitive (Local AI Only)"
+            ) { state.toggleSensitive() }
+                .disabled(state.selectedNoteID == nil)
+            Divider()
             Button("Export Notes as Markdown…") { state.exportAllNotesAsMarkdown() }
                 .disabled(state.isLocked || state.notes.isEmpty)
             Button("Import Markdown Notes…") { state.importMarkdownNotes() }
