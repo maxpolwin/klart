@@ -3,6 +3,13 @@ import SwiftUI
 import AppKit
 import KlartKit
 
+private extension NSAttributedString.Key {
+    /// Marks syntax characters (heading `#`s, emphasis `*_`` ` ``~`) that should
+    /// be hidden from layout while the cursor is on another line — the
+    /// live-preview effect. The layout manager delegate nulls these glyphs.
+    static let klartHiddenMarker = NSAttributedString.Key("klartHiddenMarker")
+}
+
 struct EditorView: View {
     @EnvironmentObject var state: AppState
 
@@ -55,9 +62,11 @@ final class KlartTextView: NSTextView {
     }
 }
 
-/// Plain-text markdown editor with live, lightweight styling: headings get
-/// larger fonts, quote lines are dimmed. Styling is applied per edited
-/// paragraph, so typing stays fast in large documents.
+/// Plain-text markdown editor with live styling: headings get larger fonts and
+/// their `#` markers are hidden (revealed only on the line you're editing), and
+/// emphasis markers dim/hide the same way — so notes read like rendered
+/// markdown while the text on disk stays plain markdown. Styling is applied per
+/// edited paragraph, so typing stays fast in large documents.
 struct MarkdownEditor: NSViewRepresentable {
     @Binding var text: String
     var clearClipboardAfterCopy = false
@@ -103,12 +112,13 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.autoresizingMask = [.width]
         textView.typingAttributes = EditorStyler.bodyAttributes
 
-        scrollView.drawsBackground = false
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
+        // Accessing layoutManager pins the view to TextKit 1, whose
+        // shouldGenerateGlyphs delegate is what lets us hide marker glyphs.
+        textView.layoutManager?.delegate = context.coordinator
 
         textView.string = text
         EditorStyler.restyleAll(textView)
+        context.coordinator.lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
         return scrollView
     }
 
@@ -124,12 +134,16 @@ struct MarkdownEditor: NSViewRepresentable {
             EditorStyler.restyleAll(textView)
             let length = (text as NSString).length
             textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+            context.coordinator.lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
         }
     }
 
-    final class Coordinator: NSObject, NSTextViewDelegate {
+    final class Coordinator: NSObject, NSTextViewDelegate, NSLayoutManagerDelegate {
         var parent: MarkdownEditor
         var isEditing = false
+        /// Start location of the paragraph whose markers are currently revealed,
+        /// so a cursor move can re-hide it and reveal the new one.
+        var lastActiveParagraphStart = 0
 
         init(_ parent: MarkdownEditor) {
             self.parent = parent
@@ -141,18 +155,59 @@ struct MarkdownEditor: NSViewRepresentable {
             parent.text = textView.string
             isEditing = false
             EditorStyler.restyleParagraph(around: textView.selectedRange(), in: textView)
+            lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
             parent.onCursorChange(textView.selectedRange().location)
             parent.onTextChange()
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            // Reveal the markers on the line the cursor moved to, re-hide the
+            // line it left.
+            EditorStyler.refreshActiveLine(in: textView, lastActiveStart: &lastActiveParagraphStart)
             parent.onCursorChange(textView.selectedRange().location)
         }
 
         func textView(_ textView: NSTextView, doCommandBy commandSelector: Selector) -> Bool {
             guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
             return EditorStyler.handleListContinuation(in: textView)
+        }
+
+        // MARK: NSLayoutManagerDelegate — hide marker glyphs
+
+        func layoutManager(
+            _ layoutManager: NSLayoutManager,
+            shouldGenerateGlyphs glyphs: UnsafePointer<CGGlyph>,
+            properties props: UnsafePointer<NSLayoutManager.GlyphProperty>,
+            characterIndexes charIndexes: UnsafePointer<Int>,
+            font aFont: NSFont,
+            forGlyphRange glyphRange: NSRange
+        ) -> Int {
+            guard let storage = layoutManager.textStorage else { return 0 }
+            let count = glyphRange.length
+            var newProps = [NSLayoutManager.GlyphProperty](repeating: [], count: count)
+            var changed = false
+            for i in 0..<count {
+                var property = props[i]
+                let charIndex = charIndexes[i]
+                if charIndex < storage.length,
+                   storage.attribute(.klartHiddenMarker, at: charIndex, effectiveRange: nil) != nil {
+                    property.insert(.null)   // zero-width, non-drawn glyph
+                    changed = true
+                }
+                newProps[i] = property
+            }
+            guard changed else { return 0 }   // 0 → let the layout manager proceed normally
+            newProps.withUnsafeBufferPointer { buffer in
+                layoutManager.setGlyphs(
+                    glyphs,
+                    properties: buffer.baseAddress!,
+                    characterIndexes: charIndexes,
+                    font: aFont,
+                    forGlyphRange: glyphRange
+                )
+            }
+            return count
         }
     }
 }
@@ -221,9 +276,18 @@ enum EditorStyler {
         }
     }
 
+    /// The paragraph range under the cursor — its markers stay visible so the
+    /// raw markdown is always editable.
+    static func activeParagraphRange(_ textView: NSTextView) -> NSRange {
+        let ns = textView.string as NSString
+        let location = min(textView.selectedRange().location, ns.length)
+        return ns.paragraphRange(for: NSRange(location: location, length: 0))
+    }
+
     static func restyleAll(_ textView: NSTextView) {
         guard let storage = textView.textStorage else { return }
-        style(storage, in: NSRange(location: 0, length: storage.length))
+        style(storage, in: NSRange(location: 0, length: storage.length),
+              activeParagraph: activeParagraphRange(textView))
         textView.typingAttributes = bodyAttributes
     }
 
@@ -232,16 +296,38 @@ enum EditorStyler {
         let ns = storage.string as NSString
         let location = min(selection.location, ns.length)
         let paragraph = ns.paragraphRange(for: NSRange(location: location, length: 0))
-        style(storage, in: paragraph)
+        // The edited paragraph is the active one, so keep its markers visible.
+        style(storage, in: paragraph, activeParagraph: paragraph)
     }
 
-    private static func style(_ storage: NSTextStorage, in range: NSRange) {
+    /// On a cursor move: reveal the markers on the newly active line and re-hide
+    /// the line the cursor left. Touches at most two paragraphs, so it stays
+    /// cheap on every selection change.
+    static func refreshActiveLine(in textView: NSTextView, lastActiveStart: inout Int) {
+        guard let storage = textView.textStorage else { return }
+        let ns = storage.string as NSString
+        let active = activeParagraphRange(textView)
+        guard active.location != lastActiveStart else { return }
+        style(storage, in: active, activeParagraph: active)
+        if lastActiveStart >= 0, lastActiveStart <= ns.length {
+            let previous = ns.paragraphRange(for: NSRange(location: min(lastActiveStart, ns.length), length: 0))
+            if previous.location != active.location {
+                style(storage, in: previous, activeParagraph: active)
+            }
+        }
+        lastActiveStart = active.location
+    }
+
+    private static func style(_ storage: NSTextStorage, in range: NSRange, activeParagraph: NSRange) {
         guard range.length > 0 || storage.length == 0 else {
             return
         }
         let ns = storage.string as NSString
         storage.beginEditing()
         storage.addAttributes(bodyAttributes, range: range)
+        // Clear any stale hidden-marker flags first, so revealing a line (by
+        // restyling it as active) actually shows its markers again.
+        storage.removeAttribute(.klartHiddenMarker, range: range)
 
         // Fenced code blocks span multiple lines, so a per-paragraph restyle
         // needs to know whether it's starting inside an already-open fence —
@@ -252,6 +338,8 @@ enum EditorStyler {
 
         ns.enumerateSubstrings(in: range, options: [.byLines, .substringNotRequired]) { _, lineRange, _, _ in
             let line = ns.substring(with: lineRange)
+            // Markers are hidden on every line except the one being edited.
+            let hideMarkers = !NSLocationInRange(lineRange.location, activeParagraph)
 
             if isCodeFenceLine(line) {
                 insideCodeBlock.toggle()
@@ -266,9 +354,9 @@ enum EditorStyler {
             }
 
             if let level = MarkdownHeading.level(of: line) {
-                // Keep the leading # marker at body size and dimmed, so only the
-                // actual heading text is enlarged — otherwise the marker itself
-                // renders at heading size and stays as visible as a plain "#".
+                // The leading "#…# " marker renders at body size and dimmed while
+                // you edit the line, and is hidden entirely otherwise — so only
+                // the heading text shows once the heading is defined.
                 let markerLength = min(level + 1, lineRange.length)
                 let markerRange = NSRange(location: lineRange.location, length: markerLength)
                 let textRange = NSRange(
@@ -281,7 +369,11 @@ enum EditorStyler {
                 // A heading can still carry bold/italic/code/strikethrough —
                 // style it at the heading's own size so emphasis doesn't
                 // shrink back down to body text.
-                styleInline(line, lineRange: lineRange, in: storage, emphasisFontSize: headingFont(level: level).pointSize)
+                styleInline(line, lineRange: lineRange, in: storage,
+                            emphasisFontSize: headingFont(level: level).pointSize, hideMarkers: hideMarkers)
+                if hideMarkers {
+                    storage.addAttribute(.klartHiddenMarker, value: true, range: markerRange)
+                }
             } else if isHorizontalRule(line) {
                 storage.addAttribute(.foregroundColor, value: markerColor, range: lineRange)
             } else if line.hasPrefix(">") {
@@ -291,10 +383,10 @@ enum EditorStyler {
                 ], range: lineRange)
                 // Quoted text can still carry emphasis, code, etc. — style it
                 // the same as a normal line so it isn't silently dropped.
-                styleInline(line, lineRange: lineRange, in: storage)
+                styleInline(line, lineRange: lineRange, in: storage, hideMarkers: hideMarkers)
             } else {
                 styleListMarker(line, lineRange: lineRange, in: storage)
-                styleInline(line, lineRange: lineRange, in: storage)
+                styleInline(line, lineRange: lineRange, in: storage, hideMarkers: hideMarkers)
             }
         }
         storage.endEditing()
@@ -429,14 +521,16 @@ enum EditorStyler {
         return true
     }
 
-    /// Live inline markdown: **bold**, *italic* / _italic_, `code`.
-    /// The surrounding syntax markers are dimmed rather than hidden, so the
-    /// text stays plain markdown while reading like the rendered result.
+    /// Live inline markdown: **bold**, *italic* / _italic_, `code`, ~~strike~~.
+    /// The surrounding syntax markers are dimmed while you edit the line and
+    /// hidden otherwise, so the text reads like the rendered result while
+    /// staying plain markdown on disk.
     private static func styleInline(
         _ line: String,
         lineRange: NSRange,
         in storage: NSTextStorage,
-        emphasisFontSize: CGFloat = bodyFont.pointSize
+        emphasisFontSize: CGFloat = bodyFont.pointSize,
+        hideMarkers: Bool = false
     ) {
         let full = NSRange(location: 0, length: (line as NSString).length)
         let emphasisBoldFont = boldFont(ofSize: emphasisFontSize)
@@ -446,25 +540,25 @@ enum EditorStyler {
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
             storage.addAttributes([.font: codeFont, .foregroundColor: quoteColor], range: range)
-            dimEdges(of: range, width: 1, in: storage)
+            markEdges(of: range, width: 1, in: storage, hide: hideMarkers)
         }
         boldRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
             storage.addAttribute(.font, value: emphasisBoldFont, range: range)
-            dimEdges(of: range, width: 2, in: storage)
+            markEdges(of: range, width: 2, in: storage, hide: hideMarkers)
         }
         italicRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
             storage.addAttribute(.font, value: emphasisItalicFont, range: range)
-            dimEdges(of: range, width: 1, in: storage)
+            markEdges(of: range, width: 1, in: storage, hide: hideMarkers)
         }
         strikethroughRegex.enumerateMatches(in: line, range: full) { match, _, _ in
             guard let match else { return }
             let range = shifted(match.range, by: lineRange.location)
             storage.addAttribute(.strikethroughStyle, value: NSUnderlineStyle.single.rawValue, range: range)
-            dimEdges(of: range, width: 2, in: storage)
+            markEdges(of: range, width: 2, in: storage, hide: hideMarkers)
         }
     }
 
@@ -472,16 +566,19 @@ enum EditorStyler {
         NSRange(location: range.location + offset, length: range.length)
     }
 
-    private static func dimEdges(of range: NSRange, width: Int, in storage: NSTextStorage) {
+    /// The `width` syntax characters at each end of `range` are the emphasis
+    /// markers: hide them (live preview) or dim them (while editing the line).
+    private static func markEdges(of range: NSRange, width: Int, in storage: NSTextStorage, hide: Bool) {
         guard range.length >= width * 2 else { return }
-        storage.addAttribute(
-            .foregroundColor, value: syntaxColor,
-            range: NSRange(location: range.location, length: width)
-        )
-        storage.addAttribute(
-            .foregroundColor, value: syntaxColor,
-            range: NSRange(location: range.location + range.length - width, length: width)
-        )
+        let head = NSRange(location: range.location, length: width)
+        let tail = NSRange(location: range.location + range.length - width, length: width)
+        if hide {
+            storage.addAttribute(.klartHiddenMarker, value: true, range: head)
+            storage.addAttribute(.klartHiddenMarker, value: true, range: tail)
+        } else {
+            storage.addAttribute(.foregroundColor, value: syntaxColor, range: head)
+            storage.addAttribute(.foregroundColor, value: syntaxColor, range: tail)
+        }
     }
 }
 #endif

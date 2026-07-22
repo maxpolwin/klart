@@ -38,7 +38,7 @@ struct ContentView: View {
                     Label("Analyze", systemImage: "sparkles")
                         .symbolEffect(.bounce, value: state.feedbackPhase == .analyzing)
                 }
-                .help("Ask the coach to analyze this note now (⌘R)")
+                .help("Ask the Editor to analyze this note now (⌘R)")
                 .disabled(state.selectedNoteID == nil)
 
                 coachPill
@@ -77,8 +77,8 @@ struct ContentView: View {
         }
         .help(
             state.selectedNote?.isSensitive == true
-                ? "Sensitive note: only local AI (Ollama/LM Studio) will ever see it. Click to unmark."
-                : "Mark as sensitive: this note will only ever use local AI, never a cloud model."
+                ? "Sensitive: only local AI ever sees this note. Click to unmark."
+                : "Mark sensitive: keeps this note on local AI only, never the cloud."
         )
         .disabled(state.selectedNoteID == nil)
     }
@@ -107,7 +107,7 @@ struct ContentView: View {
             .scaleEffect(pillPulse ? 1.06 : 1.0)
         }
         .buttonStyle(.plain)
-        .help("Coach suggestions — click to open (⌘.)")
+        .help("Editor suggestions — click to open (⌘.)")
         .disabled(state.selectedNoteID == nil)
         .popover(isPresented: $state.showCoachPopover, arrowEdge: .bottom) {
             FeedbackPanelView()
@@ -128,7 +128,7 @@ struct ContentView: View {
         if state.feedbackPhase == .analyzing || state.coachRunning { return "Thinking…" }
         let count = state.feedbackItems.count
         if count > 0 { return count == 1 ? "1 ready" : "\(count) ready" }
-        return "Coach"
+        return "Editor"
     }
 }
 
@@ -171,7 +171,7 @@ struct EmptyStateView: View {
             Text("Think in writing.")
                 .font(.system(size: 22, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
-            Text("Start a note with a `# Topic` heading and `## Questions`.\nKlårt coaches you toward clearer, more complete thinking as you write.")
+            Text("Start a note with a `# Topic` heading and `## Questions`.\nKlårt helps you think more clearly and completely as you write.")
                 .font(.system(size: 13))
                 .foregroundStyle(Theme.textSecondary)
                 .multilineTextAlignment(.center)

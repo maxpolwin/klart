@@ -8,7 +8,7 @@ struct SettingsView: View {
             ProviderSettingsView()
                 .tabItem { Label("AI Provider", systemImage: "cpu") }
             CoachingSettingsView()
-                .tabItem { Label("Coaching", systemImage: "sparkles") }
+                .tabItem { Label("Editor", systemImage: "sparkles") }
             SecuritySettingsView()
                 .tabItem { Label("Security", systemImage: "lock.shield") }
         }
@@ -230,7 +230,7 @@ private struct CoachingSettingsView: View {
                 TextField("Language (empty = match my notes)", text: $state.settings.tipStyle.language)
                     .textFieldStyle(.roundedBorder)
                 TextField(
-                    "Extra guidance for the coach (optional)",
+                    "Extra guidance for the Editor (optional)",
                     text: $state.settings.tipStyle.customGuidance,
                     axis: .vertical
                 )

@@ -76,11 +76,11 @@ struct AppCommands: Commands {
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(state.settings.vault == nil || state.isLocked)
         }
-        CommandMenu("Coach") {
+        CommandMenu("Editor") {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
-            Button("Coach Suggestions") { state.showCoachPopover.toggle() }
+            Button("Editor Suggestions") { state.showCoachPopover.toggle() }
                 .keyboardShortcut(".", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
             Divider()
