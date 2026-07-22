@@ -14,9 +14,9 @@ import KlartKit
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
 ///   the panel, ⌘., or typing /editor — each aligned to the section of text
-///   it refers to, wearing a glyph instead of a colored pill. × puts a note
-///   away for now; Dismiss retires it for good. Keep writing and the rail
-///   fades away on its own.
+///   it refers to, wearing a glyph instead of a colored pill. → moves a note
+///   out of sight for now; Dismiss retires it for good. Keep writing and the
+///   rail fades away on its own.
 /// - The note's title stays pinned at the top; an optional word-count line
 ///   (Settings → Interface) sits at the bottom.
 struct TeleprompterView: View {
@@ -628,6 +628,12 @@ private struct EditorRail: View {
                         RailCard(item: placement.item)
                             .background(heightReader(for: placement.item.id))
                             .offset(y: placement.y)
+                            // Set-aside notes slide out to the right — moved,
+                            // not destroyed — matching the → that sent them.
+                            .transition(.asymmetric(
+                                insertion: .opacity,
+                                removal: .move(edge: .trailing).combined(with: .opacity)
+                            ))
                     }
                 }
             }
@@ -743,8 +749,8 @@ private struct RailCardHeightKey: PreferenceKey {
 
 /// One editor note: a monochrome glyph in place of the colored pill, the
 /// observation, then quiet actions — Insert when there is content to take,
-/// Dismiss to never see the point again, and an × that merely puts the note
-/// away for now.
+/// Dismiss to never see the point again, and a → that merely moves the note
+/// out of sight for now.
 private struct RailCard: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
@@ -769,18 +775,20 @@ private struct RailCard: View {
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
+                // An arrow, not an × — the note isn't destroyed, it's moved
+                // out of sight (and may return on a later analysis).
                 Button {
                     state.hide(item)
                 } label: {
-                    Text("×")
-                        .font(.system(size: 13, weight: .medium))
+                    Text("→")
+                        .font(.system(size: 12, weight: .medium, design: .monospaced))
                         .foregroundStyle(hovering ? Theme.textSecondary : Theme.textTertiary)
                         .frame(width: 16, height: 16)
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Put this note away for now — it may come back on a later analysis")
-                .accessibilityLabel("Hide suggestion")
+                .help("Move this note out of sight for now — it may come back on a later analysis")
+                .accessibilityLabel("Set suggestion aside")
             }
 
             Text(item.text)
