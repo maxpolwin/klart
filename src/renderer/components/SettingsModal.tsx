@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { X, Languages, Check, Plus, Trash2, RotateCcw, MessageSquare, ChevronDown, ChevronRight, Mic, Shield, ShieldAlert } from 'lucide-react';
-import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_TIP_STYLE, TIP_LANGUAGE_OPTIONS, TipStyleConfig, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings } from '../../shared/types';
+import { AISettings, SpellcheckLanguage, FeedbackTypeConfig, DEFAULT_FEEDBACK_TYPES, DEFAULT_SYSTEM_PROMPT, DEFAULT_TIP_STYLE, TIP_LANGUAGE_OPTIONS, TipStyleConfig, FeedbackCategory, FEEDBACK_CATEGORY_LABELS, FeedbackTypeConfigWithCategory, SttSettings, BUILTIN_MODELS, BuiltinModelId, DEFAULT_BUILTIN_MODEL_ID } from '../../shared/types';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -16,6 +16,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
     spellcheckEnabled: true,
     spellcheckLanguages: ['en-US'],
     chunkingThresholdMs: 3000,
+    builtinModel: DEFAULT_BUILTIN_MODEL_ID,
     llmContextSize: 2048,
     llmMaxTokens: 1536,
     llmBatchSize: 512,
@@ -41,12 +42,68 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
   const [availableLanguages, setAvailableLanguages] = useState<SpellcheckLanguage[]>([]);
   const [activeTab, setActiveTab] = useState<'ai' | 'editor' | 'prompts' | 'transcription'>('ai');
   const [encryptionAvailable, setEncryptionAvailable] = useState<boolean | null>(null);
+  const [builtinModelStatus, setBuiltinModelStatus] = useState<{ available: boolean; downloading: boolean; error?: string } | null>(null);
+  const [downloadProgress, setDownloadProgress] = useState<{ modelId: string; percent: number; downloadedMB: number; totalMB: number } | null>(null);
+  const [downloadError, setDownloadError] = useState<string | null>(null);
 
   useEffect(() => {
     loadSettings();
     loadAvailableLanguages();
     loadEncryptionStatus();
   }, []);
+
+  // Stream download progress for whichever builtin model is currently downloading
+  useEffect(() => {
+    const unsubscribe = window.api.ai.onDownloadProgress((progress) => {
+      setDownloadProgress(progress);
+    });
+    return unsubscribe;
+  }, []);
+
+  // Re-check availability whenever the selected builtin model (or provider) changes
+  useEffect(() => {
+    if (settings.provider !== 'builtin') return;
+    let cancelled = false;
+    window.api.ai.checkBuiltinModel(settings.builtinModel).then((status) => {
+      if (!cancelled) setBuiltinModelStatus(status);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [settings.provider, settings.builtinModel]);
+
+  const selectedModelInfo = BUILTIN_MODELS.find((m) => m.id === settings.builtinModel) || BUILTIN_MODELS[0];
+
+  const handleBuiltinModelChange = (modelId: BuiltinModelId) => {
+    const info = BUILTIN_MODELS.find((m) => m.id === modelId);
+    setSettings({
+      ...settings,
+      builtinModel: modelId,
+      ...(info
+        ? {
+            llmContextSize: info.recommendedContextSize,
+            llmMaxTokens: info.recommendedMaxTokens,
+            llmBatchSize: info.recommendedBatchSize,
+          }
+        : {}),
+    });
+    setDownloadProgress(null);
+    setDownloadError(null);
+  };
+
+  const handleDownloadModel = async (modelId: BuiltinModelId) => {
+    setDownloadError(null);
+    setBuiltinModelStatus((prev) => (prev ? { ...prev, downloading: true } : prev));
+    const result = await window.api.ai.downloadBuiltinModel(modelId);
+    setDownloadProgress(null);
+    if (result.success) {
+      const status = await window.api.ai.checkBuiltinModel(modelId);
+      setBuiltinModelStatus(status);
+    } else {
+      setDownloadError(result.error || 'Download failed');
+      setBuiltinModelStatus((prev) => (prev ? { ...prev, downloading: false } : prev));
+    }
+  };
 
   const loadSettings = async () => {
     const loaded = await window.api.settings.get();
@@ -56,6 +113,7 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
       spellcheckEnabled: loaded.spellcheckEnabled ?? true,
       spellcheckLanguages: loaded.spellcheckLanguages ?? ['en-US'],
       chunkingThresholdMs: loaded.chunkingThresholdMs ?? 3000,
+      builtinModel: loaded.builtinModel ?? DEFAULT_BUILTIN_MODEL_ID,
       llmContextSize: loaded.llmContextSize ?? 2048,
       llmMaxTokens: loaded.llmMaxTokens ?? 1536,
       llmBatchSize: loaded.llmBatchSize ?? 512,
@@ -359,10 +417,63 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
               {settings.provider === 'builtin' && (
                 <>
                   <div className="form-group">
+                    <label className="form-label">Built-in Model</label>
+                    <select
+                      className="form-select"
+                      value={settings.builtinModel}
+                      onChange={(e) => handleBuiltinModelChange(e.target.value as BuiltinModelId)}
+                    >
+                      {BUILTIN_MODELS.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.label} ({m.paramCount}, up to {m.uiMaxContext.toLocaleString()} tokens)
+                        </option>
+                      ))}
+                    </select>
                     <p className="form-hint" style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '6px' }}>
-                      The built-in AI uses Qwen2.5-0.5B, a small but capable model that runs entirely on your device.
-                      No internet connection or external setup required.
+                      {selectedModelInfo.description} Runs entirely on your device once downloaded — no internet
+                      connection or external setup required.
                     </p>
+
+                    {builtinModelStatus && !builtinModelStatus.available && (
+                      <div style={{ background: 'var(--warning-glow)', padding: '12px', borderRadius: '6px', marginTop: '8px' }}>
+                        <p className="form-hint" style={{ color: 'var(--warning-color)', marginBottom: '8px' }}>
+                          {selectedModelInfo.label} isn't downloaded yet (~{(selectedModelInfo.approxDownloadSizeMB / 1000).toFixed(1)}GB).
+                        </p>
+                        {downloadProgress?.modelId === settings.builtinModel ? (
+                          <div>
+                            <div style={{ background: 'var(--bg-primary)', borderRadius: '4px', overflow: 'hidden', height: '8px', marginBottom: '6px' }}>
+                              <div
+                                style={{
+                                  width: `${downloadProgress.percent}%`,
+                                  background: 'var(--accent-color)',
+                                  height: '100%',
+                                  transition: 'width 0.2s',
+                                }}
+                              />
+                            </div>
+                            <p className="form-hint">
+                              Downloading... {downloadProgress.percent}% ({downloadProgress.downloadedMB.toFixed(0)}MB / {downloadProgress.totalMB.toFixed(0)}MB)
+                            </p>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            className="btn btn-secondary"
+                            disabled={builtinModelStatus.downloading}
+                            onClick={() => handleDownloadModel(settings.builtinModel)}
+                          >
+                            {builtinModelStatus.downloading
+                              ? 'Downloading...'
+                              : `Download ${selectedModelInfo.label} (~${(selectedModelInfo.approxDownloadSizeMB / 1000).toFixed(1)}GB)`}
+                          </button>
+                        )}
+                        {downloadError && (
+                          <p className="form-hint" style={{ color: 'var(--error-color)', marginTop: '6px' }}>
+                            {downloadError}
+                          </p>
+                        )}
+                      </div>
+                    )}
                   </div>
                   <div className="form-group">
                     <label className="form-label">Chunking Threshold (ms)</label>
@@ -405,12 +516,12 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                       <div className="form-group">
                         <div style={{ background: 'var(--bg-tertiary)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border-subtle)' }}>
                           <p style={{ fontSize: '12px', fontWeight: 600, color: 'var(--accent-color)', marginBottom: '8px' }}>
-                            Recommended for M2 MacBook (32GB RAM):
+                            Recommended for {selectedModelInfo.label}:
                           </p>
                           <div style={{ fontSize: '11px', color: 'var(--text-secondary)', lineHeight: 1.6 }}>
-                            <div>• <strong>Context Size:</strong> 4096 tokens</div>
-                            <div>• <strong>Max Output:</strong> 2048 tokens</div>
-                            <div>• <strong>Batch Size:</strong> 1024</div>
+                            <div>• <strong>Context Size:</strong> {selectedModelInfo.recommendedContextSize.toLocaleString()} tokens</div>
+                            <div>• <strong>Max Output:</strong> {selectedModelInfo.recommendedMaxTokens.toLocaleString()} tokens</div>
+                            <div>• <strong>Batch Size:</strong> {selectedModelInfo.recommendedBatchSize}</div>
                           </div>
                           <button
                             type="button"
@@ -418,9 +529,9 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                             style={{ marginTop: '10px', fontSize: '11px', padding: '6px 12px' }}
                             onClick={() => setSettings({
                               ...settings,
-                              llmContextSize: 4096,
-                              llmMaxTokens: 2048,
-                              llmBatchSize: 1024,
+                              llmContextSize: selectedModelInfo.recommendedContextSize,
+                              llmMaxTokens: selectedModelInfo.recommendedMaxTokens,
+                              llmBatchSize: selectedModelInfo.recommendedBatchSize,
                             })}
                           >
                             Apply Recommended Settings
@@ -434,14 +545,18 @@ function SettingsModal({ onClose, onSaved }: SettingsModalProps) {
                           type="number"
                           className="form-input"
                           min="512"
-                          max="8192"
+                          max={selectedModelInfo.uiMaxContext}
                           step="256"
                           value={settings.llmContextSize}
                           onChange={(e) => setSettings({ ...settings, llmContextSize: parseInt(e.target.value) || 2048 })}
                           style={{ padding: '10px 14px', background: 'var(--bg-tertiary)', border: '1px solid var(--border-color)', borderRadius: '8px', color: 'var(--text-primary)', fontSize: '14px' }}
                         />
                         <p className="form-hint">
-                          How much input text the model can process. Range: 512-8192. Higher = more context but slower.
+                          How much input text the model can process. Range: 512-{selectedModelInfo.uiMaxContext.toLocaleString()}.
+                          Higher = more context but slower and uses more RAM
+                          {selectedModelInfo.id === 'phi-3-mini-128k'
+                            ? " — this model's KV cache costs roughly 32x more per token than Qwen's, so raise it gradually and watch memory usage."
+                            : '.'}
                         </p>
                       </div>
 

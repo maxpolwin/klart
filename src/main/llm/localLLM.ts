@@ -2,6 +2,39 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { app } from 'electron';
+import modelRegistryData from './modelRegistry.json';
+
+export interface BuiltinModelInfo {
+  id: string;
+  label: string;
+  paramCount: string;
+  filename: string;
+  downloadUrl: string;
+  approxDownloadSizeMB: number;
+  nativeMaxContext: number;
+  uiMaxContext: number;
+  recommendedContextSize: number;
+  recommendedMaxTokens: number;
+  recommendedBatchSize: number;
+  description: string;
+}
+
+const MODEL_REGISTRY = modelRegistryData as BuiltinModelInfo[];
+
+export type BuiltinModelId = 'qwen2.5-0.5b' | 'phi-3-mini-128k';
+export const DEFAULT_BUILTIN_MODEL_ID: BuiltinModelId = 'qwen2.5-0.5b';
+
+export function getBuiltinModelInfo(modelId: BuiltinModelId): BuiltinModelInfo {
+  const info = MODEL_REGISTRY.find((m) => m.id === modelId);
+  if (!info) {
+    throw new Error(`Unknown builtin model: ${modelId}`);
+  }
+  return info;
+}
+
+export function listBuiltinModels(): BuiltinModelInfo[] {
+  return MODEL_REGISTRY;
+}
 
 // Force real ESM dynamic import (bypasses TypeScript's CommonJS transformation)
 // This is necessary because node-llama-cpp v3.x is ESM-only with top-level await
@@ -16,6 +49,7 @@ let isInitializing = false;
 let initError: string | null = null;
 let lastInitAttempt = 0;
 let asarResolutionPatched = false;
+let currentModelId: BuiltinModelId | null = null;
 
 // Get the correct import path for node-llama-cpp.
 // In packaged mode, we must import from the unpacked directory because
@@ -59,12 +93,13 @@ function isAppleSilicon(): boolean {
   return process.platform === 'darwin' && os.arch() === 'arm64';
 }
 
-// Get optimal GPU layers for the platform
-function getOptimalGpuLayers(): number {
+// Get GPU layers policy for the platform.
+// "max" lets node-llama-cpp auto-fit as many layers as fit in available
+// VRAM/unified memory for whichever model is loaded, rather than a number
+// hand-tuned for one specific model's size.
+function getOptimalGpuLayers(): number | 'max' {
   if (isAppleSilicon()) {
-    // Enable Metal acceleration on Apple Silicon
-    // For Qwen 0.5B Q4_K_M, 33 layers is typical for full GPU offload
-    return 33;
+    return 'max'; // Metal acceleration on Apple Silicon
   }
   // CPU-only for other platforms (or set to positive number for CUDA/ROCm)
   return 0;
@@ -75,6 +110,7 @@ export interface LLMConfig {
   contextSize: number;
   maxTokens: number;
   batchSize: number;
+  modelId?: BuiltinModelId;
 }
 
 // Default configuration for small models
@@ -82,6 +118,7 @@ const DEFAULT_CONFIG: LLMConfig = {
   contextSize: 2048,
   maxTokens: 1536,  // Increased for detailed responses
   batchSize: 512,
+  modelId: DEFAULT_BUILTIN_MODEL_ID,
 };
 
 // Static config (not user-configurable)
@@ -93,54 +130,89 @@ const STATIC_CONFIG = {
 // Retry configuration
 const INIT_RETRY_DELAY = 5000; // 5 seconds between retry attempts
 
-function getModelPath(): string {
-  const isDev = !app.isPackaged;
-  const modelName = 'qwen2.5-0.5b-instruct-q4_k_m.gguf';
-
-  if (isDev) {
-    return path.join(process.cwd(), 'models', modelName);
-  } else {
-    return path.join(process.resourcesPath, 'models', modelName);
-  }
+function getUserDataModelsDir(): string {
+  return path.join(app.getPath('userData'), 'models');
 }
 
-export async function checkLocalLLMAvailable(): Promise<{ available: boolean; error?: string }> {
-  const modelPath = getModelPath();
+// Where an in-app download for this model should be written. Always a
+// writable location regardless of dev vs. packaged.
+export function getBuiltinModelDownloadTarget(modelId: BuiltinModelId): string {
+  const { filename } = getBuiltinModelInfo(modelId);
+  return path.join(getUserDataModelsDir(), filename);
+}
+
+// Resolve an existing model file across all the places it could live:
+// the dev-mode models/ dir, the packaged app's bundled resources, or
+// wherever the in-app downloader wrote it (userData). Falls back to the
+// userData download target if the file isn't found anywhere yet.
+function getModelPath(modelId: BuiltinModelId): string {
+  const { filename } = getBuiltinModelInfo(modelId);
+  const candidateDirs = [
+    app.isPackaged
+      ? path.join(process.resourcesPath, 'models')
+      : path.join(process.cwd(), 'models'),
+    getUserDataModelsDir(),
+  ];
+
+  for (const dir of candidateDirs) {
+    const candidate = path.join(dir, filename);
+    if (fs.existsSync(candidate)) {
+      return candidate;
+    }
+  }
+
+  return getBuiltinModelDownloadTarget(modelId);
+}
+
+export async function checkLocalLLMAvailable(
+  modelId: BuiltinModelId = DEFAULT_BUILTIN_MODEL_ID
+): Promise<{ available: boolean; error?: string }> {
+  const modelPath = getModelPath(modelId);
+  const { approxDownloadSizeMB, label } = getBuiltinModelInfo(modelId);
 
   if (!fs.existsSync(modelPath)) {
     return {
       available: false,
-      error: `Model file not found: ${modelPath}. Run: npm run download-model`,
+      error: `${label} model file not found. Download it from Settings → AI Provider, or place it manually at: ${modelPath}`,
     };
   }
 
   const stats = fs.statSync(modelPath);
   const sizeMB = stats.size / (1024 * 1024);
 
-  if (sizeMB < 100) {
+  if (sizeMB < approxDownloadSizeMB * 0.5) {
     return {
       available: false,
-      error: 'Model file appears corrupted (too small). Re-download with: npm run download-model',
+      error: `${label} model file appears corrupted or incomplete. Re-download it from Settings → AI Provider.`,
     };
   }
 
   return { available: true };
 }
 
-export async function initializeLocalLLM(): Promise<{ success: boolean; error?: string }> {
+export async function initializeLocalLLM(
+  modelId: BuiltinModelId = DEFAULT_BUILTIN_MODEL_ID
+): Promise<{ success: boolean; error?: string }> {
   // Prevent concurrent initialization
   if (isInitializing) {
     return { success: false, error: 'Initialization already in progress' };
   }
 
-  // Return cached result if recently attempted
-  if (initError && Date.now() - lastInitAttempt < INIT_RETRY_DELAY) {
+  // Return cached result if recently attempted (only applies to the same model;
+  // a switch to a different model should always get a fresh attempt)
+  if (initError && currentModelId === modelId && Date.now() - lastInitAttempt < INIT_RETRY_DELAY) {
     return { success: false, error: initError };
   }
 
-  // Already initialized
-  if (isInitialized && model) {
+  // Already initialized with the requested model
+  if (isInitialized && model && currentModelId === modelId) {
     return { success: true };
+  }
+
+  // Switching models: dispose the previously loaded one before loading the new one
+  if (isInitialized && model && currentModelId !== modelId) {
+    console.log(`[LocalLLM] Switching model (${currentModelId} -> ${modelId}), disposing previous...`);
+    await disposeLocalLLM();
   }
 
   isInitializing = true;
@@ -148,12 +220,12 @@ export async function initializeLocalLLM(): Promise<{ success: boolean; error?: 
 
   try {
     // Check model availability first
-    const availability = await checkLocalLLMAvailable();
+    const availability = await checkLocalLLMAvailable(modelId);
     if (!availability.available) {
       throw new Error(availability.error);
     }
 
-    const modelPath = getModelPath();
+    const modelPath = getModelPath(modelId);
     console.log('[LocalLLM] Initializing with model:', modelPath);
 
     // Dynamic import for ESM module (using dynamicImport to bypass CommonJS transformation)
@@ -174,14 +246,15 @@ export async function initializeLocalLLM(): Promise<{ success: boolean; error?: 
 
     // Load model with GPU acceleration where available
     const gpuLayers = STATIC_CONFIG.gpuLayers;
-    console.log(`[LocalLLM] Loading model with ${gpuLayers} GPU layers (Metal: ${isAppleSilicon()})...`);
+    console.log(`[LocalLLM] Loading model with gpuLayers=${gpuLayers} (Metal: ${isAppleSilicon()})...`);
     model = await llama.loadModel({
       modelPath,
-      gpuLayers, // Metal acceleration on Apple Silicon, CPU on others
+      gpuLayers, // "max" auto-fits to available VRAM/unified memory on Apple Silicon, 0 (CPU) elsewhere
     });
 
     // Note: Context is created fresh for each generation to avoid sequence exhaustion
     isInitialized = true;
+    currentModelId = modelId;
     initError = null;
     console.log('[LocalLLM] Initialization complete');
 
@@ -208,10 +281,11 @@ export async function generateLocalResponse(
 ): Promise<{ response?: string; error?: string }> {
   // Merge provided config with defaults
   const llmConfig = { ...DEFAULT_CONFIG, ...config };
+  const modelId = llmConfig.modelId ?? DEFAULT_BUILTIN_MODEL_ID;
 
-  // Ensure initialized
-  if (!isInitialized || !model) {
-    const initResult = await initializeLocalLLM();
+  // Ensure initialized with the requested model
+  if (!isInitialized || !model || currentModelId !== modelId) {
+    const initResult = await initializeLocalLLM(modelId);
     if (!initResult.success) {
       return { error: initResult.error };
     }
@@ -224,9 +298,10 @@ export async function generateLocalResponse(
     const { LlamaChatSession } = llamaModule;
 
     // Create a fresh context for each request to avoid sequence exhaustion
-    console.log(`[LocalLLM] Creating context (size: ${llmConfig.contextSize}, maxTokens: ${llmConfig.maxTokens})...`);
+    console.log(`[LocalLLM] Creating context (size: ${llmConfig.contextSize}, maxTokens: ${llmConfig.maxTokens}, batchSize: ${llmConfig.batchSize})...`);
     localContext = await model.createContext({
       contextSize: llmConfig.contextSize,
+      batchSize: llmConfig.batchSize,
     });
 
     // Get a sequence from the fresh context
@@ -286,6 +361,7 @@ export async function disposeLocalLLM(): Promise<void> {
 
   model = null;
   isInitialized = false;
+  currentModelId = null;
   console.log('[LocalLLM] Disposed');
 }
 
@@ -293,17 +369,19 @@ export function getLocalLLMStatus(): {
   initialized: boolean;
   initializing: boolean;
   error: string | null;
+  modelId: BuiltinModelId | null;
   gpuAcceleration: {
     enabled: boolean;
     type: string;
-    layers: number;
+    layers: number | string;
   };
 } {
-  const gpuEnabled = STATIC_CONFIG.gpuLayers > 0;
+  const gpuEnabled = STATIC_CONFIG.gpuLayers !== 0;
   return {
     initialized: isInitialized,
     initializing: isInitializing,
     error: initError,
+    modelId: currentModelId,
     gpuAcceleration: {
       enabled: gpuEnabled,
       type: isAppleSilicon() ? 'Metal (Apple Silicon)' : (gpuEnabled ? 'GPU' : 'CPU'),

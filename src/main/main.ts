@@ -12,7 +12,12 @@ import {
   estimateTokens,
   LLMConfig,
   getLocalLLMStatus,
+  getBuiltinModelInfo,
+  listBuiltinModels,
+  DEFAULT_BUILTIN_MODEL_ID,
+  BuiltinModelId,
 } from './llm/localLLM';
+import { downloadBuiltinModel, isDownloadInProgress } from './llm/modelDownloader';
 import {
   compressText,
   getCompressorStatus,
@@ -73,6 +78,7 @@ interface AISettings {
   spellcheckEnabled: boolean;
   spellcheckLanguages: string[];
   chunkingThresholdMs: number;
+  builtinModel: BuiltinModelId;
   llmContextSize: number;
   llmMaxTokens: number;
   llmBatchSize: number;
@@ -169,6 +175,7 @@ function getDefaultSettings(): AISettings {
     spellcheckEnabled: true,
     spellcheckLanguages: ['en-US'],
     chunkingThresholdMs: 3000, // 3 seconds default (increased for better responses)
+    builtinModel: 'qwen2.5-0.5b', // Default bundled model
     llmContextSize: 2048,      // Context window size
     llmMaxTokens: 1536,        // Max tokens to generate (increased for detailed responses)
     llmBatchSize: 512,         // Batch size for inference
@@ -706,7 +713,9 @@ function getTipStyle(settings: AISettings): TipStyleConfig {
 
 // Get prompt configuration from settings
 function getPromptConfig(settings: AISettings) {
-  const isSmallModel = settings.provider === 'builtin';
+  // Only the small Qwen 0.5B model needs a tight content budget - Phi-3-mini
+  // has a much larger usable context and shouldn't be capped the same way.
+  const isSmallModel = settings.provider === 'builtin' && settings.builtinModel === 'qwen2.5-0.5b';
   return {
     maxContentTokens: isSmallModel ? 1200 : 2000,
     generatePrompt: (ctx: { h1: string; h2: string; allH2s: string[] }) => {
@@ -767,7 +776,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
   };
 
   // Get prompt configuration from settings
-  const isSmallModel = settings.provider === 'builtin';
+  const isSmallModel = settings.provider === 'builtin' && settings.builtinModel === 'qwen2.5-0.5b';
   const promptConfig = getPromptConfig(settings);
   const maxTips = clampMaxTips(getTipStyle(settings).maxTips);
 
@@ -798,14 +807,16 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
 
   try {
     if (settings.provider === 'builtin') {
+      const modelId: BuiltinModelId = settings.builtinModel || DEFAULT_BUILTIN_MODEL_ID;
+
       // Use built-in local LLM with better error handling
-      const availability = await checkLocalLLMAvailable();
+      const availability = await checkLocalLLMAvailable(modelId);
       if (!availability.available) {
         console.error('[AI] Local model not available:', availability.error);
         return { feedback: [], error: availability.error };
       }
 
-      const initResult = await initializeLocalLLM();
+      const initResult = await initializeLocalLLM(modelId);
       if (!initResult.success) {
         console.error('[AI] Failed to initialize local LLM:', initResult.error);
         return { feedback: [], error: initResult.error };
@@ -817,6 +828,7 @@ ipcMain.handle('ai:analyze', async (_, content: string, context: { h1: string; h
         contextSize: settings.llmContextSize || 2048,
         maxTokens: settings.llmMaxTokens || 1024,
         batchSize: settings.llmBatchSize || 512,
+        modelId,
       };
       const result = await generateLocalResponse(systemPrompt, userPrompt, llmConfig);
       lastResponseTime = Date.now() - startTime;
@@ -992,13 +1004,14 @@ ipcMain.handle('ai:checkConnection', async () => {
 
   try {
     if (settings.provider === 'builtin') {
-      const availability = await checkLocalLLMAvailable();
+      const modelId: BuiltinModelId = settings.builtinModel || DEFAULT_BUILTIN_MODEL_ID;
+      const availability = await checkLocalLLMAvailable(modelId);
       if (!availability.available) {
         console.log('[AI] Local model not available:', availability.error);
         return false;
       }
       // Try to initialize the model
-      const initResult = await initializeLocalLLM();
+      const initResult = await initializeLocalLLM(modelId);
       return initResult.success;
     } else if (settings.provider === 'ollama') {
       const ollamaBase = sanitizeHttpBaseUrl(settings.ollamaUrl, 'http://localhost:11434');
@@ -1026,16 +1039,35 @@ ipcMain.handle('ai:checkConnection', async () => {
 ipcMain.handle('ai:getStatus', async () => {
   const settings = loadSettings();
   const status = getLocalLLMStatus();
+  const modelId: BuiltinModelId = settings.builtinModel || DEFAULT_BUILTIN_MODEL_ID;
 
   return {
     provider: settings.provider,
     localLLM: status,
-    modelPath: settings.provider === 'builtin' ? 'qwen2.5-0.5b-instruct-q4_k_m.gguf' : null,
+    modelPath: settings.provider === 'builtin' ? getBuiltinModelInfo(modelId).filename : null,
     compression: {
       enabled: settings.compressionEnabled,
       ...getCompressorStatus(),
     },
   };
+});
+
+// List the available builtin models (id, label, context limits, etc.) for the Settings UI
+ipcMain.handle('ai:listBuiltinModels', async () => {
+  return listBuiltinModels();
+});
+
+// Check whether a given builtin model's file is present (and whether a download is already running)
+ipcMain.handle('ai:checkBuiltinModel', async (_, modelId: BuiltinModelId) => {
+  const availability = await checkLocalLLMAvailable(modelId);
+  return { ...availability, downloading: isDownloadInProgress(modelId) };
+});
+
+// Download a builtin model into userData/models, streaming progress back to the renderer
+ipcMain.handle('ai:downloadBuiltinModel', async (event, modelId: BuiltinModelId) => {
+  return downloadBuiltinModel(modelId, (progress) => {
+    event.sender.send('ai:downloadProgress', progress);
+  });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════

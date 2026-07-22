@@ -40,6 +40,8 @@ interface SttSettings {
   sttLanguage: string;
 }
 
+type BuiltinModelId = 'qwen2.5-0.5b' | 'phi-3-mini-128k';
+
 interface AISettings {
   provider: 'builtin' | 'ollama' | 'mistral';
   ollamaModel: string;
@@ -48,6 +50,7 @@ interface AISettings {
   spellcheckEnabled: boolean;
   spellcheckLanguages: string[];
   chunkingThresholdMs: number;
+  builtinModel: BuiltinModelId;
   llmContextSize: number;
   llmMaxTokens: number;
   llmBatchSize: number;
@@ -61,16 +64,39 @@ interface SpellcheckLanguage {
   name: string;
 }
 
+interface BuiltinModelInfo {
+  id: string;
+  label: string;
+  paramCount: string;
+  filename: string;
+  downloadUrl: string;
+  approxDownloadSizeMB: number;
+  nativeMaxContext: number;
+  uiMaxContext: number;
+  recommendedContextSize: number;
+  recommendedMaxTokens: number;
+  recommendedBatchSize: number;
+  description: string;
+}
+
+interface DownloadProgress {
+  modelId: BuiltinModelId;
+  percent: number;
+  downloadedMB: number;
+  totalMB: number;
+}
+
 interface LLMStatus {
   provider: string;
   localLLM: {
     initialized: boolean;
     initializing: boolean;
     error: string | null;
+    modelId: BuiltinModelId | null;
     gpuAcceleration: {
       enabled: boolean;
       type: string;
-      layers: number;
+      layers: number | string;
     };
   };
   modelPath: string | null;
@@ -129,6 +155,16 @@ const api = {
       ipcRenderer.invoke('ai:analyze', content, context),
     checkConnection: (): Promise<boolean> => ipcRenderer.invoke('ai:checkConnection'),
     getStatus: (): Promise<LLMStatus> => ipcRenderer.invoke('ai:getStatus'),
+    listBuiltinModels: (): Promise<BuiltinModelInfo[]> => ipcRenderer.invoke('ai:listBuiltinModels'),
+    checkBuiltinModel: (modelId: BuiltinModelId): Promise<{ available: boolean; downloading: boolean; error?: string }> =>
+      ipcRenderer.invoke('ai:checkBuiltinModel', modelId),
+    downloadBuiltinModel: (modelId: BuiltinModelId): Promise<{ success: boolean; error?: string }> =>
+      ipcRenderer.invoke('ai:downloadBuiltinModel', modelId),
+    onDownloadProgress: (callback: (progress: DownloadProgress) => void): (() => void) => {
+      const listener = (_: unknown, progress: DownloadProgress) => callback(progress);
+      ipcRenderer.on('ai:downloadProgress', listener);
+      return () => ipcRenderer.removeListener('ai:downloadProgress', listener);
+    },
   },
   spellcheck: {
     getAvailableLanguages: (): Promise<SpellcheckLanguage[]> =>

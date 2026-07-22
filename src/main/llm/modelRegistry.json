@@ -1,0 +1,30 @@
+[
+  {
+    "id": "qwen2.5-0.5b",
+    "label": "Qwen2.5-0.5B",
+    "paramCount": "0.5B",
+    "filename": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "downloadUrl": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+    "approxDownloadSizeMB": 400,
+    "nativeMaxContext": 32768,
+    "uiMaxContext": 32768,
+    "recommendedContextSize": 2048,
+    "recommendedMaxTokens": 1536,
+    "recommendedBatchSize": 512,
+    "description": "Small, fast, runs on any hardware. Good for quick feedback loops. ~400MB download."
+  },
+  {
+    "id": "phi-3-mini-128k",
+    "label": "Phi-3-mini-128k",
+    "paramCount": "3.8B",
+    "filename": "phi-3-mini-128k-instruct-q4_k_m.gguf",
+    "downloadUrl": "https://huggingface.co/QuantFactory/Phi-3-mini-128k-instruct-GGUF/resolve/main/Phi-3-mini-128k-instruct.Q4_K_M.gguf",
+    "approxDownloadSizeMB": 2390,
+    "nativeMaxContext": 131072,
+    "uiMaxContext": 32768,
+    "recommendedContextSize": 8192,
+    "recommendedMaxTokens": 2048,
+    "recommendedBatchSize": 512,
+    "description": "Bigger, higher-quality model with real long-context support. ~2.4GB download, noticeably more RAM/CPU than Qwen."
+  }
+]

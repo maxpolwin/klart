@@ -13,6 +13,7 @@
     "start": "electron .",
     "package": "npm run build && node scripts/nest-llama-deps.js && electron-builder && node scripts/nest-llama-deps.js --cleanup",
     "download-model": "node scripts/download-model.js",
+    "download-model:phi3": "node scripts/download-model.js --model=phi-3-mini-128k",
     "download-compressor": "node scripts/download-compressor-model.js",
     "generate-icon": "bash scripts/generate-icon.sh"
   },

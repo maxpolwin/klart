@@ -1,3 +1,5 @@
+import modelRegistry from '../main/llm/modelRegistry.json';
+
 export interface Note {
   id: string;
   title: string;
@@ -6,6 +8,31 @@ export interface Note {
   updatedAt: string;
   excludedSections: string[];
 }
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BUILTIN LLM MODEL REGISTRY
+// ═══════════════════════════════════════════════════════════════════════════
+
+export interface BuiltinModelInfo {
+  id: string;
+  label: string;
+  paramCount: string;
+  filename: string;
+  downloadUrl: string;
+  approxDownloadSizeMB: number;
+  nativeMaxContext: number;   // architectural max context (docs/reference only)
+  uiMaxContext: number;       // practical Settings-slider ceiling (KV-cache cost aware)
+  recommendedContextSize: number;
+  recommendedMaxTokens: number;
+  recommendedBatchSize: number;
+  description: string;
+}
+
+export const BUILTIN_MODELS = modelRegistry as BuiltinModelInfo[];
+
+export type BuiltinModelId = 'qwen2.5-0.5b' | 'phi-3-mini-128k';
+
+export const DEFAULT_BUILTIN_MODEL_ID: BuiltinModelId = 'qwen2.5-0.5b';
 
 // ═══════════════════════════════════════════════════════════════════════════
 // SPEECH-TO-TEXT (Transcription)
@@ -109,6 +136,7 @@ export interface AISettings {
   spellcheckLanguages: string[];
   chunkingThresholdMs: number; // Response time threshold for adaptive chunking (ms)
   // Built-in LLM configuration
+  builtinModel: BuiltinModelId; // Which bundled model to use (default: 'qwen2.5-0.5b')
   llmContextSize: number;   // Context window size (default: 2048)
   llmMaxTokens: number;     // Max tokens to generate (default: 1024)
   llmBatchSize: number;     // Batch size for inference (default: 512)

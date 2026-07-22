@@ -4,14 +4,25 @@ const https = require('https');
 const fs = require('fs');
 const path = require('path');
 
-// Qwen2.5-0.5B-Instruct GGUF model from Hugging Face
-const MODEL_URL = 'https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf';
-const MODEL_FILENAME = 'qwen2.5-0.5b-instruct-q4_k_m.gguf';
 const MODELS_DIR = path.join(__dirname, '..', 'models');
-const MODEL_PATH = path.join(MODELS_DIR, MODEL_FILENAME);
+const REGISTRY_PATH = path.join(__dirname, '..', 'src', 'main', 'llm', 'modelRegistry.json');
+const REGISTRY = JSON.parse(fs.readFileSync(REGISTRY_PATH, 'utf-8'));
+const DEFAULT_MODEL_ID = 'qwen2.5-0.5b';
 
-// Expected file size (approximately 400MB)
-const EXPECTED_SIZE_MB = 400;
+function parseModelArg() {
+  const arg = process.argv.find((a) => a.startsWith('--model='));
+  return arg ? arg.slice('--model='.length) : DEFAULT_MODEL_ID;
+}
+
+function getModelInfo(modelId) {
+  const info = REGISTRY.find((m) => m.id === modelId);
+  if (!info) {
+    console.error(`Unknown model id: "${modelId}"`);
+    console.error(`Available models: ${REGISTRY.map((m) => m.id).join(', ')}`);
+    process.exit(1);
+  }
+  return info;
+}
 
 function formatBytes(bytes) {
   if (bytes === 0) return '0 Bytes';
@@ -21,14 +32,13 @@ function formatBytes(bytes) {
   return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
 }
 
-function downloadFile(url, dest) {
+function downloadFile(url, dest, label) {
   return new Promise((resolve, reject) => {
-    console.log('Downloading Qwen2.5-0.5B model...');
+    console.log(`Downloading ${label}...`);
     console.log(`URL: ${url}`);
     console.log(`Destination: ${dest}`);
     console.log('');
 
-    // Ensure models directory exists
     if (!fs.existsSync(MODELS_DIR)) {
       fs.mkdirSync(MODELS_DIR, { recursive: true });
     }
@@ -96,40 +106,47 @@ function downloadFile(url, dest) {
 }
 
 async function main() {
+  const modelId = parseModelArg();
+  const modelInfo = getModelInfo(modelId);
+  const modelPath = path.join(MODELS_DIR, modelInfo.filename);
+  const expectedSizeMB = modelInfo.approxDownloadSizeMB;
+
   console.log('='.repeat(50));
   console.log('Noschen - Model Download Script');
   console.log('='.repeat(50));
   console.log('');
+  console.log(`Model: ${modelInfo.label} (${modelInfo.paramCount})`);
+  console.log('');
 
   // Check if model already exists
-  if (fs.existsSync(MODEL_PATH)) {
-    const stats = fs.statSync(MODEL_PATH);
+  if (fs.existsSync(modelPath)) {
+    const stats = fs.statSync(modelPath);
     const sizeMB = stats.size / (1024 * 1024);
 
-    if (sizeMB > EXPECTED_SIZE_MB * 0.9) {
-      console.log(`Model already exists: ${MODEL_PATH}`);
+    if (sizeMB > expectedSizeMB * 0.5) {
+      console.log(`Model already exists: ${modelPath}`);
       console.log(`Size: ${formatBytes(stats.size)}`);
       console.log('');
       console.log('To re-download, delete the file and run this script again.');
       return;
     } else {
       console.log('Existing model file appears incomplete. Re-downloading...');
-      fs.unlinkSync(MODEL_PATH);
+      fs.unlinkSync(modelPath);
     }
   }
 
   try {
-    await downloadFile(MODEL_URL, MODEL_PATH);
+    await downloadFile(modelInfo.downloadUrl, modelPath, modelInfo.label);
 
     // Verify the download
-    const stats = fs.statSync(MODEL_PATH);
+    const stats = fs.statSync(modelPath);
     console.log(`Downloaded file size: ${formatBytes(stats.size)}`);
 
-    if (stats.size < EXPECTED_SIZE_MB * 0.9 * 1024 * 1024) {
+    if (stats.size < expectedSizeMB * 0.5 * 1024 * 1024) {
       console.warn('Warning: Downloaded file may be incomplete.');
     } else {
       console.log('');
-      console.log('Model downloaded successfully!');
+      console.log(`${modelInfo.label} downloaded successfully!`);
       console.log('You can now run the app with: npm run dev');
     }
   } catch (error) {
@@ -137,7 +154,7 @@ async function main() {
     console.error('Download failed:', error.message);
     console.error('');
     console.error('You can manually download the model from:');
-    console.error(MODEL_URL);
+    console.error(modelInfo.downloadUrl);
     console.error('');
     console.error(`And place it in: ${MODELS_DIR}`);
     process.exit(1);

@@ -28,7 +28,7 @@ Noschen is a privacy-first, local-first research note-taking application that pr
 ### Core Features
 
 - **Local-First Privacy**: All notes are stored locally on your machine. No cloud sync, no data leaving your device.
-- **AI-Powered Feedback**: Real-time intelligent suggestions powered by local LLM (Ollama) or Mistral API.
+- **AI-Powered Feedback**: Real-time intelligent suggestions powered by a built-in local LLM (Qwen2.5-0.5B or Phi-3-mini-128k), Ollama, or Mistral API.
 - **Hierarchical Note Structure**: Organize research with H1 headings (main topic) and H2 headings (sub-questions/aspects).
 - **Dark Mode Interface**: Clean, distraction-free dark theme designed for extended research sessions.
 - **Auto-Save**: Never lose your work—notes save automatically after 1 second of inactivity.
@@ -144,7 +144,30 @@ ollama pull mistral
 
 Launch Noschen and click the **Settings** icon in the sidebar to configure your AI provider.
 
-#### Option 1: Ollama (Local LLM) — Recommended
+#### Option 0: Built-in AI (Default, No Setup Required)
+
+Runs entirely on-device via `node-llama-cpp`, no external server or account needed. Pick between
+two bundled models in Settings → AI Provider → Built-in Model; whichever one isn't yet downloaded
+gets an in-app "Download" button with a progress bar.
+
+| Model | Size | Practical Context | Notes |
+|-------|------|--------------------|-------|
+| Qwen2.5-0.5B | ~400MB | up to 32K tokens | Small, fast, works on any hardware. Default. |
+| Phi-3-mini-128k | ~2.4GB | up to 32K tokens (practical ceiling — see below) | Bigger, higher-quality, noticeably more RAM/CPU |
+
+Both models can natively address large context windows (Qwen: 32K, Phi-3-mini: 128K), but the
+Context Size setting is capped at 32768 for both — Phi-3-mini's KV cache costs roughly 32x more
+per token than Qwen's (it lacks grouped-query attention), so its *architectural* 128K window isn't
+practically usable on consumer hardware even though the model supports it.
+
+You can also pre-fetch either model from the command line before first launch:
+
+```bash
+npm run download-model        # Qwen2.5-0.5B (default)
+npm run download-model:phi3   # Phi-3-mini-128k
+```
+
+#### Option 1: Ollama (Local LLM)
 
 Best for privacy and offline use. Runs entirely on your machine.
 
@@ -512,7 +535,8 @@ npx tsc --noEmit
 | `npm run dev` | Start development server with hot reload |
 | `npm run build` | Build for production |
 | `npm run package` | Package as desktop app |
-| `npm run download-model` | Download the built-in Qwen 0.5B model |
+| `npm run download-model` | Download the built-in Qwen2.5-0.5B model (default) |
+| `npm run download-model:phi3` | Download the built-in Phi-3-mini-128k model (bigger-context alternative) |
 | `npm run download-compressor` | Download the LLMLingua-2 prompt-compression model (optional) |
 | `npm run lint` | Run ESLint |
 | `npm run typecheck` | Run TypeScript type checking |

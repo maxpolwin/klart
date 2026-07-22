@@ -28,7 +28,7 @@ Noschen is an **AI-powered research note-taking application** designed for acade
 
 ### 1.2 Key Value Propositions
 
-- **Privacy-First AI**: Built-in local LLM (Qwen 0.5B) runs entirely offline
+- **Privacy-First AI**: Built-in local LLM (Qwen2.5-0.5B, or Phi-3-mini-128k for bigger context) runs entirely offline
 - **Real-Time Feedback**: AI analyzes notes as you type with 2-second debounce
 - **Customizable**: Editable prompts, custom feedback types, adjustable AI parameters
 - **Cross-Platform**: macOS (Intel & Apple Silicon), Windows, Linux
@@ -165,27 +165,45 @@ When AI responses exceed a time threshold:
 
 #### Built-in AI (Default)
 
+Two selectable models, both running fully offline via `node-llama-cpp` (ESM). GPU layers
+are auto-fit ("max") to available VRAM/unified memory on Apple Silicon (Metal), CPU-only
+elsewhere. The user picks between them in Settings → AI Provider → Built-in Model; the
+selected model's file is either bundled with the app, downloaded on first use via an
+in-app download button, or pre-fetched with `npm run download-model[:phi3]`.
+
 ```
-Model: Qwen2.5-0.5B-Instruct (Q4_K_M quantization)
-Size: ~380MB
-Runtime: node-llama-cpp (ESM)
-GPU: Metal acceleration on Apple Silicon (33 layers)
-Offline: Yes
+Qwen2.5-0.5B-Instruct (Q4_K_M quantization)
+  Size: ~400MB
+  Native context: up to 32768 tokens
+
+Phi-3-mini-128k-instruct (Q4_K_M quantization)
+  Size: ~2.4GB
+  Native context: up to 131072 tokens (architectural max; see practical ceiling below)
 ```
 
 **Configuration Parameters:**
 
 | Parameter | Range | Default | Description |
 |-----------|-------|---------|-------------|
-| Context Size | 512-8192 | 2048 | Input tokens capacity |
-| Max Tokens | 256-4096 | 1536 | Output length limit |
+| Context Size | 512-32768 | 2048 (Qwen) / 8192 (Phi-3-mini) | Input tokens capacity |
+| Max Tokens | 256-4096 | 1536 (Qwen) / 2048 (Phi-3-mini) | Output length limit |
 | Batch Size | 128-2048 | 512 | Processing batch size |
 | Chunking Threshold | 500-10000ms | 3000ms | Time before adaptive chunking |
 
-**Recommended for M2 MacBook (32GB RAM):**
-- Context Size: 4096
+The Context Size ceiling is capped at 32768 for both models in the UI, even though
+Phi-3-mini's architecture supports up to 131072 — its KV cache costs roughly 32x more
+per token than Qwen's (no grouped-query attention, more/larger attention heads), so its
+*practical* usable context on consumer hardware is far below its architectural maximum.
+
+**Recommended for Qwen2.5-0.5B:**
+- Context Size: 2048
+- Max Tokens: 1536
+- Batch Size: 512
+
+**Recommended for Phi-3-mini-128k:**
+- Context Size: 8192
 - Max Tokens: 2048
-- Batch Size: 1024
+- Batch Size: 512
 
 #### Ollama (Local HTTP)
 
@@ -607,8 +625,9 @@ interface AISettings {
   spellcheckLanguages: string[];
 
   // LLM Parameters
+  builtinModel: 'qwen2.5-0.5b' | 'phi-3-mini-128k'; // Which bundled model to use
   chunkingThresholdMs: number;   // 500-10000
-  llmContextSize: number;        // 512-8192
+  llmContextSize: number;        // 512-32768
   llmMaxTokens: number;          // 256-4096
   llmBatchSize: number;          // 128-2048
 
@@ -630,6 +649,8 @@ interface PromptConfig {
 
 1. **AI Provider**
    - Provider selection (Built-in / Ollama / Mistral)
+   - Built-in model selection (Qwen2.5-0.5B / Phi-3-mini-128k), with an in-app
+     download button and progress bar for whichever model isn't yet present
    - Provider-specific configuration
    - Chunking threshold
    - Advanced LLM parameters (expandable)
@@ -652,7 +673,8 @@ interface PromptConfig {
 |------|------|
 | Notes | `~/.config/Noschen/notes/*.json` |
 | Settings | `~/.config/Noschen/settings.json` |
-| LLM Model | `{app}/models/qwen2.5-0.5b-instruct-q4_k_m.gguf` |
+| LLM Model (bundled/dev) | `{app}/models/qwen2.5-0.5b-instruct-q4_k_m.gguf` or `phi-3-mini-128k-instruct-q4_k_m.gguf` |
+| LLM Model (in-app download) | `~/.config/Noschen/models/<filename>` |
 
 ---
 
@@ -664,7 +686,8 @@ interface PromptConfig {
 npm run dev          # Development mode (hot reload)
 npm run build        # Production build
 npm run package      # Create distributable installers
-npm run download-model  # Download Qwen model
+npm run download-model       # Download Qwen2.5-0.5B (default builtin model)
+npm run download-model:phi3  # Download Phi-3-mini-128k (bigger-context alternative)
 ```
 
 ### 9.2 Distribution Formats
