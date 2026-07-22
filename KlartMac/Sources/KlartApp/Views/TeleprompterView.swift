@@ -8,9 +8,11 @@ import KlartKit
 /// layout keeps visible lives behind an edge or a key here:
 ///
 /// - Notes wait behind the left edge. Moving the pointer there reveals a
-///   spine of dots (one per note); dwelling on them for 0.8 s expands the
-///   full panel — titles, last-edited dates, shield marks, search — which
-///   retires again the moment writing resumes.
+///   spine of dots (one per note); a click on the spine (not on a dot itself,
+///   which switches notes) expands the full panel immediately, and dwelling
+///   there for 2 s expands it without needing to click at all — titles,
+///   last-edited dates, shield marks, search — which retires again the
+///   moment writing resumes.
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
 ///   the panel, ⌘E, or typing /editor — each aligned to the section of text
@@ -68,8 +70,9 @@ struct TeleprompterView: View {
         static let panelWidth: CGFloat = 268
         static let edgeStripWidth: CGFloat = 26
         static let titleBarHeight: CGFloat = 46
-        /// Dwell on the dots before the panel expands.
-        static let dwellSeconds: Double = 0.8
+        /// Dwell on the dots before the panel expands on its own — a click
+        /// expands it immediately, without waiting.
+        static let dwellSeconds: Double = 2.0
         /// Continued writing for this long fades the rail…
         static let railFadeDelay: Double = 5 * 60
         /// …over this long, so focus returns gradually.
@@ -278,6 +281,10 @@ struct TeleprompterView: View {
                         scheduleCollapse()
                     }
                 }
+                // A click skips the dwell entirely — useful before the dots
+                // have even faded in, e.g. a confident click right at the
+                // window edge.
+                .onTapGesture { revealPanel() }
 
             if dotsVisible && !panelExpanded {
                 dotSpine
@@ -291,8 +298,10 @@ struct TeleprompterView: View {
     /// The dots→panel expand — same calm speed as the editor's margin rail.
     private var edgeAnimation: Animation? { calmAnimation }
 
-    /// One dot per note, current note in full ink. Dwelling here for 0.8 s
-    /// expands the panel; a click switches notes without ever opening it.
+    /// One dot per note, current note in full ink. Clicking a dot switches
+    /// straight to that note; clicking the spine itself (its padding and
+    /// background, not a dot) expands the full panel immediately, and
+    /// dwelling here for 2 s does the same without a click.
     private var dotSpine: some View {
         VStack(spacing: 10) {
             ForEach(spineNotes) { note in
@@ -326,6 +335,10 @@ struct TeleprompterView: View {
         // right rail (a plain numeric spring on the column's padding, no
         // opacity at all) reads as springy and this didn't.
         .transition(.move(edge: .leading))
+        .contentShape(Rectangle())
+        // Landing on a dot's own Button fires that dot's action instead —
+        // this only fires for the spine's padding and background.
+        .onTapGesture { revealPanel() }
         .onHover { inside in
             hoveringDots = inside
             if inside {
@@ -552,11 +565,7 @@ struct TeleprompterView: View {
         dwellTask = Task { @MainActor in
             try? await Task.sleep(nanoseconds: UInt64(Metrics.dwellSeconds * 1_000_000_000))
             guard !Task.isCancelled else { return }
-            // The dots leave the hierarchy when the panel replaces them, and
-            // a removed view never reports hover-exit — clear it by hand.
-            hoveringDots = false
-            withAnimation(edgeAnimation) { panelExpanded = true }
-            searchFocused = true
+            revealPanel()
         }
     }
 
@@ -585,8 +594,15 @@ struct TeleprompterView: View {
         }
     }
 
+    /// Expands straight to the full panel — from the dwell timer completing,
+    /// a click on the spine, or ⌘F. All three converge here so they can
+    /// never leave the state machine's flags out of sync with each other.
     private func revealPanel() {
+        dwellTask?.cancel()
         collapseTask?.cancel()
+        // The dots leave the hierarchy once the panel replaces them, and a
+        // removed view never reports hover-exit — clear it by hand.
+        hoveringDots = false
         withAnimation(edgeAnimation) {
             dotsVisible = true
             panelExpanded = true
