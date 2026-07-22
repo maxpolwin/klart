@@ -10,7 +10,7 @@ This is the native Swift/SwiftUI rebuild of the original Electron prototype. It 
 
 ## Highlights
 
-- **Native SwiftUI, "Quiet" design** — follows the system light/dark appearance, one accent color, a translucent sidebar, and no persistent AI chrome: suggestions wait behind a small pill in the toolbar ("3 ready") until summoned with a click or `⌘.`. No Electron, no web view.
+- **Native SwiftUI, "Teleprompter" design** — the default surface is one centered, monochrome column and nothing else: no sidebar, no toolbar, no persistent AI chrome. Notes wait behind the left edge (move the pointer there for a spine of dots; dwell 0.8 s for the full panel with titles, dates, and search). The AI editor works in the background and appears only when summoned (`⌘.`, the ¶ icon in the panel, or typing `/editor`): margin notes on the right, matched to the text sections they refer to, marked with glyphs (◇ ⧉ ❝ ≡ ◎ ?) instead of colored pills — and they fade back out while you keep writing. The classic "Quiet" layout (sidebar, accent color, toolbar pill) is a toggle in Settings → Interface. No Electron, no web view.
 - **Markdown-ready editor** — headings resize live as you type (`#`, `##`, `###`), list markers and quotes are tinted, and `**bold**`, `*italic*`, and `` `code` `` style inline while the text stays plain markdown.
 - **Local-first** — notes are plain JSON-wrapped markdown files in `~/Library/Application Support/Klart/Notes`. Nothing leaves your machine unless you choose a cloud provider.
 - **Any LLM** — Ollama (native API), LM Studio, OpenRouter, or any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, corporate gateways). Model lists are fetched live from the provider.
@@ -19,7 +19,7 @@ This is the native Swift/SwiftUI rebuild of the original Electron prototype. It 
 - **Context-aware** — the coach knows your H1 topic, which H2 section you're editing, and what the other sections cover, so MECE and gap analysis are about the *document*, not the paragraph. Mark any section `[no-ai]` to exclude it.
 - **Secure by default** — API keys live in the macOS Keychain, never in settings files. Plain HTTP is enforced in code to local hosts only (loopback, RFC 1918/link-local addresses, `.local`/`.lan` names) and Settings shows a notice whenever an endpoint is unencrypted; every remote endpoint must be HTTPS. Packaged builds are signed with the **Hardened Runtime** and run in the **App Sandbox** (outgoing network only, plus files the user explicitly picks for export/import) — `make-app.sh` verifies both flags are present in the signature and fails the build otherwise.
 - **Optional note encryption + app lock** — Settings → Security encrypts every note file at rest with **AES-256-GCM** (FIPS-approved) under a **per-note subkey** derived via HKDF-SHA256 from a random master key, with the note's identity as AAD — a sealed file copied under another note's name fails to decrypt instead of impersonating it — and file sizes padded to 4 KiB buckets so they don't reveal note sizes. The master key is wrapped by your password via **Argon2id** (memory-hard: 128 MiB, 3 passes, 4 lanes, NFC-normalized — the vendored, hash-pinned PHC reference implementation, see `Sources/CArgon2/THIRD_PARTY.md`; legacy PBKDF2 vaults upgrade automatically on the next password unlock) and held in **mlocked, zeroized-on-lock memory** while unlocked. Optional Touch ID unlock: on Apple Silicon / T2 the key copy is encrypted to a **Secure Enclave** P-256 key that demands user presence on every decrypt; older Macs fall back to a user-presence Keychain control. The app starts locked, locks with `⌘L`, **auto-locks** on screen sleep/lock and after a configurable idle timeout, and repeated wrong passwords throttle with growing delays. A **key rotation** action re-encrypts the library under a fresh master key (crash-safe and resumable). Legacy v1/v2 (ChaCha20-Poly1305) files stay readable and upgrade on save. There is no recovery backdoor: a forgotten password (with Touch ID off) means the notes are gone — keep a markdown export. FIDO2 hardware keys (YubiKey) are not supported: macOS exposes no public API to derive stable encryption secrets from a security key for app-local vaults.
-- **Sensitive notes never touch the cloud** — mark any note with the shield in the toolbar and every AI request for it is refused *in code* unless the resolved endpoint is local (Ollama, LM Studio, or another on-machine/LAN server). A "Custom" provider pointed at a remote host counts as cloud. The block is enforced at request time, not just hidden in the UI.
+- **Sensitive notes never touch the cloud** — mark any note via **File ▸ Mark Sensitive** (or the toolbar shield in the classic layout) and every AI request for it is refused *in code* unless the resolved endpoint is local (Ollama, LM Studio, or another on-machine/LAN server). A "Custom" provider pointed at a remote host counts as cloud. The block is enforced at request time, not just hidden in the UI.
 - **Ambient anti-exposure** — the window can be excluded from screenshots, screen recordings, and screen sharing (on by default with protection); copies from a protected library clear the clipboard after 45 seconds unless something else was copied; core dumps are disabled and release builds deny debugger attachment; a hash-chained local **audit log** (`audit.log`) records lock/unlock/rotation events — never content — and any tampering with it is detectable.
 - **Markdown export/import** — File → Export Notes as Markdown… writes every note as a plain `.md` file to a folder you pick (your manual, provider-independent backup); Import Markdown Notes… brings them back, recognizing its own export headers so re-imports update instead of duplicate.
 - **Fast** — actor-based file I/O, debounced autosave (atomic writes), per-paragraph editor styling, cancellation-aware feedback pipeline (a new keystroke cancels the in-flight analysis).
@@ -104,11 +104,12 @@ With no secrets configured the workflow keeps working and falls back to ad-hoc s
 ## Using Klårt
 
 1. Create a note (`⌘N`). Give it a `# Topic` heading and `## Sub-question` sections.
-2. Write. After a pause (configurable, default 2.5 s), the coach analyzes the section you're in. Nothing appears mid-screen — the toolbar pill just changes to "N ready".
-3. Click the pill (or press `⌘.`) to open the coach popover: **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **Dismiss** hides that tip permanently for this note.
-4. Use the coach actions any time — they answer in a live stream in the popover, and are also in the **Coach** menu.
-5. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
+2. Write. After a pause (configurable, default 2.5 s), the editor reads the section you're in — silently, in the background. Nothing appears mid-screen.
+3. Summon the editor with `⌘.`, by typing `/editor`, or via the ¶ icon in the notes panel: its notes appear in the right margin, each aligned with the section it refers to. **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **→** moves that note out of sight for now (it slides off to the right and may return on a later analysis); **Dismiss** hides that tip permanently for this note. Keep writing and the margin notes fade away again on their own (after 5 more minutes of typing, over 20 seconds).
+4. Your notes live behind the left edge: move the pointer there for the dot spine, rest on it for 0.8 s for the full panel (titles, last edited, shield marks, search — `⌘F` jumps straight there).
+5. Use the coach actions any time from the **Coach** menu. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
 6. Add `[no-ai]` to a heading (e.g. `## Private notes [no-ai]`) to keep the coach out of that section.
+7. Prefer the classic sidebar-and-toolbar layout, or want word count and reading time at the foot of the page? Settings → Interface.
 
 ## Provider setup (Settings → AI Provider)
 
@@ -135,7 +136,7 @@ KlartMac/
 │   │   └── Feedback/             PromptBuilder, robust FeedbackParser, FeedbackEngine
 │   └── KlartApp/               SwiftUI app (macOS-only)
 │       ├── AppState.swift        Single source of truth, debounce/cancellation logic
-│       └── Views/                Sidebar, NSTextView markdown editor, coach panel, settings
+│       └── Views/                Teleprompter surface, sidebar, NSTextView markdown editor, coach panel, settings
 ├── Tests/KlartKitTests/        Outline, parser, prompts, engine, storage, settings
 └── Scripts/make-app.sh           Release build → signed Klart.app
 ```

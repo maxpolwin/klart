@@ -47,11 +47,20 @@ final class AppState: ObservableObject {
     /// The Quiet coach popover — closed by default, only ever opened by the
     /// user (or by running a coach action, whose output lives inside it).
     @Published var showCoachPopover = false
+    /// Teleprompter: whether the editor's margin rail (suggestions on the
+    /// right) is on screen. Analysis runs in the background either way; the
+    /// rail only appears when the user summons the editor — via the icon in
+    /// the notes panel, ⌘., or typing /editor — and retires again when the
+    /// suggestions fade out.
+    @Published var editorRailVisible = false
 
     // MARK: Settings / provider
 
     @Published var settings: AppSettings {
-        didSet { persistSettings() }
+        didSet {
+            persistSettings()
+            Theme.monochrome = settings.teleprompterMode
+        }
     }
     @Published var connection: ConnectionStatus = .unknown
     @Published var availableModels: [String] = []
@@ -99,7 +108,11 @@ final class AppState: ObservableObject {
         self.noteStore = noteStore
         self.settingsStore = settingsStore
         self.secrets = secrets
-        self.settings = settingsStore.load()
+        let loadedSettings = settingsStore.load()
+        self.settings = loadedSettings
+        // didSet doesn't fire during init; seed the monochrome flag here so
+        // the very first editor styles under the right palette.
+        Theme.monochrome = loadedSettings.teleprompterMode
         self.auditLog = AuditLog(
             fileURL: settingsStore.fileURL.deletingLastPathComponent().appendingPathComponent("audit.log")
         )
@@ -231,8 +244,19 @@ final class AppState: ObservableObject {
         coachOutput = ""
         coachAction = nil
         coachRunning = false
+        editorRailVisible = false
         editorText = selectedNote?.content ?? ""
         cursorUTF16 = 0
+    }
+
+    /// Summons the editor (Teleprompter): shows the margin rail and, when no
+    /// suggestions are waiting yet, asks for an analysis right away.
+    func activateEditor() {
+        guard selectedNoteID != nil else { return }
+        editorRailVisible = true
+        if feedbackItems.isEmpty {
+            requestFeedback(manual: true)
+        }
     }
 
     /// Called by the editor on every text change.
@@ -389,6 +413,15 @@ final class AppState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// Puts a suggestion away without judging it: it leaves the screen but
+    /// records nothing, so the editor may raise the point again on a later
+    /// analysis. (The Teleprompter rail's ×.)
+    func hide(_ item: FeedbackItem) {
+        feedbackItems.removeAll { $0.id == item.id }
+    }
+
+    /// Rejects a suggestion for good: its fingerprint is remembered per note
+    /// and it will not be shown again.
     func reject(_ item: FeedbackItem) {
         feedbackItems.removeAll { $0.id == item.id }
         guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }
@@ -738,6 +771,7 @@ final class AppState: ObservableObject {
             self.coachOutput = ""
             self.coachAction = nil
             self.showCoachPopover = false
+            self.editorRailVisible = false
             self.isLocked = true
             await self.auditLog.record(.locked)
         }

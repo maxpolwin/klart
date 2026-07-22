@@ -76,6 +76,21 @@ final class SettingsTests: XCTestCase {
         XCTAssertEqual(decoded.tipStyle.maxTips, 3)
         XCTAssertEqual(decoded.config(for: .lmstudio).baseURL, "http://localhost:1234/v1")
         XCTAssertTrue(decoded.autoFeedback)
+        // Interface settings introduced later: settings files from older
+        // builds fall back to Teleprompter on, word count off.
+        XCTAssertTrue(decoded.teleprompterMode)
+        XCTAssertFalse(decoded.showWordCount)
+    }
+
+    func testInterfaceSettingsRoundtrip() throws {
+        var settings = AppSettings()
+        settings.teleprompterMode = false
+        settings.showWordCount = true
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self, from: JSONEncoder().encode(settings)
+        )
+        XCTAssertFalse(decoded.teleprompterMode)
+        XCTAssertTrue(decoded.showWordCount)
     }
 
     func testDecodingClampsOutOfRangeValues() throws {

@@ -5,6 +5,8 @@ import KlartKit
 struct SettingsView: View {
     var body: some View {
         TabView {
+            InterfaceSettingsView()
+                .tabItem { Label("Interface", systemImage: "rectangle.center.inset.filled") }
             ProviderSettingsView()
                 .tabItem { Label("AI Provider", systemImage: "cpu") }
             CoachingSettingsView()
@@ -13,6 +15,37 @@ struct SettingsView: View {
                 .tabItem { Label("Security", systemImage: "lock.shield") }
         }
         .frame(width: 520, height: 480)
+    }
+}
+
+// MARK: - Interface tab
+
+private struct InterfaceSettingsView: View {
+    @EnvironmentObject var state: AppState
+
+    var body: some View {
+        Form {
+            Section("Writing surface") {
+                Toggle("Teleprompter mode", isOn: $state.settings.teleprompterMode)
+                Text(
+                    "One centered, monochrome column and nothing else on screen. "
+                    + "Your notes wait behind the left edge; the editor's suggestions "
+                    + "appear in the right margin when you summon them (⌘. or type /editor) "
+                    + "and fade away again while you keep writing. "
+                    + "Turn off for the classic sidebar layout."
+                )
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            }
+
+            Section("At the bottom") {
+                Toggle("Show word count and estimated reading time", isOn: $state.settings.showWordCount)
+                Text("A quiet line at the foot of the page, e.g. “512 words · 3 min read”.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .formStyle(.grouped)
     }
 }
 

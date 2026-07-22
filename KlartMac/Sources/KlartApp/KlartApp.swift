@@ -67,6 +67,15 @@ struct AppCommands: Commands {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
             Divider()
+            // The Teleprompter surface has no toolbar, so the sensitive
+            // toggle needs a menu home that works in both layouts.
+            Button(
+                state.selectedNote?.isSensitive == true
+                    ? "Unmark Sensitive (Allow Cloud AI)"
+                    : "Mark Sensitive (Local AI Only)"
+            ) { state.toggleSensitive() }
+                .disabled(state.selectedNoteID == nil)
+            Divider()
             Button("Export Notes as Markdown…") { state.exportAllNotesAsMarkdown() }
                 .disabled(state.isLocked || state.notes.isEmpty)
             Button("Import Markdown Notes…") { state.importMarkdownNotes() }
@@ -80,9 +89,21 @@ struct AppCommands: Commands {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
-            Button("Editor Suggestions") { state.showCoachPopover.toggle() }
-                .keyboardShortcut(".", modifiers: .command)
-                .disabled(state.selectedNoteID == nil)
+            Button("Editor Suggestions") {
+                // Teleprompter: the same key summons/hides the editor's
+                // margin rail; classic: the popover behind the toolbar pill.
+                if state.settings.teleprompterMode {
+                    if state.editorRailVisible {
+                        state.editorRailVisible = false
+                    } else {
+                        state.activateEditor()
+                    }
+                } else {
+                    state.showCoachPopover.toggle()
+                }
+            }
+            .keyboardShortcut(".", modifiers: .command)
+            .disabled(state.selectedNoteID == nil)
             Divider()
             ForEach(CoachAction.allCases) { action in
                 Button(action.label) { state.runCoach(action) }

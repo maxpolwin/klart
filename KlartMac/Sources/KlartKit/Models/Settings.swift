@@ -158,6 +158,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var lockOnScreenSleep: Bool
     /// Make the window invisible to screenshots, recordings, and screen sharing.
     public var excludeFromCapture: Bool
+    /// Teleprompter mode: the zero-chrome, monochrome writing surface. One
+    /// centered column, notes behind the left edge, the editor's suggestions
+    /// in a right margin rail. Off = the classic sidebar layout.
+    public var teleprompterMode: Bool
+    /// Show word count and estimated reading time at the bottom of the
+    /// teleprompter surface.
+    public var showWordCount: Bool
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -171,7 +178,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         vault: VaultConfig? = nil,
         autoLockMinutes: Int = 15,
         lockOnScreenSleep: Bool = true,
-        excludeFromCapture: Bool = true
+        excludeFromCapture: Bool = true,
+        teleprompterMode: Bool = true,
+        showWordCount: Bool = false
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -185,6 +194,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.autoLockMinutes = autoLockMinutes
         self.lockOnScreenSleep = lockOnScreenSleep
         self.excludeFromCapture = excludeFromCapture
+        self.teleprompterMode = teleprompterMode
+        self.showWordCount = showWordCount
     }
 
     public init(from decoder: Decoder) throws {
@@ -202,6 +213,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         autoLockMinutes = min(240, max(0, try c.decodeIfPresent(Int.self, forKey: .autoLockMinutes) ?? defaults.autoLockMinutes))
         lockOnScreenSleep = try c.decodeIfPresent(Bool.self, forKey: .lockOnScreenSleep) ?? defaults.lockOnScreenSleep
         excludeFromCapture = try c.decodeIfPresent(Bool.self, forKey: .excludeFromCapture) ?? defaults.excludeFromCapture
+        teleprompterMode = try c.decodeIfPresent(Bool.self, forKey: .teleprompterMode) ?? defaults.teleprompterMode
+        showWordCount = try c.decodeIfPresent(Bool.self, forKey: .showWordCount) ?? defaults.showWordCount
     }
 
     /// Connection details for the given provider, falling back to defaults.
