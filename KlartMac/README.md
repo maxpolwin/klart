@@ -10,7 +10,7 @@ This is the native Swift/SwiftUI rebuild of the original Electron prototype. It 
 
 ## Highlights
 
-- **Native SwiftUI, "Quiet" design** — follows the system light/dark appearance, one accent color, a translucent sidebar, and no persistent AI chrome: suggestions wait behind a small pill in the toolbar ("3 ready") until summoned with a click or `⌘.`. No Electron, no web view.
+- **Native SwiftUI, "Teleprompter" design** — the default surface is one centered, monochrome column and nothing else: no sidebar, no toolbar, no persistent AI chrome. Notes wait behind the left edge (move the pointer there for a spine of dots; dwell 0.8 s for the full panel with titles, dates, and search). The AI editor works in the background and appears only when summoned (`⌘.`, the ¶ icon in the panel, or typing `/editor`): margin notes on the right, matched to the text sections they refer to, marked with glyphs (◇ ⧉ ❝ ≡ ◎ ?) instead of colored pills — and they fade back out while you keep writing. The classic "Quiet" layout (sidebar, accent color, toolbar pill) is a toggle in Settings → Interface. No Electron, no web view.
 - **Markdown-ready editor** — headings resize live as you type (`#`, `##`, `###`), list markers and quotes are tinted, and `**bold**`, `*italic*`, and `` `code` `` style inline while the text stays plain markdown.
 - **Local-first** — notes are plain JSON-wrapped markdown files in `~/Library/Application Support/Klart/Notes`. Nothing leaves your machine unless you choose a cloud provider.
 - **Any LLM** — Ollama (native API), LM Studio, OpenRouter, or any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, corporate gateways). Model lists are fetched live from the provider.
@@ -104,11 +104,12 @@ With no secrets configured the workflow keeps working and falls back to ad-hoc s
 ## Using Klårt
 
 1. Create a note (`⌘N`). Give it a `# Topic` heading and `## Sub-question` sections.
-2. Write. After a pause (configurable, default 2.5 s), the coach analyzes the section you're in. Nothing appears mid-screen — the toolbar pill just changes to "N ready".
-3. Click the pill (or press `⌘.`) to open the coach popover: **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **Dismiss** hides that tip permanently for this note.
-4. Use the coach actions any time — they answer in a live stream in the popover, and are also in the **Coach** menu.
-5. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
+2. Write. After a pause (configurable, default 2.5 s), the editor reads the section you're in — silently, in the background. Nothing appears mid-screen.
+3. Summon the editor with `⌘.`, by typing `/editor`, or via the ¶ icon in the notes panel: its notes appear in the right margin, each aligned with the section it refers to. **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **×** dismisses that tip permanently for this note. Keep writing and the margin notes fade away again on their own (after 5 more minutes of typing, over 20 seconds).
+4. Your notes live behind the left edge: move the pointer there for the dot spine, rest on it for 0.8 s for the full panel (titles, last edited, shield marks, search — `⌘F` jumps straight there).
+5. Use the coach actions any time from the **Coach** menu. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
 6. Add `[no-ai]` to a heading (e.g. `## Private notes [no-ai]`) to keep the coach out of that section.
+7. Prefer the classic sidebar-and-toolbar layout, or want word count and reading time at the foot of the page? Settings → Interface.
 
 ## Provider setup (Settings → AI Provider)
 

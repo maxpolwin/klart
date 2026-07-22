@@ -17,10 +17,25 @@ struct ContentView: View {
                 mainInterface
             }
         }
-        .background(WindowConfigurator(excludeFromCapture: state.settings.excludeFromCapture))
+        .background(WindowConfigurator(
+            excludeFromCapture: state.settings.excludeFromCapture,
+            chromeless: state.settings.teleprompterMode && !state.isLocked
+        ))
     }
 
+    /// Teleprompter (the default): one centered column, no persistent chrome,
+    /// monochrome. Classic: sidebar + toolbar + coach pill. Switchable in
+    /// Settings → Interface.
+    @ViewBuilder
     private var mainInterface: some View {
+        if state.settings.teleprompterMode {
+            TeleprompterView()
+        } else {
+            classicInterface
+        }
+    }
+
+    private var classicInterface: some View {
         NavigationSplitView {
             SidebarView()
                 .navigationSplitViewColumnWidth(min: 200, ideal: 240, max: 340)
@@ -132,11 +147,13 @@ struct ContentView: View {
     }
 }
 
-/// Applies window-level security settings SwiftUI has no modifier for:
+/// Applies window-level settings SwiftUI has no modifier for:
 /// `sharingType = .none` removes the window from screenshots, recordings,
-/// and screen sharing.
+/// and screen sharing; `chromeless` melts the title bar into the content
+/// for the Teleprompter's zero-chrome surface.
 private struct WindowConfigurator: NSViewRepresentable {
     let excludeFromCapture: Bool
+    var chromeless = false
 
     func makeNSView(context: Context) -> NSView {
         let view = NSView()
@@ -149,7 +166,15 @@ private struct WindowConfigurator: NSViewRepresentable {
     }
 
     private func apply(to view: NSView) {
-        view.window?.sharingType = excludeFromCapture ? .none : .readOnly
+        guard let window = view.window else { return }
+        window.sharingType = excludeFromCapture ? .none : .readOnly
+        window.titleVisibility = chromeless ? .hidden : .visible
+        window.titlebarAppearsTransparent = chromeless
+        if chromeless {
+            window.styleMask.insert(.fullSizeContentView)
+        } else {
+            window.styleMask.remove(.fullSizeContentView)
+        }
     }
 }
 

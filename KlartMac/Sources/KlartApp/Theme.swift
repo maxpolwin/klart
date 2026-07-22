@@ -51,6 +51,26 @@ enum Theme {
         dark: rgb(0.435, 0.627, 0.918, 0.85)
     )
 
+    // MARK: Monochrome (Teleprompter)
+
+    /// True while the Teleprompter surface is active: every hue collapses to
+    /// ink. Kept in sync with settings by AppState, *before* any view builds,
+    /// and read at styling time — switching modes rebuilds the editor, so
+    /// text is always restyled under the right value.
+    static var monochrome = false
+
+    /// Markdown syntax markers (#, -, >, ``` …): accent normally, mid-gray
+    /// in monochrome so nothing in the editor carries a hue. Each branch is
+    /// still a dynamic color, so light/dark keeps adapting live.
+    static var nsMarker: NSColor {
+        monochrome ? nsTextSecondary : nsAccentMuted
+    }
+
+    /// Insertion point: accent normally, full ink in monochrome.
+    static var nsInsertionPoint: NSColor {
+        monochrome ? nsTextPrimary : nsAccent
+    }
+
     // MARK: SwiftUI colors
 
     static let background = Color(nsColor: nsBackground)
@@ -63,6 +83,21 @@ enum Theme {
     static let surfaceRaised = Color.primary.opacity(0.055)
     /// Hairline.
     static let border = Color.primary.opacity(0.08)
+
+    /// Monochrome stand-in for the kind colors: a geometric glyph drawn from
+    /// what the kind means. Glyph + label is the signal (never hue), so the
+    /// set also reads correctly for color-blind users in the classic UI.
+    static func glyph(for kind: FeedbackKind) -> String {
+        switch kind {
+        case .gap: return "◇"        // something missing — an unfilled shape
+        case .mece: return "⧉"       // two frames colliding — overlap
+        case .source: return "❝"     // a citation to add
+        case .structure: return "≡"  // stacked, level rules — order
+        case .clarity: return "◎"    // a mark resolving into focus
+        case .question: return "?"   // an open, Socratic ask
+        case .other: return "·"
+        }
+    }
 
     static func color(for kind: FeedbackKind) -> Color {
         switch kind {

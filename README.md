@@ -12,7 +12,7 @@ It's fast and light (~5 MB app, no bundled browser) and talks to **Ollama**, **L
 
 ## Highlights
 
-- **Native SwiftUI, "quiet" design** — follows the system light/dark appearance, one accent color, a translucent sidebar, and no persistent AI chrome: suggestions wait behind a small toolbar pill ("3 ready") until you summon them with a click or `⌘.`.
+- **Native SwiftUI, "Teleprompter" design** — by default one centered, monochrome column and nothing else on screen: notes wait behind the left edge (dots → hover 0.8 s → full panel with search), the AI editor's suggestions appear as margin notes on the right — matched to the text sections they refer to, marked with glyphs instead of colored pills — when summoned via `⌘.` or by typing `/editor`, and fade away again while you keep writing. Optional word count/reading time at the foot; the classic sidebar + accent-color layout is one toggle away in Settings → Interface.
 - **Live markdown editor** — headings resize as you type (`#`, `##`, `###`), list markers and quotes are tinted, fenced code blocks and `**bold**` / `*italic*` / `` `code` `` style inline while the text stays plain markdown. Lists continue on <kbd>Enter</kbd>.
 - **Coaching, not ghostwriting** — feedback types: **Gap**, **MECE**, **Source**, **Structure**, **Clarity**, and **Question** (Socratic), plus one-tap coach actions (*Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps*).
 - **Local-first & private** — notes live in `~/Library/Application Support/Klart/Notes`; API keys live in the macOS Keychain; no telemetry. Optional at-rest note encryption with app lock, Touch ID unlock, and auto-lock.

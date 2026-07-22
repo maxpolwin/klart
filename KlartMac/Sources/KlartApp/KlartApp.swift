@@ -80,9 +80,21 @@ struct AppCommands: Commands {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
-            Button("Coach Suggestions") { state.showCoachPopover.toggle() }
-                .keyboardShortcut(".", modifiers: .command)
-                .disabled(state.selectedNoteID == nil)
+            Button("Coach Suggestions") {
+                // Teleprompter: the same key summons/hides the editor's
+                // margin rail; classic: the coach popover behind the pill.
+                if state.settings.teleprompterMode {
+                    if state.editorRailVisible {
+                        state.editorRailVisible = false
+                    } else {
+                        state.activateEditor()
+                    }
+                } else {
+                    state.showCoachPopover.toggle()
+                }
+            }
+            .keyboardShortcut(".", modifiers: .command)
+            .disabled(state.selectedNoteID == nil)
             Divider()
             ForEach(CoachAction.allCases) { action in
                 Button(action.label) { state.runCoach(action) }

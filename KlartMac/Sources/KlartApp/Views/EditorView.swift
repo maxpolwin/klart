@@ -55,12 +55,66 @@ final class KlartTextView: NSTextView {
     }
 }
 
+/// Bridges the AppKit text machinery to SwiftUI overlays that need text
+/// geometry — the Teleprompter's right-hand rail aligns each of the editor's
+/// notes with the section of text it refers to.
+@MainActor
+final class EditorBridge: ObservableObject {
+    private(set) weak var textView: NSTextView?
+    /// Bumped on every scroll or edit so geometry-dependent overlays recompute.
+    @Published private(set) var layoutTick = 0
+    private var boundsObserver: NSObjectProtocol?
+
+    func attach(textView: NSTextView, scrollView: NSScrollView) {
+        self.textView = textView
+        scrollView.contentView.postsBoundsChangedNotifications = true
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+        boundsObserver = NotificationCenter.default.addObserver(
+            forName: NSView.boundsDidChangeNotification,
+            object: scrollView.contentView,
+            queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.bump() }
+        }
+    }
+
+    func bump() {
+        layoutTick &+= 1
+    }
+
+    deinit {
+        if let boundsObserver {
+            NotificationCenter.default.removeObserver(boundsObserver)
+        }
+    }
+
+    /// Y of the line containing the given UTF-16 offset, in the editor's
+    /// visible (viewport) coordinate space. Nil while detached or empty.
+    func lineY(atUTF16 offset: Int) -> CGFloat? {
+        guard let textView, let layoutManager = textView.layoutManager else { return nil }
+        let length = (textView.string as NSString).length
+        guard length > 0 else { return nil }
+        let glyphIndex = layoutManager.glyphIndexForCharacter(at: max(0, min(offset, length - 1)))
+        let rect = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+        return rect.minY + textView.textContainerInset.height - textView.visibleRect.minY
+    }
+}
+
 /// Plain-text markdown editor with live, lightweight styling: headings get
 /// larger fonts, quote lines are dimmed. Styling is applied per edited
 /// paragraph, so typing stays fast in large documents.
 struct MarkdownEditor: NSViewRepresentable {
     @Binding var text: String
     var clearClipboardAfterCopy = false
+    /// Top/bottom (height) and side (width) padding around the text.
+    var contentInset = NSSize(width: 32, height: 28)
+    /// When set, receives the text view for geometry queries (Teleprompter).
+    var bridge: EditorBridge? = nil
+    /// Slash commands: called with the command name (e.g. "editor") after
+    /// the typed `/editor` has been removed from the text.
+    var onCommand: ((String) -> Void)? = nil
     var onTextChange: () -> Void
     var onCursorChange: (Int) -> Void
 
@@ -97,8 +151,8 @@ struct MarkdownEditor: NSViewRepresentable {
         textView.isContinuousSpellCheckingEnabled = true
         textView.usesFindBar = true
         textView.drawsBackground = false
-        textView.insertionPointColor = Theme.nsAccent
-        textView.textContainerInset = NSSize(width: 32, height: 28)
+        textView.insertionPointColor = Theme.nsInsertionPoint
+        textView.textContainerInset = contentInset
         textView.textContainer?.widthTracksTextView = true
         textView.autoresizingMask = [.width]
         textView.typingAttributes = EditorStyler.bodyAttributes
@@ -109,6 +163,7 @@ struct MarkdownEditor: NSViewRepresentable {
 
         textView.string = text
         EditorStyler.restyleAll(textView)
+        bridge?.attach(textView: textView, scrollView: scrollView)
         return scrollView
     }
 
@@ -137,12 +192,48 @@ struct MarkdownEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
+            // A typed slash command ("/editor") is removed from the text and
+            // reported via onCommand. The removal re-enters textDidChange,
+            // which does the full binding/styling pass — skip our own.
+            if handleSlashCommand(in: textView) { return }
             isEditing = true
             parent.text = textView.string
             isEditing = false
             EditorStyler.restyleParagraph(around: textView.selectedRange(), in: textView)
             parent.onCursorChange(textView.selectedRange().location)
             parent.onTextChange()
+            parent.bridge?.bump()
+        }
+
+        /// Commands the user can type directly into the note.
+        private static let slashCommands = ["editor"]
+
+        /// Detects a just-completed slash command immediately before the
+        /// cursor (at a word boundary), removes it, and fires onCommand.
+        private func handleSlashCommand(in textView: NSTextView) -> Bool {
+            guard let onCommand = parent.onCommand else { return false }
+            let ns = textView.string as NSString
+            let cursor = textView.selectedRange().location
+            guard cursor <= ns.length else { return false }
+            for name in Self.slashCommands {
+                let token = "/" + name
+                let length = (token as NSString).length
+                guard cursor >= length else { continue }
+                let start = cursor - length
+                guard ns.substring(with: NSRange(location: start, length: length))
+                    .lowercased() == token else { continue }
+                // Only at a word boundary, so a pasted URL path never triggers.
+                if start > 0 {
+                    guard let scalar = Unicode.Scalar(ns.character(at: start - 1)),
+                          CharacterSet.whitespacesAndNewlines.contains(scalar) else { continue }
+                }
+                textView.insertText("", replacementRange: NSRange(location: start, length: length))
+                // Deliver after the current AppKit event settles — the
+                // handler mutates observable app state.
+                DispatchQueue.main.async { onCommand(name) }
+                return true
+            }
+            return false
         }
 
         func textViewDidChangeSelection(_ notification: Notification) {
@@ -170,7 +261,9 @@ enum EditorStyler {
     static let textColor = Theme.nsTextPrimary
     static let quoteColor = Theme.nsTextSecondary
     static let syntaxColor = Theme.nsTextTertiary
-    static let markerColor = Theme.nsAccentMuted
+    /// Accent-tinted normally, gray in Teleprompter (monochrome). Computed
+    /// so it's resolved at styling time, not frozen at first use.
+    static var markerColor: NSColor { Theme.nsMarker }
 
     private static let listMarkerRegex = try! NSRegularExpression(
         pattern: #"^\s{0,8}(?:[-*+]|\d{1,3}[.)])(?=\s)"#
