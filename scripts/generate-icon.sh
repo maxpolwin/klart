@@ -2,6 +2,10 @@
 
 # Generate macOS .icns icon from a 1024x1024 master PNG (build/icon.png).
 # Requires: sips and iconutil (both come with macOS / Xcode command line tools).
+# If build/icon.png has transparency, it is flattened onto a solid
+# background color (ICON_BG, default #1a1a2e) using ImageMagick, since
+# macOS app icons should not rely on the Dock/Finder background showing
+# through. Install ImageMagick with: brew install imagemagick
 
 set -e
 
@@ -10,6 +14,7 @@ PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
 PNG_FILE="$BUILD_DIR/icon.png"
 ICONSET_DIR="$BUILD_DIR/icon.iconset"
+ICON_BG="${ICON_BG:-#1a1a2e}"
 
 echo "Generating macOS icon from PNG..."
 
@@ -22,6 +27,24 @@ fi
 if ! command -v sips &> /dev/null; then
   echo "Error: sips not found (should ship with macOS)." >&2
   exit 1
+fi
+
+if command -v magick &> /dev/null; then
+  IM_CMD="magick"
+elif command -v convert &> /dev/null; then
+  IM_CMD="convert"
+else
+  IM_CMD=""
+fi
+
+if [ -n "$IM_CMD" ]; then
+  echo "Flattening $PNG_FILE onto solid background $ICON_BG..."
+  "$IM_CMD" "$PNG_FILE" -background "$ICON_BG" -flatten "$PNG_FILE"
+else
+  echo "Warning: ImageMagick not found — if $PNG_FILE has transparency it will stay" >&2
+  echo "transparent (invisible on light backgrounds). Install with:" >&2
+  echo "  brew install imagemagick" >&2
+  echo "and rerun, or flatten it yourself before running this script." >&2
 fi
 
 # Create iconset directory
