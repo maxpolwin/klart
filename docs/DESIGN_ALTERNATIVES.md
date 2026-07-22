@@ -1,6 +1,6 @@
 # Design Alternatives: A More Modern, Accessible AI Experience
 
-This document ideates three design directions for how Noschen presents AI assistance.
+This document ideates three design directions for how Klårt presents AI assistance.
 All three follow the same cross-cutting best practices (below) and differ in *where* AI
 lives in the interface and *how much attention* it is allowed to demand.
 
@@ -161,4 +161,4 @@ is worth adding to either — the prompt plumbing (`tipStyle.customGuidance`) al
 supports it end-to-end.
 
 An interactive visual mockup of all three alternatives accompanies this document
-(see the session artifact "Noschen AI design alternatives").
+(see the session artifact "Klårt AI design alternatives").

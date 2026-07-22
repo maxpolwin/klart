@@ -1,4 +1,4 @@
-# Noschen — Product Requirements Document
+# Klårt — Product Requirements Document
 
 **Version:** 2.0.0 (Swift-native)
 **Last Updated:** July 2026
@@ -26,7 +26,7 @@
 
 ### 1.1 Purpose
 
-Noschen is a **thinking coach that lives in your notes** — a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on (in the context of the whole document) and coaches you: it points out gaps, overlapping categories, vague claims, and structural problems, and can ask Socratic questions instead of writing your notes for you.
+Klårt is a **thinking coach that lives in your notes** — a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on (in the context of the whole document) and coaches you: it points out gaps, overlapping categories, vague claims, and structural problems, and can ask Socratic questions instead of writing your notes for you.
 
 ### 1.2 Key Value Propositions
 
@@ -60,39 +60,39 @@ No Node, npm, Electron, or web view. The app is a single SwiftPM package.
 
 ### 2.2 Package structure
 
-`Package.swift` declares one package (`Noschen`) with:
+`Package.swift` declares one package (`Klart`) with:
 
 **Products**
-- `.library("NoschenKit")` — platform-independent, unit-tested core
-- `.executable("Noschen")` — the SwiftUI app
+- `.library("KlartKit")` — platform-independent, unit-tested core
+- `.executable("Klart")` — the SwiftUI app
 
 **Targets**
 - **`CArgon2`** — plain C target (`Sources/CArgon2`): vendored, hash-pinned PHC reference Argon2, compiled in-tree (nothing fetched at build time). Public headers in `include/`.
-- **`NoschenKit`** — depends on `CArgon2`. Core models, markdown parsing, storage, LLM clients, feedback engine.
-- **`Noschen`** — executable, depends on `NoschenKit`. SwiftUI app (`Sources/NoschenApp`). Embeds `Resources/Info.plist` into the binary via a linker `-sectcreate` flag so `swift run` gets App Transport Security exceptions for localhost providers.
-- **`NoschenKitTests`** — XCTest suite against `NoschenKit`.
+- **`KlartKit`** — depends on `CArgon2`. Core models, markdown parsing, storage, LLM clients, feedback engine.
+- **`Klart`** — executable, depends on `KlartKit`. SwiftUI app (`Sources/KlartApp`). Embeds `Resources/Info.plist` into the binary via a linker `-sectcreate` flag so `swift run` gets App Transport Security exceptions for localhost providers.
+- **`KlartKitTests`** — XCTest suite against `KlartKit`.
 
 ```
-NoschenMac/
+KlartMac/
 ├── Package.swift
 ├── Sources/
 │   ├── CArgon2/                  Vendored Argon2 (C)
-│   ├── NoschenKit/               Core (library, unit-tested)
+│   ├── KlartKit/               Core (library, unit-tested)
 │   │   ├── Models/               Note, Settings, Feedback
 │   │   ├── Markdown/             Outline parser (UTF-16 offsets ↔ cursor)
 │   │   ├── Storage/              NoteStore (actor), SettingsStore, Keychain, VaultCrypto
 │   │   ├── LLM/                  LLMClient, Ollama + OpenAI-compatible clients
 │   │   └── Feedback/             PromptBuilder, FeedbackParser, FeedbackEngine
-│   └── NoschenApp/               SwiftUI app (macOS-only)
+│   └── KlartApp/               SwiftUI app (macOS-only)
 │       ├── AppState.swift        Single source of truth, debounce/cancellation
 │       ├── Theme.swift           Design tokens
 │       └── Views/                Sidebar, editor, coach panel, settings, lock
-└── Tests/NoschenKitTests/
+└── Tests/KlartKitTests/
 ```
 
 ### 2.3 Data flow
 
-The renderer/main-process split of the old Electron build is gone. `AppState` (an observable object) is the single source of truth; it debounces edits, cancels in-flight analyses on new keystrokes, and calls into `NoschenKit` (`NoteStore` actor for I/O, `FeedbackEngine` for coaching). Views are pure SwiftUI except the editor, which bridges to an `NSTextView` for markdown styling.
+The renderer/main-process split of the old Electron build is gone. `AppState` (an observable object) is the single source of truth; it debounces edits, cancels in-flight analyses on new keystrokes, and calls into `KlartKit` (`NoteStore` actor for I/O, `FeedbackEngine` for coaching). Views are pure SwiftUI except the editor, which bridges to an `NSTextView` for markdown styling.
 
 ---
 
@@ -153,7 +153,7 @@ Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`)
 
 ### 4.1 Providers
 
-`ProviderKind` and its defaults (`Sources/NoschenKit/Models/Settings.swift`):
+`ProviderKind` and its defaults (`Sources/KlartKit/Models/Settings.swift`):
 
 | Provider | Display name | Default endpoint | Default model | API key | Insecure HTTP allowed |
 |----------|-------------|------------------|---------------|:---:|:---:|
@@ -162,7 +162,7 @@ Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`)
 | `openrouter` | OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-haiku-4.5` | Keychain | ❌ |
 | `custom` | Custom (OpenAI-compatible) | `http://localhost:8080/v1` | — | optional | ✅ (local) |
 
-**Clients** (`Sources/NoschenKit/LLM/`):
+**Clients** (`Sources/KlartKit/LLM/`):
 - **`OllamaClient`** — native Ollama API. `listModels()` → GET `api/tags`; chat → POST `api/chat` with `options.num_predict`, `format: "json"` in JSON mode; newline-delimited JSON streaming.
 - **`OpenAICompatClient`** — LM Studio, OpenRouter, custom. `listModels()` → GET `models`; chat → POST `chat/completions` with `max_tokens`, SSE streaming; API key as `Authorization: Bearer …`.
 - **`ProviderFactory`** builds the right client. OpenRouter adds `HTTP-Referer` / `X-Title` headers. **Test Connection** in Settings fetches the live model list.
@@ -183,7 +183,7 @@ Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`)
 
 ## 5. Editor & Markdown
 
-The editor (`Sources/NoschenApp/Views/EditorView.swift`) is a plain-text `NSTextView` (`NoschenTextView`) with live, per-paragraph styling — markdown stays markdown, it is never converted to rich text. It re-styles per paragraph while typing and fully on paste / note-switch. A fresh editor (and undo stack) is created per note.
+The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextView` (`KlartTextView`) with live, per-paragraph styling — markdown stays markdown, it is never converted to rich text. It re-styles per paragraph while typing and fully on paste / note-switch. A fresh editor (and undo stack) is created per note.
 
 **Constructs styled/handled** (`EditorStyler`):
 
@@ -199,13 +199,13 @@ The editor (`Sources/NoschenApp/Views/EditorView.swift`) is a plain-text `NSText
 | Horizontal rules `---` / `***` / `___` | Dimmed |
 | Escaped `\*` `` \` `` `\_` | Not treated as emphasis/code |
 
-**Outline** (`Sources/NoschenKit/Markdown/Outline.swift`): `DocumentOutline.parse` builds `OutlineSection`s with **UTF-16 offsets** (matching the `NSTextView` cursor) — `level`, `title`, `headingStart`, `bodyStart`, `bodyEnd`, `excludedFromAI`. Headings inside code fences are ignored; a trailing `[no-ai]` marks a section excluded. This is the structure the coach uses to know your topic (first H1), which section you're editing, and what the other sections cover.
+**Outline** (`Sources/KlartKit/Markdown/Outline.swift`): `DocumentOutline.parse` builds `OutlineSection`s with **UTF-16 offsets** (matching the `NSTextView` cursor) — `level`, `title`, `headingStart`, `bodyStart`, `bodyEnd`, `excludedFromAI`. Headings inside code fences are ignored; a trailing `[no-ai]` marks a section excluded. This is the structure the coach uses to know your topic (first H1), which section you're editing, and what the other sections cover.
 
 ---
 
 ## 6. Design System
 
-`Sources/NoschenApp/Theme.swift` — the "Quiet" palette: system-adaptive light/dark via dynamic `NSColor`s, one accent color, hairline borders, no glass/glow chrome.
+`Sources/KlartApp/Theme.swift` — the "Quiet" palette: system-adaptive light/dark via dynamic `NSColor`s, one accent color, hairline borders, no glass/glow chrome.
 
 **Core tokens** (light / dark):
 
@@ -230,7 +230,7 @@ The editor (`Sources/NoschenApp/Views/EditorView.swift`) is a plain-text `NSText
 
 ## 7. Data Models
 
-`Sources/NoschenKit/Models/`. All types are `Codable, Sendable`, with lenient decoding (every field falls back to a default).
+`Sources/KlartKit/Models/`. All types are `Codable, Sendable`, with lenient decoding (every field falls back to a default).
 
 ### 7.1 Note (`Note.swift`)
 
@@ -322,9 +322,9 @@ Optional, off by default (`vault == nil`). Files: `Storage/VaultCrypto.swift`, `
 
 | Data | Path |
 |------|------|
-| Notes | `~/Library/Application Support/Noschen/Notes/<UUID>.json` (pretty JSON, atomic) |
-| Settings | `~/Library/Application Support/Noschen/settings.json` |
-| API keys | macOS Keychain, service `com.noschen.mac`, account `noschen.apikey.<provider>` |
+| Notes | `~/Library/Application Support/Klart/Notes/<UUID>.json` (pretty JSON, atomic) |
+| Settings | `~/Library/Application Support/Klart/settings.json` |
+| API keys | macOS Keychain, service `com.klart.mac`, account `klart.apikey.<provider>` |
 | Telemetry | none |
 
 `NoteStore` is a Swift `actor`; it refuses writes while the vault is locked. The sandboxed packaged app resolves the base path to its container; an unsandboxed `swift run` build uses `~/Library/Application Support` directly.
@@ -333,7 +333,7 @@ Optional, off by default (`vault == nil`). Files: `Storage/VaultCrypto.swift`, `
 
 ## 9. Settings & Configuration
 
-Settings UI (`Sources/NoschenApp/Views/SettingsView.swift`) covers:
+Settings UI (`Sources/KlartApp/Views/SettingsView.swift`) covers:
 
 1. **AI Provider** — active provider (Ollama / LM Studio / OpenRouter / Custom), endpoint, model (with live **Test Connection** model list), API key (stored in Keychain), temperature, max tokens.
 2. **Coaching** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
@@ -348,24 +348,24 @@ Out-of-range values are clamped on decode (see §7.3).
 ### 10.1 Commands
 
 ```bash
-cd NoschenMac
+cd KlartMac
 swift run                  # development
-swift test                 # unit tests (NoschenKitTests)
-bash Scripts/make-app.sh   # release build → dist/Noschen.app (verifies Hardened Runtime + App Sandbox)
-bash Scripts/make-dmg.sh   # package → dist/Noschen.dmg
+swift test                 # unit tests (KlartKitTests)
+bash Scripts/make-app.sh   # release build → dist/Klart.app (verifies Hardened Runtime + App Sandbox)
+bash Scripts/make-dmg.sh   # package → dist/Klart.dmg
 bash Scripts/notarize-app.sh   # submit to Apple + staple
 ```
 
 ### 10.2 Distribution
 
-- **Format:** signed `Noschen.app` and `Noschen.dmg`. Single platform: **macOS** (universal, per Xcode toolchain).
+- **Format:** signed `Klart.app` and `Klart.dmg`. Single platform: **macOS** (universal, per Xcode toolchain).
 - **Signing:** Developer ID + **Hardened Runtime** + **App Sandbox** (outgoing network only, plus user-picked files for export/import). `make-app.sh` fails the build if either flag is missing from the signature.
-- **CI:** `.github/workflows/macos-app.yml` builds, tests, and packages on every push; uploads `Noschen.app` and (ad-hoc or Developer-ID-signed) `Noschen.dmg` artifacts. Full signing/notarization secrets are documented in `NoschenMac/README.md`.
+- **CI:** `.github/workflows/macos-app.yml` builds, tests, and packages on every push; uploads `Klart.app` and (ad-hoc or Developer-ID-signed) `Klart.dmg` artifacts. Full signing/notarization secrets are documented in `KlartMac/README.md`.
 
 ### 10.3 Tests
 
-`Tests/NoschenKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), and end-to-end vault lifecycle (`VaultLifecycleTests`).
+`Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), and end-to-end vault lifecycle (`VaultLifecycleTests`).
 
 ---
 
-*Document reflects the native Swift/SwiftUI implementation in `NoschenMac/`. For narrative setup and distribution detail, see [NoschenMac/README.md](../NoschenMac/README.md).*
+*Document reflects the native Swift/SwiftUI implementation in `KlartMac/`. For narrative setup and distribution detail, see [KlartMac/README.md](../KlartMac/README.md).*

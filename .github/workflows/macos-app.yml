@@ -6,20 +6,20 @@ on:
       - main
       - 'claude/**'
     paths:
-      - 'NoschenMac/**'
+      - 'KlartMac/**'
       - '.github/workflows/macos-app.yml'
   workflow_dispatch:
 
 jobs:
   build-and-test:
-    name: Build, test, and package Noschen.app
+    name: Build, test, and package Klart.app
     runs-on: macos-15
     defaults:
       run:
-        working-directory: NoschenMac
+        working-directory: KlartMac
     env:
       # Developer ID signing/notarization activates automatically once the
-      # secrets exist (see NoschenMac/README.md → "Distributing to testers").
+      # secrets exist (see KlartMac/README.md → "Distributing to testers").
       # Without them the workflow ad-hoc signs, which is fine for CI checks
       # but NOT for handing builds to other people.
       HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
@@ -52,7 +52,7 @@ jobs:
           rm cert.p12
           security set-key-partition-list -S apple-tool:,apple: -s -k "$KEYCHAIN_PW" build.keychain > /dev/null
 
-      - name: Assemble Noschen.app (release)
+      - name: Assemble Klart.app (release)
         env:
           SIGN_IDENTITY: ${{ env.HAVE_SIGNING == 'true' && secrets.MACOS_SIGN_IDENTITY || '-' }}
         run: bash Scripts/make-app.sh
@@ -69,27 +69,27 @@ jobs:
           NOTARY_TEAM_ID: ${{ secrets.NOTARY_TEAM_ID }}
           NOTARY_PASSWORD: ${{ secrets.NOTARY_PASSWORD }}
         run: |
-          xcrun notarytool submit dist/Noschen.dmg \
+          xcrun notarytool submit dist/Klart.dmg \
             --apple-id "$NOTARY_APPLE_ID" \
             --team-id "$NOTARY_TEAM_ID" \
             --password "$NOTARY_PASSWORD" \
             --wait
-          xcrun stapler staple dist/Noschen.dmg
-          spctl --assess --type open --context context:primary-signature -v dist/Noschen.dmg
+          xcrun stapler staple dist/Klart.dmg
+          spctl --assess --type open --context context:primary-signature -v dist/Klart.dmg
 
       - name: Zip app bundle
-        run: ditto -c -k --keepParent dist/Noschen.app Noschen.app.zip
+        run: ditto -c -k --keepParent dist/Klart.app Klart.app.zip
 
       - name: Upload app artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Noschen.app
-          path: NoschenMac/Noschen.app.zip
+          name: Klart.app
+          path: KlartMac/Klart.app.zip
           if-no-files-found: error
 
       - name: Upload DMG artifact
         uses: actions/upload-artifact@v4
         with:
-          name: Noschen.dmg
-          path: NoschenMac/dist/Noschen.dmg
+          name: Klart.dmg
+          path: KlartMac/dist/Klart.dmg
           if-no-files-found: error
