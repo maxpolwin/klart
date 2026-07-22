@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(Security)
 import Security
+import LocalAuthentication
 
 /// Wraps the vault master key with a P-256 key that lives inside the Secure
 /// Enclave (Apple Silicon / T2). The private key never leaves the hardware
@@ -21,7 +22,12 @@ public enum SecureEnclaveWrap {
             kSecReturnRef as String: true,
         ]
         if let prompt {
-            query[kSecUseOperationPrompt as String] = prompt
+            // kSecUseOperationPrompt was deprecated in macOS 11: carry the
+            // prompt on an LAContext handed to the keychain via
+            // kSecUseAuthenticationContext.
+            let context = LAContext()
+            context.localizedReason = prompt
+            query[kSecUseAuthenticationContext as String] = context
         }
         var item: CFTypeRef?
         guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else { return nil }

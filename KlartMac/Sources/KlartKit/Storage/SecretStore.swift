@@ -1,6 +1,7 @@
 import Foundation
 #if canImport(Security)
 import Security
+import LocalAuthentication
 #endif
 
 /// Abstraction over secret storage so API keys never touch settings files.
@@ -123,7 +124,12 @@ public final class KeychainSecretStore: SecretStore {
         var query = baseQuery(account: account)
         query[kSecReturnData as String] = true
         query[kSecMatchLimit as String] = kSecMatchLimitOne
-        query[kSecUseOperationPrompt as String] = prompt
+        // kSecUseOperationPrompt was deprecated in macOS 11: carry the prompt on
+        // an LAContext instead and hand it to the keychain via
+        // kSecUseAuthenticationContext.
+        let context = LAContext()
+        context.localizedReason = prompt
+        query[kSecUseAuthenticationContext as String] = context
         var result: AnyObject?
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }
@@ -132,7 +138,13 @@ public final class KeychainSecretStore: SecretStore {
 
     public func hasProtectedData(for account: String) -> Bool {
         var query = baseQuery(account: account)
-        query[kSecUseAuthenticationUI as String] = kSecUseAuthenticationUIFail
+        // kSecUseAuthenticationUIFail was deprecated in macOS 11: forbid the
+        // auth UI via an LAContext with interactionNotAllowed instead, so a
+        // protected item is reported present (errSecInteractionNotAllowed)
+        // without ever prompting.
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        query[kSecUseAuthenticationContext as String] = context
         let status = SecItemCopyMatching(query as CFDictionary, nil)
         return status == errSecSuccess || status == errSecInteractionNotAllowed
     }
