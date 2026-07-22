@@ -1,0 +1,724 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Klårt — Minimalist &amp; Monochrome Directions</title>
+</head>
+<body>
+<style>
+  /* ============================================================
+     Klårt — Minimalist & Monochrome interface directions.
+     Companion to ui-direction-concepts.html; this file pushes
+     past the shipped "Quiet" design toward less chrome and,
+     in places, no colour at all. The frame is itself near-
+     monochrome graphite: the only chromatic moment is the one
+     interactive demo where you drain the colour out yourself.
+     ============================================================ */
+
+  :root {
+    --ground:  #F4F3EE;
+    --surface: #FBFAF8;
+    --raise:   #FFFFFF;
+    --ink:     #1A1A17;
+    --muted:   #6C6A61;
+    --faint:   #9C9A90;
+    --line:    #E4E2DA;
+    --hair:    #ECEAE2;
+    --accent:  #2B5FAD;
+    --shadow:  0 1px 2px rgba(20,20,15,.05), 0 12px 34px rgba(20,20,15,.09);
+    /* App-real feedback-kind hues, light mode — used ONLY in the
+       colour end of the hero demo, then desaturated on drag. */
+    --k-gap: #2560B8; --k-mece: #6C3FA8; --k-source: #1E7A46;
+    --k-struct: #9A5A17; --k-clarity: #0F767A; --k-question: #AF3A55;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground:  #141413;
+      --surface: #1C1C1A;
+      --raise:   #232320;
+      --ink:     #ECEAE3;
+      --muted:   #918F86;
+      --faint:   #66645C;
+      --line:    #2A2A27;
+      --hair:    #242421;
+      --accent:  #7FA8E6;
+      --shadow:  0 1px 2px rgba(0,0,0,.4), 0 16px 40px rgba(0,0,0,.5);
+      --k-gap: #6FA0EA; --k-mece: #C08CF7; --k-source: #66D399;
+      --k-struct: #F5A95C; --k-clarity: #5CD1D4; --k-question: #F78CA8;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground:#F4F3EE; --surface:#FBFAF8; --raise:#FFFFFF; --ink:#1A1A17;
+    --muted:#6C6A61; --faint:#9C9A90; --line:#E4E2DA; --hair:#ECEAE2; --accent:#2B5FAD;
+    --shadow:0 1px 2px rgba(20,20,15,.05), 0 12px 34px rgba(20,20,15,.09);
+    --k-gap:#2560B8; --k-mece:#6C3FA8; --k-source:#1E7A46;
+    --k-struct:#9A5A17; --k-clarity:#0F767A; --k-question:#AF3A55;
+  }
+  :root[data-theme="dark"] {
+    --ground:#141413; --surface:#1C1C1A; --raise:#232320; --ink:#ECEAE3;
+    --muted:#918F86; --faint:#66645C; --line:#2A2A27; --hair:#242421; --accent:#7FA8E6;
+    --shadow:0 1px 2px rgba(0,0,0,.4), 0 16px 40px rgba(0,0,0,.5);
+    --k-gap:#6FA0EA; --k-mece:#C08CF7; --k-source:#66D399;
+    --k-struct:#F5A95C; --k-clarity:#5CD1D4; --k-question:#F78CA8;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    -webkit-font-smoothing: antialiased;
+    line-height: 1.55;
+  }
+  .serif { font-family: ui-serif, "New York", "Iowan Old Style", Georgia, serif; }
+  .mono  { font-family: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, monospace; }
+  h1, h2, h3, h4 { margin: 0; text-wrap: balance; letter-spacing: -0.01em; }
+  p { margin: 0; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 3px; }
+  @media (prefers-reduced-motion: reduce) {
+    * { transition-duration: .001ms !important; animation-duration: .001ms !important; }
+  }
+
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 clamp(18px, 4vw, 40px); }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    position: sticky; top: 0; z-index: 30;
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 14px clamp(18px, 4vw, 40px);
+    background: color-mix(in srgb, var(--ground) 86%, transparent);
+    backdrop-filter: saturate(180%) blur(14px);
+    -webkit-backdrop-filter: saturate(180%) blur(14px);
+    border-bottom: 1px solid var(--hair);
+  }
+  .brand { display: flex; align-items: baseline; gap: 10px; }
+  .brand b { font-size: 15px; font-weight: 620; letter-spacing: -0.02em; }
+  .brand span { font-size: 11.5px; color: var(--faint); letter-spacing: .04em; }
+  .seg {
+    display: inline-flex; gap: 2px; padding: 3px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 999px;
+  }
+  .seg button {
+    border: 0; background: none; cursor: pointer; color: var(--muted);
+    font-size: 12px; padding: 5px 13px; border-radius: 999px; transition: color .18s, background .18s;
+  }
+  .seg button[aria-pressed="true"] { background: var(--ink); color: var(--ground); }
+
+  /* ---------- hero ---------- */
+  .hero { padding: clamp(48px, 8vw, 92px) 0 20px; }
+  .eyebrow {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .16em; text-transform: uppercase;
+    color: var(--faint); margin: 0 0 18px;
+  }
+  .hero h1 {
+    font-size: clamp(34px, 6vw, 62px); line-height: 1.02; font-weight: 600; max-width: 15ch;
+  }
+  .hero h1 em { font-style: normal; color: var(--muted); }
+  .hero .lede {
+    margin-top: 22px; max-width: 60ch; font-size: clamp(15px, 1.6vw, 18px);
+    color: var(--muted); line-height: 1.62;
+  }
+  .rule { height: 1px; background: var(--line); border: 0; margin: 0; }
+
+  /* ---------- interactive chroma demo ---------- */
+  .demo { margin: 40px 0 8px; }
+  .demo-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 16px 24px; margin-bottom: 18px; }
+  .demo-head h2 { font-size: 20px; font-weight: 600; }
+  .demo-head p { color: var(--muted); font-size: 13.5px; max-width: 46ch; margin-top: 6px; }
+  .slider-card {
+    display: flex; align-items: center; gap: 14px;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 12px 16px; min-width: 300px;
+  }
+  .slider-card .end { font-size: 11px; letter-spacing: .06em; color: var(--faint); text-transform: uppercase; white-space: nowrap; }
+  .slider-card input[type="range"] { flex: 1; accent-color: var(--accent); height: 22px; }
+  .slider-card .readout {
+    font-size: 12px; color: var(--ink); min-width: 92px; text-align: right;
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* the demo window desaturates via --sat (1 → 0) and dims context via --foc */
+  .stage { --sat: 1; --foc: 0; }
+
+  /* ---------- generic mac window ---------- */
+  .win {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    overflow: hidden; box-shadow: var(--shadow);
+  }
+  .win-bar {
+    display: flex; align-items: center; gap: 7px; padding: 11px 14px;
+    border-bottom: 1px solid var(--hair); background: color-mix(in srgb, var(--surface) 70%, var(--ground));
+  }
+  .win-bar i { width: 11px; height: 11px; border-radius: 50%; background: var(--line); display: inline-block; }
+  .win-bar .t { margin-left: 8px; font-size: 11.5px; color: var(--faint); }
+  .win-bar .pill {
+    margin-left: auto; display: inline-flex; align-items: center; gap: 6px;
+    font-size: 11px; color: var(--muted); background: color-mix(in srgb, var(--ink) 6%, transparent);
+    padding: 3px 9px; border-radius: 999px;
+  }
+  .win-bar .pill .d { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
+
+  .win-body { display: grid; grid-template-columns: 210px 1fr; min-height: 340px; }
+  .sb {
+    border-right: 1px solid var(--hair);
+    padding: 14px 10px; background: color-mix(in srgb, var(--surface) 60%, var(--ground));
+  }
+  .sb h5 { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); padding: 0 8px 8px; }
+  .sb a { display: block; font-size: 12.5px; color: var(--muted); padding: 7px 9px; border-radius: 7px; text-decoration: none; }
+  .sb a.on { background: color-mix(in srgb, var(--ink) 7%, transparent); color: var(--ink); }
+  .doc { padding: 26px clamp(20px, 3.5vw, 40px); }
+  .doc .kick { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--faint); }
+  .doc h1 { font-size: 23px; font-weight: 640; margin: 8px 0 16px; line-height: 1.16; }
+  .doc h3 { font-size: 13.5px; font-weight: 600; color: var(--muted); margin: 18px 0 8px; }
+  .doc p { font-size: 14px; color: color-mix(in srgb, var(--ink) 88%, var(--ground)); margin-bottom: 12px; max-width: 60ch; }
+
+  /* colour bits used in the hero, then drained by --sat */
+  .chroma { filter: saturate(var(--sat)); }
+  .badge {
+    display: inline-flex; align-items: center; gap: 5px; font-size: 10px; font-weight: 700;
+    letter-spacing: .06em; text-transform: uppercase; padding: 3px 8px; border-radius: 999px;
+    font-family: system-ui, sans-serif;
+  }
+  .badge.gap      { color: var(--k-gap);      background: color-mix(in srgb, var(--k-gap) 15%, transparent); }
+  .badge.mece     { color: var(--k-mece);     background: color-mix(in srgb, var(--k-mece) 15%, transparent); }
+  .badge.source   { color: var(--k-source);   background: color-mix(in srgb, var(--k-source) 15%, transparent); }
+  .badge.structure{ color: var(--k-struct);   background: color-mix(in srgb, var(--k-struct) 15%, transparent); }
+  .badge.clarity  { color: var(--k-clarity);  background: color-mix(in srgb, var(--k-clarity) 15%, transparent); }
+  .badge.question { color: var(--k-question); background: color-mix(in srgb, var(--k-question) 15%, transparent); }
+
+  .coach {
+    margin-top: 6px; border-top: 1px dashed var(--line); padding-top: 14px;
+  }
+  .coach .tip { display: flex; gap: 9px; margin-bottom: 11px; align-items: flex-start; }
+  .coach .tip p { font-size: 12.5px; color: var(--muted); margin: 1px 0 0; }
+  /* dim the running text as focus rises (hero only) */
+  .stage .doc p.ctx { opacity: calc(1 - (var(--foc) * 0.62)); transition: opacity .12s linear; }
+
+  /* ---------- concept gallery ---------- */
+  .section-label {
+    margin: clamp(56px,9vw,104px) 0 4px; font-size: 11.5px; letter-spacing: .16em;
+    text-transform: uppercase; color: var(--faint);
+  }
+  .section-label + h2 { font-size: clamp(24px, 3.4vw, 34px); font-weight: 600; max-width: 20ch; }
+  .section-intro { margin-top: 14px; max-width: 62ch; color: var(--muted); font-size: 15px; }
+
+  .concept { padding: clamp(40px, 6vw, 72px) 0; border-top: 1px solid var(--hair); }
+  .concept:first-of-type { border-top: 0; }
+  .concept-grid { display: grid; grid-template-columns: 1fr; gap: 30px; }
+  @media (min-width: 900px) { .concept-grid { grid-template-columns: 1.15fr 1fr; align-items: start; gap: 44px; } }
+  .concept-copy .idx { font-family: ui-monospace, monospace; font-size: 12px; color: var(--faint); }
+  .concept-copy h3 { font-size: clamp(22px, 3vw, 30px); font-weight: 600; margin: 8px 0 4px; }
+  .concept-copy .tag { color: var(--accent); font-size: 13px; font-weight: 550; }
+  .concept-copy .why { margin-top: 16px; color: var(--muted); font-size: 14.5px; line-height: 1.62; }
+  .meta-row { display: grid; gap: 12px; margin-top: 22px; }
+  .meta-row .m { display: grid; grid-template-columns: 88px 1fr; gap: 12px; font-size: 13px; align-items: baseline; }
+  .meta-row .m b { color: var(--ink); font-weight: 600; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+  .meta-row .m span { color: var(--muted); }
+
+  /* Concept A — Graphite: monochrome recast, kinds by glyph not hue */
+  .k-graphite .badge, .k-graphite .kglyph {
+    color: var(--ink) !important; background: transparent !important;
+    border: 1px solid var(--line); font-family: ui-monospace, monospace;
+  }
+  .k-graphite .coach .tip .g { color: var(--ink); }
+
+  /* Concept B — Page: paper & ink, marginalia coach */
+  .k-page .win { background: #FBF9F2; border-color: #E7E2D2; }
+  .k-page .win-bar { background: #F3EFE2; border-color: #E7E2D2; }
+  .k-page .win-bar i { background: #DBD4C0; }
+  .k-page .win-bar .t, .k-page .win-bar .pill { color: #8C846E; }
+  .k-page .page-body { display: grid; grid-template-columns: 1fr 210px; min-height: 340px; }
+  .k-page .page-doc { padding: 30px 34px; }
+  .k-page .page-doc .kick { color: #A89E84; font-family: ui-monospace, monospace; font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; }
+  .k-page .page-doc h1 { font-family: ui-serif,"New York",Georgia,serif; font-size: 25px; color: #211E16; margin: 10px 0 6px; font-weight: 650; }
+  .k-page .page-doc h3 { font-family: ui-serif,"New York",Georgia,serif; font-size: 16px; color: #4A4536; font-style: italic; font-weight: 500; margin: 20px 0 8px; }
+  .k-page .page-doc p { font-family: ui-serif,"New York",Georgia,serif; font-size: 15px; line-height: 1.66; color: #2C281D; max-width: 40ch; margin-bottom: 12px; }
+  .k-page .margin { border-left: 1px solid #E7E2D2; padding: 30px 18px; }
+  .k-page .pencil { margin-bottom: 20px; }
+  .k-page .pencil .lbl { font-family: ui-monospace, monospace; font-size: 9.5px; letter-spacing: .1em; text-transform: uppercase; color: #A89E84; }
+  .k-page .pencil p { font-family: ui-serif,"New York",Georgia,serif; font-style: italic; font-size: 12.5px; line-height: 1.5; color: #6F674F; margin-top: 4px; }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) .k-page .win { background: #171612; border-color: #2C2A22; }
+    :root:not([data-theme="light"]) .k-page .win-bar { background: #1E1C16; border-color: #2C2A22; }
+    :root:not([data-theme="light"]) .k-page .page-doc h1 { color: #EFE9D8; }
+    :root:not([data-theme="light"]) .k-page .page-doc h3 { color: #B9B096; }
+    :root:not([data-theme="light"]) .k-page .page-doc p { color: #D9D2BE; }
+    :root:not([data-theme="light"]) .k-page .margin { border-color: #2C2A22; }
+    :root:not([data-theme="light"]) .k-page .pencil p { color: #9A9176; }
+  }
+  :root[data-theme="dark"] .k-page .win { background: #171612; border-color: #2C2A22; }
+  :root[data-theme="dark"] .k-page .win-bar { background: #1E1C16; border-color: #2C2A22; }
+  :root[data-theme="dark"] .k-page .page-doc h1 { color: #EFE9D8; }
+  :root[data-theme="dark"] .k-page .page-doc h3 { color: #B9B096; }
+  :root[data-theme="dark"] .k-page .page-doc p { color: #D9D2BE; }
+  :root[data-theme="dark"] .k-page .margin { border-color: #2C2A22; }
+  :root[data-theme="dark"] .k-page .pencil p { color: #9A9176; }
+
+  /* Concept C — Spotlight: active paragraph full ink, rest dimmed; spine sidebar */
+  .k-spot .win-body { grid-template-columns: 52px 1fr; }
+  .k-spot .spine { border-right: 1px solid var(--hair); padding: 20px 0; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+  .k-spot .spine .d { width: 7px; height: 7px; border-radius: 50%; background: var(--line); }
+  .k-spot .spine .d.on { background: var(--ink); }
+  .k-spot .doc p { opacity: .26; transition: opacity .2s; }
+  .k-spot .doc p.live { opacity: 1; }
+  .k-spot .doc h1 { opacity: .5; }
+  .k-spot .tick { position: absolute; right: 16px; bottom: 14px; font-size: 11px; color: var(--faint); font-family: ui-monospace, monospace; }
+  .k-spot .doc { position: relative; }
+
+  /* Concept D — Teleprompter: zero chrome, centred measure */
+  .k-tele .win-body { grid-template-columns: 1fr; min-height: 380px; }
+  .k-tele .tele { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 40px 20px; text-align: left; }
+  .k-tele .tele .col { max-width: 42ch; }
+  .k-tele .tele h1 { font-size: 21px; font-weight: 600; margin-bottom: 16px; }
+  .k-tele .tele p { font-size: 14.5px; line-height: 1.68; color: color-mix(in srgb, var(--ink) 82%, var(--ground)); margin-bottom: 13px; }
+  .k-tele .tele p.dim { color: var(--faint); }
+  .k-tele .status { margin-top: 20px; display: flex; align-items: center; gap: 8px; font-size: 11px; color: var(--faint); font-family: ui-monospace, monospace; }
+  .k-tele .status .d { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); }
+
+  /* ---------- monochrome encoding legend ---------- */
+  .legend { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: clamp(22px, 3vw, 34px); margin-top: 30px; }
+  .legend .lg-head { display: flex; flex-wrap: wrap; gap: 8px 20px; align-items: baseline; justify-content: space-between; margin-bottom: 22px; }
+  .legend h3 { font-size: 18px; font-weight: 600; }
+  .legend .lg-head p { color: var(--muted); font-size: 13px; max-width: 50ch; }
+  .kinds { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 2px; background: var(--hair); border-radius: 12px; overflow: hidden; }
+  .kind { display: flex; gap: 13px; align-items: flex-start; padding: 15px 16px; background: var(--surface); }
+  .kind .gl {
+    flex: none; width: 34px; height: 34px; display: grid; place-items: center;
+    border: 1px solid var(--line); border-radius: 9px; font-family: ui-monospace, monospace;
+    font-size: 16px; color: var(--ink); background: var(--ground);
+  }
+  .kind .kb { font-size: 12.5px; font-weight: 650; letter-spacing: .02em; }
+  .kind .kd { font-size: 11.5px; color: var(--muted); margin-top: 2px; line-height: 1.45; }
+  .kind .wt { font-size: 10px; color: var(--faint); font-family: ui-monospace, monospace; margin-top: 5px; }
+
+  /* ---------- comparison ---------- */
+  .compare { margin-top: 30px; overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; }
+  table { border-collapse: collapse; width: 100%; min-width: 640px; font-size: 13px; }
+  th, td { text-align: left; padding: 13px 16px; border-bottom: 1px solid var(--hair); vertical-align: top; }
+  thead th { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--faint); font-weight: 600; background: color-mix(in srgb, var(--surface) 60%, var(--ground)); }
+  tbody th { font-weight: 600; color: var(--ink); white-space: nowrap; }
+  td { color: var(--muted); }
+  tbody tr:last-child th, tbody tr:last-child td { border-bottom: 0; }
+  td .dots { letter-spacing: 2px; color: var(--ink); }
+  td .dots .o { color: var(--line); }
+
+  footer { padding: 60px 0 80px; color: var(--faint); font-size: 12.5px; line-height: 1.7; border-top: 1px solid var(--hair); margin-top: 40px; }
+  footer a { color: var(--muted); }
+</style>
+
+<div class="topbar">
+  <div class="brand"><b>Klårt</b><span class="mono">minimalist · monochrome directions</span></div>
+  <div class="seg" role="group" aria-label="Theme">
+    <button type="button" data-theme-set="light" aria-pressed="false">Light</button>
+    <button type="button" data-theme-set="dark" aria-pressed="false">Dark</button>
+  </div>
+</div>
+
+<div class="wrap">
+
+  <!-- ===================== HERO ===================== -->
+  <header class="hero">
+    <p class="eyebrow">Interface study · beyond “Quiet”</p>
+    <h1>Take away the colour.<br><em>Keep the thinking.</em></h1>
+    <p class="lede">
+      The shipped design already hides the AI behind one small pill. These directions ask a sharper
+      question: how much more can leave — a second column, an accent hue, a toolbar — before the note
+      stops feeling like a tool and starts feeling like paper? Four directions, and a monochrome system
+      that keeps six kinds of coaching legible with no colour at all.
+    </p>
+  </header>
+
+  <hr class="rule">
+
+  <!-- ===================== INTERACTIVE DEMO ===================== -->
+  <section class="demo" aria-labelledby="demo-h">
+    <div class="demo-head">
+      <div>
+        <h2 id="demo-h">Drain it yourself</h2>
+        <p>Drag from full colour to graphite. Watch the accent and the six coloured suggestion badges
+          collapse to ink — and the surrounding text step back as focus rises.</p>
+      </div>
+      <label class="slider-card">
+        <span class="end">Colour</span>
+        <input id="chroma" type="range" min="0" max="100" value="0"
+               aria-label="Focus: colour to monochrome">
+        <span class="end">Mono</span>
+        <span class="readout mono" id="chroma-out">0% · full colour</span>
+      </label>
+    </div>
+
+    <div class="stage" id="stage">
+      <div class="win">
+        <div class="win-bar">
+          <i></i><i></i><i></i>
+          <span class="t mono">Do Remote Teams Communicate Worse.md</span>
+          <span class="pill chroma"><span class="d"></span>3 ready</span>
+        </div>
+        <div class="win-body">
+          <aside class="sb">
+            <h5>Notes</h5>
+            <a class="on" href="#" onclick="return false">Do Remote Teams Communicate Worse?</a>
+            <a href="#" onclick="return false">Platform Governance</a>
+            <a href="#" onclick="return false">The Attention Economy</a>
+            <a href="#" onclick="return false">Algorithmic Accountability</a>
+            <a href="#" onclick="return false">Interview Coding, Pass 2</a>
+          </aside>
+          <div class="doc">
+            <div class="kick mono">Communication · 21 Jul</div>
+            <h1>Do Remote Teams Communicate Worse?</h1>
+            <h3>Synchronous vs. Asynchronous Patterns</h3>
+            <p>Remote work hasn’t eliminated communication so much as redistributed it. A five-minute
+              hallway exchange is now a Slack thread, a shared doc, the occasional recorded video.</p>
+            <p class="ctx">The literature is split on whether this is a net loss. Some argue writing forces
+              clearer thinking; others point to the informal exchange that used to catch problems early.</p>
+            <div class="coach chroma">
+              <div class="tip"><span class="badge gap">Gap</span><p>Time-zone friction is named but never analyzed.</p></div>
+              <div class="tip"><span class="badge mece">MECE</span><p>“Sync vs. async” overlaps with hybrid norms below.</p></div>
+              <div class="tip"><span class="badge source">Source</span><p>Kahneman &amp; Thaler, on decision fatigue.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ===================== GALLERY ===================== -->
+  <p class="section-label">Four directions</p>
+  <h2 class="serif" style="font-size:clamp(26px,3.6vw,38px);font-weight:600;max-width:22ch;">
+    From a quiet colour app to a sheet of paper.</h2>
+  <p class="section-intro">Each screen shows the same note and the same three observations, so the only
+    variable is the interface’s philosophy. They’re ordered by how much they remove.</p>
+
+  <!-- A — GRAPHITE -->
+  <article class="concept k-graphite">
+    <div class="concept-grid">
+      <div class="concept-copy">
+        <span class="idx">01 / 04</span>
+        <h3>Graphite</h3>
+        <span class="tag">The shipped app, with the colour turned off.</span>
+        <p class="why">One ink, no accent. Everything the current design says with hue — the pill dot, the
+          six suggestion colours — is re-said with a glyph, a weight, and a word. It’s the least disruptive
+          move here: same layout, same interactions, but nothing on screen competes with the sentence you’re
+          writing. The whole colour budget is spent on your own text selection.</p>
+        <div class="meta-row">
+          <div class="m"><b>Removes</b><span>All hue. The accent becomes ink.</span></div>
+          <div class="m"><b>Keeps</b><span>Sidebar, coach pill, every interaction.</span></div>
+          <div class="m"><b>Best for</b><span>Shipping monochrome without a redesign.</span></div>
+          <div class="m"><b>Effort</b><span>Low — a palette swap plus a glyph set.</span></div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar">
+            <i></i><i></i><i></i>
+            <span class="t mono">…Communicate Worse.md</span>
+            <span class="pill"><span class="d" style="background:var(--ink)"></span>3 ready</span>
+          </div>
+          <div class="win-body">
+            <aside class="sb">
+              <h5>Notes</h5>
+              <a class="on" href="#" onclick="return false">Do Remote Teams Communicate Worse?</a>
+              <a href="#" onclick="return false">Platform Governance</a>
+              <a href="#" onclick="return false">The Attention Economy</a>
+              <a href="#" onclick="return false">Interview Coding, Pass 2</a>
+            </aside>
+            <div class="doc">
+              <div class="kick mono">Communication · 21 Jul</div>
+              <h1>Do Remote Teams Communicate Worse?</h1>
+              <h3>Synchronous vs. Asynchronous Patterns</h3>
+              <p>Remote work hasn’t eliminated communication so much as redistributed it — the hallway
+                exchange is now a Slack thread, a shared doc, a recorded video.</p>
+              <div class="coach">
+                <div class="tip"><span class="badge">◇ Gap</span><p>Time-zone friction is named but never analyzed.</p></div>
+                <div class="tip"><span class="badge">⧉ MECE</span><p>“Sync vs. async” overlaps with hybrid norms below.</p></div>
+                <div class="tip"><span class="badge">“ Source</span><p>Kahneman &amp; Thaler, on decision fatigue.</p></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- B — PAGE -->
+  <article class="concept k-page">
+    <div class="concept-grid">
+      <div class="concept-copy">
+        <span class="idx">02 / 04</span>
+        <h3>Page</h3>
+        <span class="tag">Warm paper, ink serif, a pencil in the margin.</span>
+        <p class="why">Two tones — paper and graphite — and a serif set to a real reading measure. The file
+          list becomes a slim contents strip; the coach becomes a copyeditor’s pencil marks, italic and
+          faint, in the right margin next to the line they’re about. Nothing here looks like software. It’s
+          the most opinionated direction and the one that most rewards long-form work.</p>
+        <div class="meta-row">
+          <div class="m"><b>Removes</b><span>Colour, cards, chrome — down to two tones.</span></div>
+          <div class="m"><b>Keeps</b><span>Anchored, in-context suggestions.</span></div>
+          <div class="m"><b>Best for</b><span>Essays and arguments you mean to finish.</span></div>
+          <div class="m"><b>Effort</b><span>Medium — margin anchoring, serif tuning.</span></div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar">
+            <i></i><i></i><i></i>
+            <span class="t mono">Research Notes · Vol. I</span>
+          </div>
+          <div class="page-body">
+            <div class="page-doc">
+              <div class="kick">Communication · 21 July</div>
+              <h1>Do Remote Teams Communicate Worse?</h1>
+              <h3>Synchronous vs. Asynchronous Patterns</h3>
+              <p>Remote work hasn’t eliminated communication so much as redistributed it. Teams that once
+                relied on a five-minute hallway exchange now default to asynchronous, written coordination.</p>
+              <p>The literature is split on whether this is a net loss. Some argue that writing things down
+                forces clearer thinking; others point to what quietly gets lost.</p>
+            </div>
+            <aside class="margin">
+              <div class="pencil"><div class="lbl">Gap</div><p>Time-zone friction is named but never analyzed — worth its own subsection.</p></div>
+              <div class="pencil"><div class="lbl">MECE</div><p>Overlaps with “Hybrid Meeting Norms” below. Consider merging.</p></div>
+              <div class="pencil"><div class="lbl">Source</div><p>Kahneman &amp; Thaler, on decision fatigue under distributed trust.</p></div>
+            </aside>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- C — SPOTLIGHT -->
+  <article class="concept k-spot">
+    <div class="concept-grid">
+      <div class="concept-copy">
+        <span class="idx">03 / 04</span>
+        <h3>Spotlight</h3>
+        <span class="tag">Only the paragraph you’re in is lit.</span>
+        <p class="why">Monochrome by mechanism: focus <em>is</em> the interface. The paragraph under your
+          cursor holds full ink; everything else steps back to a quarter-tone. The sidebar shrinks to a
+          spine of dots, the coach to a single count in the corner. You get contrast without ever adding a
+          second colour — the dimming does all the signalling.</p>
+        <div class="meta-row">
+          <div class="m"><b>Removes</b><span>The sidebar, the coach panel, all hue.</span></div>
+          <div class="m"><b>Keeps</b><span>Full text; it’s dimmed, never hidden.</span></div>
+          <div class="m"><b>Best for</b><span>Drafting when everything else is noise.</span></div>
+          <div class="m"><b>Effort</b><span>Medium — track the active block live.</span></div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar">
+            <i></i><i></i><i></i>
+            <span class="t mono">focus mode</span>
+          </div>
+          <div class="win-body">
+            <aside class="spine" aria-hidden="true">
+              <span class="d"></span><span class="d on"></span><span class="d"></span>
+              <span class="d"></span><span class="d"></span>
+            </aside>
+            <div class="doc">
+              <h1>Do Remote Teams Communicate Worse?</h1>
+              <p>Remote work hasn’t eliminated communication so much as redistributed it — the hallway
+                exchange is now a Slack thread, a shared doc, a recorded video.</p>
+              <p class="live">The literature is split on whether this is a net loss. Some argue writing
+                forces clearer thinking; others point to the informal exchange that caught problems early —
+                and this is the line the coach is watching now.</p>
+              <p>Time-zone friction compounds it: a question asked at 5pm is a question answered tomorrow.</p>
+              <span class="tick">1 note · ⌘. to open</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- D — TELEPROMPTER -->
+  <article class="concept k-tele">
+    <div class="concept-grid">
+      <div class="concept-copy">
+        <span class="idx">04 / 04</span>
+        <h3>Teleprompter</h3>
+        <span class="tag">No sidebar, no toolbar. One column, centred.</span>
+        <p class="why">The end of the road. Every frame is gone; there is a measure of text in the middle of
+          the window and one small status glyph at the bottom. Notes, settings, and the coach all live behind
+          keys (<span class="mono">⌘K</span>, <span class="mono">⌘.</span>). You don’t manage the app — you
+          just write into it, and summon the rest only when you reach for it.</p>
+        <div class="meta-row">
+          <div class="m"><b>Removes</b><span>Every persistent control on screen.</span></div>
+          <div class="m"><b>Keeps</b><span>A command palette and the count glyph.</span></div>
+          <div class="m"><b>Best for</b><span>Pure flow; deciding what to say next.</span></div>
+          <div class="m"><b>Effort</b><span>Low–medium — mostly things to hide.</span></div>
+        </div>
+      </div>
+      <div class="stage">
+        <div class="win">
+          <div class="win-bar">
+            <i></i><i></i><i></i>
+            <span class="t mono">​</span>
+          </div>
+          <div class="win-body">
+            <div class="tele">
+              <div class="col">
+                <h1>Do Remote Teams Communicate Worse?</h1>
+                <p>Remote work hasn’t eliminated communication so much as redistributed it. The five-minute
+                  hallway exchange is now a Slack thread, a shared doc, the occasional recorded video.</p>
+                <p class="dim">The literature is split on whether this is a net loss…</p>
+                <div class="status"><span class="d"></span>3 ready · ⌘. &nbsp;·&nbsp; ⌘K for everything</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </article>
+
+  <!-- ===================== MONOCHROME ENCODING ===================== -->
+  <p class="section-label">The hard part</p>
+  <h2 style="font-size:clamp(24px,3.4vw,34px);font-weight:600;max-width:24ch;">
+    Six kinds of coaching, zero colours to spend.</h2>
+  <p class="section-intro">Colour is how the app tells a Gap from a Source today. Remove it and the meaning
+    has to travel some other way — never by hue alone (which also fixes the colour-blind case). Each kind
+    gets a geometric glyph drawn from what it means, a fixed word, and a tonal weight. Glyph + word is the
+    signal; the tone is a quiet second channel.</p>
+
+  <div class="legend">
+    <div class="lg-head">
+      <h3>Monochrome kind set</h3>
+      <p>Glyph carries the idea, the label removes all doubt, the ink-weight ranks urgency.</p>
+    </div>
+    <div class="kinds">
+      <div class="kind">
+        <div class="gl">◇</div>
+        <div><div class="kb">Gap</div><div class="kd">Something missing — an open, unfilled shape.</div><div class="wt">weight · strong</div></div>
+      </div>
+      <div class="kind">
+        <div class="gl">⧉</div>
+        <div><div class="kb">MECE</div><div class="kd">Overlapping categories — two frames colliding.</div><div class="wt">weight · strong</div></div>
+      </div>
+      <div class="kind">
+        <div class="gl">“</div>
+        <div><div class="kb">Source</div><div class="kd">A citation to add — an open quotation mark.</div><div class="wt">weight · medium</div></div>
+      </div>
+      <div class="kind">
+        <div class="gl">≡</div>
+        <div><div class="kb">Structure</div><div class="kd">Order and outline — stacked, level rules.</div><div class="wt">weight · medium</div></div>
+      </div>
+      <div class="kind">
+        <div class="gl">◎</div>
+        <div><div class="kb">Clarity</div><div class="kd">Bring it into focus — a mark resolving sharp.</div><div class="wt">weight · light</div></div>
+      </div>
+      <div class="kind">
+        <div class="gl">?</div>
+        <div><div class="kb">Question</div><div class="kd">A Socratic prompt, not a fix — an open ask.</div><div class="wt">weight · light</div></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== COMPARISON ===================== -->
+  <p class="section-label" style="margin-top:clamp(48px,7vw,80px)">At a glance</p>
+  <div class="compare">
+    <table>
+      <thead>
+        <tr>
+          <th scope="col">Direction</th>
+          <th scope="col">Chroma</th>
+          <th scope="col">On-screen chrome</th>
+          <th scope="col">Coach lives</th>
+          <th scope="col">Focus</th>
+          <th scope="col">Effort</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Quiet <span class="mono" style="color:var(--faint)">(shipped)</span></th>
+          <td>One accent</td>
+          <td>Sidebar + toolbar</td>
+          <td>Corner pill</td>
+          <td><span class="dots">●●<span class="o">●●●</span></span></td>
+          <td>—</td>
+        </tr>
+        <tr>
+          <th scope="row">Graphite</th>
+          <td>None (ink)</td>
+          <td>Sidebar + toolbar</td>
+          <td>Corner pill</td>
+          <td><span class="dots">●●●<span class="o">●●</span></span></td>
+          <td>Low</td>
+        </tr>
+        <tr>
+          <th scope="row">Page</th>
+          <td>Two tones</td>
+          <td>Contents strip</td>
+          <td>Margin, anchored</td>
+          <td><span class="dots">●●●●<span class="o">●</span></span></td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <th scope="row">Spotlight</th>
+          <td>None (dimming)</td>
+          <td>Dot spine only</td>
+          <td>Count in corner</td>
+          <td><span class="dots">●●●●<span class="o">●</span></span></td>
+          <td>Medium</td>
+        </tr>
+        <tr>
+          <th scope="row">Teleprompter</th>
+          <td>None (ink)</td>
+          <td>Nothing persistent</td>
+          <td>Behind ⌘.</td>
+          <td><span class="dots">●●●●●</span></td>
+          <td>Low–med</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <footer>
+    Companion to <a href="ui-direction-concepts.html">ui-direction-concepts.html</a> and
+    <a href="DESIGN_ALTERNATIVES.md">DESIGN_ALTERNATIVES.md</a>. Same sample note throughout, so the only
+    thing that changes screen-to-screen is the interface philosophy. All five directions meet the app’s
+    accessibility baseline — meaning never rides on colour alone, contrast stays legible in both themes, and
+    every affordance keeps a keyboard path.
+  </footer>
+</div>
+
+<script>
+  (function () {
+    var root = document.documentElement;
+
+    // theme toggle — overrides prefers-color-scheme in both directions
+    var btns = document.querySelectorAll("[data-theme-set]");
+    function reflect() {
+      var cur = root.getAttribute("data-theme");
+      btns.forEach(function (b) {
+        b.setAttribute("aria-pressed", String(b.getAttribute("data-theme-set") === cur));
+      });
+    }
+    btns.forEach(function (b) {
+      b.addEventListener("click", function () {
+        var want = b.getAttribute("data-theme-set");
+        root.setAttribute("data-theme", root.getAttribute("data-theme") === want ? "" : want);
+        reflect();
+      });
+    });
+    reflect();
+
+    // chroma / focus demo
+    var stage = document.getElementById("stage");
+    var slider = document.getElementById("chroma");
+    var out = document.getElementById("chroma-out");
+    function render() {
+      var v = +slider.value;               // 0 colour → 100 mono
+      var sat = 1 - v / 100;
+      var foc = v / 100;
+      stage.style.setProperty("--sat", sat.toFixed(3));
+      stage.style.setProperty("--foc", foc.toFixed(3));
+      var word = v < 6 ? "full colour" : v > 94 ? "pure graphite" : "draining";
+      out.textContent = v + "% · " + word;
+    }
+    slider.addEventListener("input", render);
+    render();
+  })();
+</script>
+</body>
+</html>
