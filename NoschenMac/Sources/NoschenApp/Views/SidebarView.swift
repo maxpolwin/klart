@@ -1,26 +1,52 @@
 #if os(macOS)
 import SwiftUI
+import Foundation
 import NoschenKit
 
 struct SidebarView: View {
     @EnvironmentObject var state: AppState
     @State private var noteToDelete: Note?
 
+    /// Column width the dot + connecting line reserve on the leading edge of
+    /// every row; the line's background rectangle and each dot's frame both
+    /// key off this so they stay centered on one another.
+    private let dotColumnWidth: CGFloat = 16
+
     var body: some View {
+        let notes = state.filteredNotes
+        let gaps = timelineGaps(for: notes)
+
         VStack(spacing: 0) {
-            List(selection: $state.selectedNoteID) {
-                ForEach(state.filteredNotes) { note in
-                    NoteRow(note: note)
-                        .tag(note.id)
+            ScrollView {
+                VStack(alignment: .leading, spacing: 0) {
+                    ForEach(notes) { note in
+                        ConstellationRow(
+                            note: note,
+                            isSelected: note.id == state.selectedNoteID,
+                            isRecent: Calendar.current.isDateInToday(note.updatedAt),
+                            dotColumnWidth: dotColumnWidth
+                        ) {
+                            state.selectedNoteID = note.id
+                        }
+                        .padding(.top, gaps[note.id] ?? 0)
                         .contextMenu {
                             Button("Delete Note", role: .destructive) {
                                 noteToDelete = note
                             }
                         }
+                    }
                 }
+                .padding(.horizontal, 16)
+                .background(alignment: .leading) {
+                    Rectangle()
+                        .fill(Theme.border)
+                        .frame(width: 1)
+                        .padding(.leading, dotColumnWidth / 2 - 0.5)
+                }
+                .padding(.top, 12)
+                .padding(.bottom, 14)
             }
-            .scrollContentBackground(.hidden)
-            .listStyle(.sidebar)
+            .scrollIndicators(.hidden)
 
             Divider().overlay(Theme.border)
 
@@ -54,38 +80,82 @@ struct SidebarView: View {
             Text("This permanently removes the note file from disk.")
         }
     }
+
+    /// For every note after the first (notes are already newest-first),
+    /// how much extra space should open up above its row — proportional to
+    /// the real time elapsed since the previous, more recent note.
+    /// Log-compressed so a months-old note doesn't push the list off-screen,
+    /// and clamped on both ends so near-simultaneous notes never collide
+    /// and old notes never blow out the scroll height. A large gap on the
+    /// spine reads as "nothing happened here," not just "next row."
+    private func timelineGaps(for notes: [Note]) -> [UUID: CGFloat] {
+        var gaps: [UUID: CGFloat] = [:]
+        for index in notes.indices.dropFirst() {
+            let minutes = max(0, notes[index - 1].updatedAt.timeIntervalSince(notes[index].updatedAt)) / 60
+            let value = 6 + 11 * log10(1 + minutes)
+            gaps[notes[index].id] = CGFloat(min(max(value, 6), 56))
+        }
+        return gaps
+    }
 }
 
-private struct NoteRow: View {
+/// A single note on the sidebar's timeline: a dot on the vertical spine,
+/// sized and colored by recency, with the note's title and its exact
+/// last-modified date and time (not a relative "4d ago" string).
+private struct ConstellationRow: View {
     let note: Note
+    let isSelected: Bool
+    let isRecent: Bool
+    let dotColumnWidth: CGFloat
+    let onSelect: () -> Void
+
+    private var dotColor: Color {
+        isSelected || isRecent ? Theme.accent : Theme.textTertiary
+    }
+
+    private var dotSize: CGFloat {
+        isSelected ? 10 : (isRecent ? 9 : 7)
+    }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 3) {
-            HStack(spacing: 5) {
-                if note.isSensitive {
-                    Image(systemName: "shield.fill")
-                        .font(.system(size: 9))
-                        .foregroundStyle(Theme.accent)
-                        .help("Sensitive — local AI only")
-                }
-                Text(note.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .foregroundStyle(Theme.textPrimary)
-                    .lineLimit(1)
-            }
-            HStack(spacing: 6) {
-                Text(note.updatedAt, format: .relative(presentation: .named))
-                    .font(.system(size: 11))
-                    .foregroundStyle(Theme.textTertiary)
-                if !note.preview.isEmpty {
-                    Text(note.preview)
-                        .font(.system(size: 11))
+        Button(action: onSelect) {
+            HStack(alignment: .top, spacing: 12) {
+                Circle()
+                    .fill(dotColor)
+                    .frame(width: dotSize, height: dotSize)
+                    .padding(.top, 5)
+                    .frame(width: dotColumnWidth, alignment: .top)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 5) {
+                        if note.isSensitive {
+                            Image(systemName: "shield.fill")
+                                .font(.system(size: 8.5))
+                                .foregroundStyle(Theme.accent)
+                                .help("Sensitive — local AI only")
+                        }
+                        Text(note.title)
+                            .font(.system(size: 13, weight: isSelected ? .semibold : .medium))
+                            .foregroundStyle(isSelected || isRecent ? Theme.textPrimary : Theme.textSecondary)
+                            .lineLimit(1)
+                    }
+                    Text(note.updatedAt.formatted(date: .abbreviated, time: .shortened))
+                        .font(.system(size: 10.5))
                         .foregroundStyle(Theme.textTertiary)
-                        .lineLimit(1)
                 }
+
+                Spacer(minLength: 0)
             }
+            .padding(.vertical, 6)
+            .padding(.trailing, 8)
+            .frame(minHeight: 44, alignment: .top)
+            .background(
+                isSelected ? Theme.accent.opacity(0.12) : Color.clear,
+                in: RoundedRectangle(cornerRadius: 8, style: .continuous)
+            )
+            .contentShape(Rectangle())
         }
-        .padding(.vertical, 3)
+        .buttonStyle(.plain)
     }
 }
 #endif
