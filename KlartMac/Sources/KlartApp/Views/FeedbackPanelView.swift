@@ -29,7 +29,7 @@ struct FeedbackPanelView: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Label("Coach", systemImage: "sparkles")
+            Label("Editor", systemImage: "sparkles")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundStyle(Theme.textPrimary)
             if state.feedbackPhase == .analyzing || state.coachRunning {

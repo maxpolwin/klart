@@ -85,13 +85,13 @@ struct AppCommands: Commands {
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(state.settings.vault == nil || state.isLocked)
         }
-        CommandMenu("Coach") {
+        CommandMenu("Editor") {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
-            Button("Coach Suggestions") {
+            Button("Editor Suggestions") {
                 // Teleprompter: the same key summons/hides the editor's
-                // margin rail; classic: the coach popover behind the pill.
+                // margin rail; classic: the popover behind the toolbar pill.
                 if state.settings.teleprompterMode {
                     if state.editorRailVisible {
                         state.editorRailVisible = false

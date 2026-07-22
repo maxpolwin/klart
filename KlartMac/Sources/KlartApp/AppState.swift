@@ -323,7 +323,7 @@ final class AppState: ObservableObject {
     static let sensitiveBlockedMessage =
         "This note is marked sensitive, so it only ever uses local AI. "
         + "The current provider is a cloud service — switch to Ollama or "
-        + "LM Studio in Settings to get coaching on this note."
+        + "LM Studio in Settings to use the Editor on this note."
 
     func toggleSensitive() {
         guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }
