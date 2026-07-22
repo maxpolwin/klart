@@ -67,6 +67,9 @@ struct AppCommands: Commands {
                 .keyboardShortcut("s", modifiers: .command)
                 .disabled(state.selectedNoteID == nil)
             Divider()
+            Button("Find") { state.requestSearch() }
+                .keyboardShortcut("f", modifiers: .command)
+            Divider()
             // The Teleprompter surface has no toolbar, so the sensitive
             // toggle needs a menu home that works in both layouts.
             Button(
@@ -102,7 +105,7 @@ struct AppCommands: Commands {
                     state.showCoachPopover.toggle()
                 }
             }
-            .keyboardShortcut(".", modifiers: .command)
+            .keyboardShortcut("e", modifiers: .command)
             .disabled(state.selectedNoteID == nil)
             Divider()
             ForEach(CoachAction.allCases) { action in

@@ -13,7 +13,7 @@ import KlartKit
 ///   retires again the moment writing resumes.
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
-///   the panel, ⌘., or typing /editor — each aligned to the section of text
+///   the panel, ⌘E, or typing /editor — each aligned to the section of text
 ///   it refers to, wearing a glyph instead of a colored pill. → moves a note
 ///   out of sight for now; Dismiss retires it for good. Keep writing and the
 ///   rail fades away on its own.
@@ -43,10 +43,17 @@ struct TeleprompterView: View {
     @State private var typedSinceRailShown = false
 
     @State private var noteToDelete: Note?
+    /// Reveals the "Show/Hide editor" label next to the ¶ icon — the label
+    /// only exists on hover, so the quiet chrome stays quiet at rest.
+    @State private var hoveringEditorSummons = false
 
     private enum Metrics {
         static let columnMaxWidth: CGFloat = 720
-        static let railWidth: CGFloat = 264
+        /// The rail hugs its widest current note's text between these two —
+        /// never so narrow it can't hold a card's chrome, never wider than
+        /// the old fixed rail used to be.
+        static let railMinWidth: CGFloat = 200
+        static let railMaxWidth: CGFloat = 264
         static let panelWidth: CGFloat = 268
         static let edgeStripWidth: CGFloat = 26
         static let titleBarHeight: CGFloat = 46
@@ -56,6 +63,11 @@ struct TeleprompterView: View {
         static let railFadeDelay: Double = 5 * 60
         /// …over this long, so focus returns gradually.
         static let railFadeDuration: Double = 20
+        /// Shared, unhurried pace for both slides — dots→panel and the
+        /// editor's margin rail — so summoning either always feels the same
+        /// calm speed.
+        static let calmAnimationDuration: Double = 0.45
+        static let calmAnimationBounce: Double = 0.12
     }
 
     var body: some View {
@@ -76,21 +88,17 @@ struct TeleprompterView: View {
                 wordCountBar
             }
             leftEdge
-
-            // Off-screen affordances: ⌘F opens the notes panel with search
-            // focused (there is no visible search field while writing).
-            Button("") {
-                revealPanel()
-            }
-            .keyboardShortcut("f", modifiers: .command)
-            .frame(width: 0, height: 0)
-            .opacity(0)
-            .accessibilityHidden(true)
         }
+        .animation(calmAnimation, value: state.editorRailVisible)
         .onDisappear {
             dwellTask?.cancel()
             collapseTask?.cancel()
             railFadeTask?.cancel()
+        }
+        .onChange(of: state.searchRequested) { _, _ in
+            // There is no visible search field while writing — ⌘F (the
+            // Find menu command) opens the notes panel with it focused.
+            revealPanel()
         }
         .confirmationDialog(
             "Delete “\(noteToDelete?.title ?? "")”?",
@@ -144,25 +152,43 @@ struct TeleprompterView: View {
         .id(state.selectedNoteID) // fresh editor (and undo stack) per note
         .frame(maxWidth: Metrics.columnMaxWidth)
         .frame(maxWidth: .infinity)
-        .padding(.trailing, state.editorRailVisible ? Metrics.railWidth : 0)
-        .animation(reduceMotion ? nil : .spring(duration: 0.35, bounce: 0.15),
-                   value: state.editorRailVisible)
+        .padding(.trailing, state.editorRailVisible ? railWidth : 0)
+        .animation(calmAnimation, value: state.editorRailVisible)
+        .animation(calmAnimation, value: railWidth)
+    }
+
+    /// The shared, unhurried spring behind every slide in the Teleprompter
+    /// chrome — the dots→panel expand and the editor's margin rail — so both
+    /// always move at the same calm speed.
+    private var calmAnimation: Animation? {
+        reduceMotion ? nil : .spring(duration: Metrics.calmAnimationDuration, bounce: Metrics.calmAnimationBounce)
+    }
+
+    /// How wide the rail needs to be to hold its widest current note without
+    /// wrapping unnecessarily — clamped to `Metrics.railMinWidth...railMaxWidth`
+    /// so a short note doesn't reserve as much margin as a long one, but a
+    /// long one still wraps exactly as it did with the old fixed width.
+    private var railWidth: CGFloat {
+        let widestText = state.feedbackItems.isEmpty
+            ? EditorRailMetrics.naturalWidth(for: EditorRailMetrics.emptyStateText(for: state.feedbackPhase))
+            : (state.feedbackItems.map { EditorRailMetrics.naturalWidth(for: $0.text) }.max() ?? 0)
+        return min(max(widestText + EditorRailMetrics.cardHorizontalChrome, Metrics.railMinWidth), Metrics.railMaxWidth)
     }
 
     /// The note's topic, pinned. Text scrolls under a fog of background color
-    /// so the title never competes with a hairline.
+    /// so the title never competes with a hairline. The title itself stays
+    /// click-through (so clicks land in the editor beneath); the sensitivity
+    /// shield beside it is the one real control in this band.
     private var titleBar: some View {
         HStack(spacing: 6) {
-            if state.selectedNote?.isSensitive == true {
-                Image(systemName: "shield.fill")
-                    .font(.system(size: 9.5))
-                    .foregroundStyle(Theme.textTertiary)
-                    .help("Sensitive — local AI only")
-            }
             Text(state.selectedNote?.title ?? "Klårt")
                 .font(.system(size: 12.5, weight: .medium))
                 .foregroundStyle(Theme.textSecondary)
                 .lineLimit(1)
+                .allowsHitTesting(false)
+            if state.selectedNoteID != nil {
+                sensitiveToggle
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: Metrics.titleBarHeight, alignment: .center)
@@ -176,8 +202,26 @@ struct TeleprompterView: View {
                 startPoint: .top, endPoint: .bottom
             )
         )
-        .allowsHitTesting(false)
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Sits to the right of the title so sensitivity reads as an attribute of
+    /// *this* note, not a global app setting. Always visible (outline when
+    /// off, filled when on) so it's discoverable, not just an indicator that
+    /// only appears once already set.
+    private var sensitiveToggle: some View {
+        Button {
+            state.toggleSensitive()
+        } label: {
+            Image(systemName: state.selectedNote?.isSensitive == true ? "shield.fill" : "shield")
+                .font(.system(size: 9.5))
+                .foregroundStyle(state.selectedNote?.isSensitive == true ? Theme.textSecondary : Theme.textTertiary)
+        }
+        .buttonStyle(.plain)
+        .help(state.selectedNote?.isSensitive == true
+              ? "Sensitive: only local AI ever sees this note. Click to unmark."
+              : "Mark sensitive: keeps this note on local AI only, never the cloud.")
+        .accessibilityLabel(state.selectedNote?.isSensitive == true ? "Sensitive note. Click to unmark." : "Mark note sensitive.")
     }
 
     private var wordCountBar: some View {
@@ -238,9 +282,8 @@ struct TeleprompterView: View {
         }
     }
 
-    private var edgeAnimation: Animation? {
-        reduceMotion ? nil : .spring(duration: 0.3, bounce: 0.2)
-    }
+    /// The dots→panel expand — same calm speed as the editor's margin rail.
+    private var edgeAnimation: Animation? { calmAnimation }
 
     /// One dot per note, current note in full ink. Dwelling here for 0.8 s
     /// expands the panel; a click switches notes without ever opening it.
@@ -331,7 +374,6 @@ struct TeleprompterView: View {
         }
         .frame(width: Metrics.panelWidth)
         .frame(maxHeight: .infinity)
-        .background(Theme.surfaceRaised)
         .background(Theme.background)
         .overlay(alignment: .trailing) {
             Rectangle().fill(Theme.border).frame(width: 1)
@@ -349,8 +391,9 @@ struct TeleprompterView: View {
         .onExitCommand { collapseEdge() }
     }
 
-    /// The editor lives behind this one quiet mark. Hover names it; a count
-    /// rides along when suggestions are already waiting.
+    /// The editor lives behind this one quiet mark — just the glyph at rest.
+    /// Hovering names its purpose (and a count, when suggestions are already
+    /// waiting) so the chrome stays quiet until someone actually asks.
     private var editorSummons: some View {
         Button {
             collapseEdge()
@@ -362,12 +405,16 @@ struct TeleprompterView: View {
         } label: {
             HStack(spacing: 7) {
                 Text("¶")
-                    .font(.system(size: 14, weight: .medium, design: .serif))
+                    .font(.system(size: 20, weight: .medium, design: .serif))
                     .foregroundStyle(Theme.textPrimary)
-                Text(editorSummonsLabel)
-                    .font(.system(size: 11.5, weight: .medium))
-                    .foregroundStyle(Theme.textSecondary)
-                Spacer()
+                if hoveringEditorSummons {
+                    Text(editorSummonsLabel)
+                        .font(.system(size: 11.5, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                }
+                Spacer(minLength: 0)
                 if !state.feedbackItems.isEmpty {
                     Text("\(state.feedbackItems.count)")
                         .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
@@ -381,9 +428,14 @@ struct TeleprompterView: View {
         }
         .buttonStyle(.plain)
         .disabled(state.selectedNoteID == nil)
+        .onHover { inside in
+            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                hoveringEditorSummons = inside
+            }
+        }
         .help(state.editorRailVisible
-              ? "Hide the editor's notes (⌘.)"
-              : "Show editor — margin notes on this text (⌘. or type /editor)")
+              ? "Hide the editor's notes (⌘E)"
+              : "Show editor — margin notes on this text (⌘E or type /editor)")
         .accessibilityLabel(state.editorRailVisible ? "Hide editor" : "Show editor")
     }
 
@@ -546,14 +598,36 @@ struct TeleprompterView: View {
         HStack(spacing: 0) {
             Spacer(minLength: 0)
             EditorRail(bridge: bridge, topInset: Metrics.titleBarHeight + 8)
-                .frame(width: Metrics.railWidth)
+                .frame(width: railWidth)
                 .opacity(railOpacity)
                 // Reaching for the notes restores them and resets the fade.
                 .onHover { inside in
                     if inside { wakeRail() }
                 }
+                .overlay(alignment: .topLeading) { hideRailButton }
                 .transition(.opacity.combined(with: .move(edge: .trailing)))
         }
+    }
+
+    /// Sits at the rail's near (left) edge, right where the writing column
+    /// ends — the one spot on the rail itself that closes it, rather than
+    /// only ⌘E or the far-away notes panel.
+    private var hideRailButton: some View {
+        Button {
+            state.editorRailVisible = false
+        } label: {
+            Image(systemName: "chevron.right")
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.textTertiary)
+                .frame(width: 22, height: 22)
+                .background(Theme.surfaceRaised, in: Circle())
+                .contentShape(Circle())
+        }
+        .buttonStyle(.plain)
+        .padding(.top, (Metrics.titleBarHeight - 22) / 2)
+        .padding(.leading, 6)
+        .help("Hide the editor's notes (⌘E)")
+        .accessibilityLabel("Hide editor notes")
     }
 
     /// Full opacity, and (re)start the countdown: after five more minutes of
@@ -597,6 +671,38 @@ struct TeleprompterView: View {
         let formatter = DateFormatter()
         formatter.setLocalizedDateFormatFromTemplate("dMMM")
         return formatter.string(from: date)
+    }
+}
+
+// MARK: - Rail width measurement
+
+/// How wide a rail card's own chrome (padding, glyph column, set-aside arrow)
+/// needs beyond its text — not pixel-exact, just enough to keep the rail from
+/// hugging so tight the chrome clips. `TeleprompterView.railWidth` caps the
+/// result against `Metrics.railMaxWidth`, so long prose still wraps exactly
+/// as it did with the old fixed-width rail.
+private enum EditorRailMetrics {
+    static let bodyFont = NSFont.systemFont(ofSize: 11.5)
+    static let cardHorizontalChrome: CGFloat = 80
+
+    static func emptyStateText(for phase: FeedbackPhase) -> String {
+        switch phase {
+        case .analyzing: return "Going through your text now."
+        case .error(let message): return message
+        case .skipped(let reason): return reason
+        case .waiting, .idle: return "Nothing to note yet — keep writing, or ⌘R to ask again."
+        }
+    }
+
+    /// The single-line width `text` would need if it never wrapped.
+    static func naturalWidth(for text: String) -> CGFloat {
+        let attributed = NSAttributedString(string: text, attributes: [.font: bodyFont])
+        let unbounded = CGFloat.greatestFiniteMagnitude
+        let bounds = attributed.boundingRect(
+            with: NSSize(width: unbounded, height: unbounded),
+            options: [.usesLineFragmentOrigin, .usesFontLeading]
+        )
+        return ceil(bounds.width)
     }
 }
 
@@ -671,12 +777,7 @@ private struct EditorRail: View {
     }
 
     private var emptyMessage: String {
-        switch state.feedbackPhase {
-        case .analyzing: return "Going through your text now."
-        case .error(let message): return message
-        case .skipped(let reason): return reason
-        case .waiting, .idle: return "Nothing to note yet — keep writing, or ⌘R to ask again."
-        }
+        EditorRailMetrics.emptyStateText(for: state.feedbackPhase)
     }
 
     // MARK: Anchored layout

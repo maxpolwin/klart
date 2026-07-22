@@ -30,6 +30,11 @@ final class AppState: ObservableObject {
         didSet { if oldValue != selectedNoteID { noteSelectionChanged(from: oldValue) } }
     }
     @Published var searchText = ""
+    /// Bumped by the ⌘F menu command; the currently-visible surface
+    /// (Teleprompter's notes panel or the classic sidebar) observes this and
+    /// reveals/focuses its own search field — the menu has no view of which
+    /// surface is on screen, so it can't focus a `@FocusState` directly.
+    @Published var searchRequested = 0
     /// Live editor buffer for the selected note.
     @Published var editorText = ""
 
@@ -50,7 +55,7 @@ final class AppState: ObservableObject {
     /// Teleprompter: whether the editor's margin rail (suggestions on the
     /// right) is on screen. Analysis runs in the background either way; the
     /// rail only appears when the user summons the editor — via the icon in
-    /// the notes panel, ⌘., or typing /editor — and retires again when the
+    /// the notes panel, ⌘E, or typing /editor — and retires again when the
     /// suggestions fade out.
     @Published var editorRailVisible = false
 
@@ -216,6 +221,12 @@ final class AppState: ObservableObject {
         notes.insert(note, at: 0)
         selectedNoteID = note.id
         persist(note)
+    }
+
+    /// Asks whichever surface is on screen to reveal and focus its search
+    /// field (⌘F).
+    func requestSearch() {
+        searchRequested += 1
     }
 
     func deleteNote(id: UUID) {

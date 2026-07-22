@@ -122,7 +122,7 @@ struct ContentView: View {
             .scaleEffect(pillPulse ? 1.06 : 1.0)
         }
         .buttonStyle(.plain)
-        .help("Editor suggestions — click to open (⌘.)")
+        .help("Editor suggestions — click to open (⌘E)")
         .disabled(state.selectedNoteID == nil)
         .popover(isPresented: $state.showCoachPopover, arrowEdge: .bottom) {
             FeedbackPanelView()

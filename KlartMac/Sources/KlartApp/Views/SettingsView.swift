@@ -30,7 +30,7 @@ private struct InterfaceSettingsView: View {
                 Text(
                     "One centered, monochrome column and nothing else on screen. "
                     + "Your notes wait behind the left edge; the editor's suggestions "
-                    + "appear in the right margin when you summon them (⌘. or type /editor) "
+                    + "appear in the right margin when you summon them (⌘E or type /editor) "
                     + "and fade away again while you keep writing. "
                     + "Turn off for the classic sidebar layout."
                 )

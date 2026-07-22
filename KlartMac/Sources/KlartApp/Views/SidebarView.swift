@@ -27,16 +27,11 @@ struct SidebarView: View {
             searchField
             timeline
             footer
-
-            // Off-screen affordance: ⌘F focuses the search field, replacing the
-            // Find shortcut the system search field used to provide.
-            Button("") { searchFocused = true }
-                .keyboardShortcut("f", modifiers: .command)
-                .frame(width: 0, height: 0)
-                .opacity(0)
-                .accessibilityHidden(true)
         }
         .navigationTitle("Klårt")
+        // ⌘F (the Find menu command) focuses the search field, replacing the
+        // Find shortcut the system search field used to provide.
+        .onChange(of: state.searchRequested) { _, _ in searchFocused = true }
         .confirmationDialog(
             "Delete “\(noteToDelete?.title ?? "")”?",
             isPresented: Binding(get: { noteToDelete != nil }, set: { if !$0 { noteToDelete = nil } })
