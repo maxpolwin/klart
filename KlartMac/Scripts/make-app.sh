@@ -52,6 +52,6 @@ fi
 # Fail the build if the sandbox or hardened runtime didn't take.
 codesign --display --entitlements - "$APP" 2>/dev/null | grep -q "com.apple.security.app-sandbox" \
   || { echo "error: app-sandbox entitlement missing from signature" >&2; exit 1; }
-codesign --display --verbose "$APP" 2>&1 | grep -q "flags=.*runtime" \
+codesign --display --verbose=4 "$APP" 2>&1 | grep -q "flags=.*runtime" \
   || { echo "error: hardened runtime flag missing from signature" >&2; exit 1; }
 echo "Verified: App Sandbox + Hardened Runtime present in signature"
