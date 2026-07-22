@@ -4,7 +4,7 @@
 
 Noschen is a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of giving answers.
 
-This is the native Swift/SwiftUI rebuild of the original Electron app (still in the repository root). It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
+This is the native Swift/SwiftUI rebuild of the original Electron prototype. It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
 
 ---
 

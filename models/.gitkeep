@@ -1,5 +1,0 @@
-# This directory contains the AI model files
-# The model will be downloaded when you run: npm run download-model
-#
-# The default model is Qwen2.5-0.5B-Instruct (~400MB)
-# It will be bundled into the app when you run: npm run package

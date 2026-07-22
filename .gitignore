@@ -1,13 +1,13 @@
-# Dependencies
-node_modules/
-
-# Swift Package Manager (NoschenMac)
+# Swift Package Manager
 .build/
 .swiftpm/
 
 # Build outputs
 dist/
 release/
+
+# Generated icon intermediates
+build/icon.iconset/
 
 # IDE
 .idea/
@@ -21,7 +21,6 @@ Thumbs.db
 
 # Logs
 *.log
-npm-debug.log*
 
 # Environment
 .env
@@ -33,6 +32,3 @@ secrets.enc
 
 # User data (stored in app data folder, not repo)
 userData/
-
-# AI Models (large files, download separately)
-models/*.gguf
