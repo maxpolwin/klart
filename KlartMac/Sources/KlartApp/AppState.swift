@@ -413,6 +413,15 @@ final class AppState: ObservableObject {
         scheduleAutosave()
     }
 
+    /// Puts a suggestion away without judging it: it leaves the screen but
+    /// records nothing, so the editor may raise the point again on a later
+    /// analysis. (The Teleprompter rail's ×.)
+    func hide(_ item: FeedbackItem) {
+        feedbackItems.removeAll { $0.id == item.id }
+    }
+
+    /// Rejects a suggestion for good: its fingerprint is remembered per note
+    /// and it will not be shown again.
     func reject(_ item: FeedbackItem) {
         feedbackItems.removeAll { $0.id == item.id }
         guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }

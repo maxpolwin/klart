@@ -14,8 +14,9 @@ import KlartKit
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
 ///   the panel, ⌘., or typing /editor — each aligned to the section of text
-///   it refers to, wearing a glyph instead of a colored pill, with a small ×
-///   to dismiss. Keep writing and the rail fades away on its own.
+///   it refers to, wearing a glyph instead of a colored pill. × puts a note
+///   away for now; Dismiss retires it for good. Keep writing and the rail
+///   fades away on its own.
 /// - The note's title stays pinned at the top; an optional word-count line
 ///   (Settings → Interface) sits at the bottom.
 struct TeleprompterView: View {
@@ -741,8 +742,9 @@ private struct RailCardHeightKey: PreferenceKey {
 }
 
 /// One editor note: a monochrome glyph in place of the colored pill, the
-/// observation, a quiet Insert when there is content to take, and an × to
-/// send it away.
+/// observation, then quiet actions — Insert when there is content to take,
+/// Dismiss to never see the point again, and an × that merely puts the note
+/// away for now.
 private struct RailCard: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
@@ -768,7 +770,7 @@ private struct RailCard: View {
                 }
                 Spacer(minLength: 4)
                 Button {
-                    state.reject(item)
+                    state.hide(item)
                 } label: {
                     Text("×")
                         .font(.system(size: 13, weight: .medium))
@@ -777,8 +779,8 @@ private struct RailCard: View {
                         .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
-                .help("Dismiss — don't show this note again")
-                .accessibilityLabel("Dismiss suggestion")
+                .help("Put this note away for now — it may come back on a later analysis")
+                .accessibilityLabel("Hide suggestion")
             }
 
             Text(item.text)
@@ -789,17 +791,30 @@ private struct RailCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
 
-            if item.suggestion != nil {
+            HStack(spacing: 10) {
+                if item.suggestion != nil {
+                    Button {
+                        state.accept(item)
+                    } label: {
+                        Text("Insert")
+                            .font(.system(size: 10.5, weight: .medium))
+                            .foregroundStyle(Theme.textSecondary)
+                            .underline(hovering)
+                    }
+                    .buttonStyle(.plain)
+                    .help("Insert the suggested content into that section")
+                }
                 Button {
-                    state.accept(item)
+                    state.reject(item)
                 } label: {
-                    Text("Insert")
+                    Text("Dismiss")
                         .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
+                        .foregroundStyle(Theme.textTertiary)
                         .underline(hovering)
                 }
                 .buttonStyle(.plain)
-                .help("Insert the suggested content into that section")
+                .help("Don't show this note again for this note file")
+                .accessibilityLabel("Dismiss permanently")
             }
         }
         .padding(10)

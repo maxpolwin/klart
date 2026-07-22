@@ -105,7 +105,7 @@ With no secrets configured the workflow keeps working and falls back to ad-hoc s
 
 1. Create a note (`⌘N`). Give it a `# Topic` heading and `## Sub-question` sections.
 2. Write. After a pause (configurable, default 2.5 s), the editor reads the section you're in — silently, in the background. Nothing appears mid-screen.
-3. Summon the editor with `⌘.`, by typing `/editor`, or via the ¶ icon in the notes panel: its notes appear in the right margin, each aligned with the section it refers to. **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **×** dismisses that tip permanently for this note. Keep writing and the margin notes fade away again on their own (after 5 more minutes of typing, over 20 seconds).
+3. Summon the editor with `⌘.`, by typing `/editor`, or via the ¶ icon in the notes panel: its notes appear in the right margin, each aligned with the section it refers to. **Insert** puts a suggestion into your note as a `> ✎` quote block for you to rework; **×** just puts that note away for now (it may return on a later analysis); **Dismiss** hides that tip permanently for this note. Keep writing and the margin notes fade away again on their own (after 5 more minutes of typing, over 20 seconds).
 4. Your notes live behind the left edge: move the pointer there for the dot spine, rest on it for 0.8 s for the full panel (titles, last edited, shield marks, search — `⌘F` jumps straight there).
 5. Use the coach actions any time from the **Coach** menu. `⌘R` analyzes on demand; auto-analysis can be turned off entirely in Settings → Coaching.
 6. Add `[no-ai]` to a heading (e.g. `## Private notes [no-ai]`) to keep the coach out of that section.
