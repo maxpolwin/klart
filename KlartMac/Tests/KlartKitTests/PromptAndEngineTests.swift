@@ -55,6 +55,60 @@ final class PromptBuilderTests: XCTestCase {
         XCTAssertTrue(user.contains("Body text"))
     }
 
+    func testDefaultTemplatePreservesJSONShapeAndCoachAction() {
+        let feedback = PromptBuilder.feedbackMessages(
+            context: PromptContext(currentSectionBody: "Body"),
+            kinds: [.gap],
+            style: TipStyle()
+        )
+        XCTAssertTrue(feedback[0].content.contains(PromptBuilder.feedbackJSONShape))
+
+        let coach = PromptBuilder.coachMessages(action: .challenge, documentText: "notes")
+        XCTAssertTrue(coach[0].content.contains(CoachAction.challenge.instruction))
+    }
+
+    func testCustomTemplateSubstitutesTokensAndReplacesPersona() {
+        let template = "Custom persona.\nTypes:\n{{FEEDBACK_TYPES}}\nCap {{MAX_TIPS}}.\nShape: {{JSON_SHAPE}}"
+        let messages = PromptBuilder.feedbackMessages(
+            context: PromptContext(currentSectionBody: "Body"),
+            kinds: [.gap],
+            style: TipStyle(maxTips: 4),
+            template: template
+        )
+        let system = messages[0].content
+        XCTAssertTrue(system.hasPrefix("Custom persona."))
+        XCTAssertFalse(system.contains("rigorous thinking coach"))
+        XCTAssertTrue(system.contains("gap —"))
+        XCTAssertTrue(system.contains("Cap 4."))
+        XCTAssertTrue(system.contains(PromptBuilder.feedbackJSONShape))
+        XCTAssertFalse(system.contains("{{"))
+    }
+
+    func testCustomCoachTemplateSubstitutesAction() {
+        let messages = PromptBuilder.coachMessages(
+            action: .summarize,
+            documentText: "notes",
+            template: "Do this: {{ACTION_INSTRUCTION}}"
+        )
+        XCTAssertEqual(messages[0].content, "Do this: \(CoachAction.summarize.instruction)")
+    }
+
+    func testMissingRequiredPlaceholderDetected() {
+        XCTAssertTrue(
+            PromptBuilder.missingRequiredPlaceholders(
+                in: PromptBuilder.defaultFeedbackTemplate,
+                placeholders: PromptBuilder.feedbackPlaceholders
+            ).isEmpty
+        )
+        XCTAssertEqual(
+            PromptBuilder.missingRequiredPlaceholders(
+                in: "no shape token here",
+                placeholders: PromptBuilder.feedbackPlaceholders
+            ),
+            ["{{JSON_SHAPE}}"]
+        )
+    }
+
     func testClipKeepsHeadAndTail() {
         let long = String(repeating: "a", count: 5000) + "MIDDLE" + String(repeating: "z", count: 5000)
         let clipped = PromptBuilder.clip(long, to: 1000)

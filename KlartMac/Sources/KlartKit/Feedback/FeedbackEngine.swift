@@ -39,7 +39,8 @@ public struct FeedbackEngine: Sendable {
         let messages = PromptBuilder.feedbackMessages(
             context: context,
             kinds: kinds,
-            style: settings.tipStyle
+            style: settings.tipStyle,
+            template: settings.effectiveFeedbackPrompt
         )
         let options = CompletionOptions(
             temperature: settings.temperature,

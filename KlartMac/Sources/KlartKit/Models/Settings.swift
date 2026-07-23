@@ -165,6 +165,13 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// Show word count and estimated reading time at the bottom of the
     /// teleprompter surface.
     public var showWordCount: Bool
+    /// User override for the live-feedback ("Editor") system prompt. `nil`
+    /// means "use the app's current default" — so Revert clears this and a
+    /// future default improvement flows through automatically. Stored as a
+    /// `{{TOKEN}}` template; see `PromptBuilder`.
+    public var feedbackSystemPrompt: String?
+    /// User override for the Quiet-coach system prompt. `nil` = current default.
+    public var coachSystemPrompt: String?
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -180,7 +187,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         lockOnScreenSleep: Bool = true,
         excludeFromCapture: Bool = true,
         teleprompterMode: Bool = true,
-        showWordCount: Bool = false
+        showWordCount: Bool = false,
+        feedbackSystemPrompt: String? = nil,
+        coachSystemPrompt: String? = nil
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -196,6 +205,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.excludeFromCapture = excludeFromCapture
         self.teleprompterMode = teleprompterMode
         self.showWordCount = showWordCount
+        self.feedbackSystemPrompt = feedbackSystemPrompt
+        self.coachSystemPrompt = coachSystemPrompt
     }
 
     public init(from decoder: Decoder) throws {
@@ -215,6 +226,19 @@ public struct AppSettings: Codable, Equatable, Sendable {
         excludeFromCapture = try c.decodeIfPresent(Bool.self, forKey: .excludeFromCapture) ?? defaults.excludeFromCapture
         teleprompterMode = try c.decodeIfPresent(Bool.self, forKey: .teleprompterMode) ?? defaults.teleprompterMode
         showWordCount = try c.decodeIfPresent(Bool.self, forKey: .showWordCount) ?? defaults.showWordCount
+        feedbackSystemPrompt = try c.decodeIfPresent(String.self, forKey: .feedbackSystemPrompt)
+        coachSystemPrompt = try c.decodeIfPresent(String.self, forKey: .coachSystemPrompt)
+    }
+
+    /// The live-feedback system prompt actually sent to the model: the user's
+    /// override when set, otherwise the app's current default.
+    public var effectiveFeedbackPrompt: String {
+        feedbackSystemPrompt ?? PromptBuilder.defaultFeedbackTemplate
+    }
+
+    /// The Quiet-coach system prompt actually sent to the model.
+    public var effectiveCoachPrompt: String {
+        coachSystemPrompt ?? PromptBuilder.defaultCoachTemplate
     }
 
     /// Connection details for the given provider, falling back to defaults.

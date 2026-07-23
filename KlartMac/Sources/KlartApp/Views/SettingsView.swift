@@ -216,6 +216,7 @@ private struct ProviderSettingsView: View {
 
 private struct CoachingSettingsView: View {
     @EnvironmentObject var state: AppState
+    @State private var showPromptEditor = false
 
     var body: some View {
         Form {
@@ -270,8 +271,32 @@ private struct CoachingSettingsView: View {
                 .lineLimit(2...4)
                 .textFieldStyle(.roundedBorder)
             }
+
+            Section {
+                HStack {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("System prompt")
+                        Text(
+                            (state.settings.feedbackSystemPrompt != nil || state.settings.coachSystemPrompt != nil)
+                            ? "Customised — you can always revert to the default."
+                            : "Rewrite how the coach thinks. Revert to the default any time."
+                        )
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Button("Edit System Prompt…") { showPromptEditor = true }
+                }
+            } footer: {
+                Text("Advanced. The prompt keeps placeholder tokens (e.g. {{JSON_SHAPE}}) the app fills in for each request; leave the required ones in place.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
+        .sheet(isPresented: $showPromptEditor) {
+            SystemPromptEditorSheet()
+        }
     }
 
     private func binding(for kind: FeedbackKind) -> Binding<Bool> {
@@ -299,6 +324,121 @@ private struct CoachingSettingsView: View {
         case .question: return "Socratic questions that push further"
         case .other: return ""
         }
+    }
+}
+
+// MARK: - System prompt editor
+
+/// Full-text editor for the two AI system prompts, each with independent
+/// revert-to-default. Writes straight through `state.settings`, so persistence
+/// is automatic; storing `nil` when the text matches the current default keeps
+/// "revert" and "the current default" one and the same thing.
+private struct SystemPromptEditorSheet: View {
+    @EnvironmentObject var state: AppState
+    @Environment(\.dismiss) private var dismiss
+
+    private enum Target: String, CaseIterable, Identifiable {
+        case feedback, coach
+        var id: String { rawValue }
+        var label: String { self == .feedback ? "Editor feedback" : "Quiet coach" }
+    }
+
+    @State private var target: Target = .feedback
+
+    private var placeholders: [PromptPlaceholder] {
+        target == .feedback ? PromptBuilder.feedbackPlaceholders : PromptBuilder.coachPlaceholders
+    }
+
+    private var isCustomised: Bool {
+        target == .feedback
+            ? state.settings.feedbackSystemPrompt != nil
+            : state.settings.coachSystemPrompt != nil
+    }
+
+    private var promptText: Binding<String> {
+        Binding(
+            get: {
+                target == .feedback
+                    ? state.settings.effectiveFeedbackPrompt
+                    : state.settings.effectiveCoachPrompt
+            },
+            set: { newValue in
+                switch target {
+                case .feedback:
+                    state.settings.feedbackSystemPrompt =
+                        newValue == PromptBuilder.defaultFeedbackTemplate ? nil : newValue
+                case .coach:
+                    state.settings.coachSystemPrompt =
+                        newValue == PromptBuilder.defaultCoachTemplate ? nil : newValue
+                }
+            }
+        )
+    }
+
+    private var missingTokens: [String] {
+        PromptBuilder.missingRequiredPlaceholders(in: promptText.wrappedValue, placeholders: placeholders)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("System prompt")
+                .font(.system(size: 15, weight: .semibold))
+
+            Picker("", selection: $target) {
+                ForEach(Target.allCases) { Text($0.label).tag($0) }
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+
+            TextEditor(text: promptText)
+                .font(.system(.body, design: .monospaced))
+                .frame(minHeight: 240)
+                .padding(6)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.3))
+                )
+
+            if !missingTokens.isEmpty {
+                Label(
+                    "\(missingTokens.joined(separator: ", ")) is missing — feedback can't be parsed without it.",
+                    systemImage: "exclamationmark.triangle.fill"
+                )
+                .font(.caption)
+                .foregroundStyle(.orange)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Placeholders the app fills in:")
+                    .font(.caption.weight(.medium))
+                    .foregroundStyle(.secondary)
+                ForEach(placeholders) { placeholder in
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        Text(placeholder.token)
+                            .font(.system(.caption, design: .monospaced))
+                        Text(placeholder.summary)
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
+            HStack {
+                Button("Revert to Default", role: .destructive) {
+                    switch target {
+                    case .feedback: state.settings.feedbackSystemPrompt = nil
+                    case .coach: state.settings.coachSystemPrompt = nil
+                    }
+                }
+                .disabled(!isCustomised)
+                Spacer()
+                Button("Done") { dismiss() }
+                    .keyboardShortcut(.defaultAction)
+                    .buttonStyle(.borderedProminent)
+            }
+        }
+        .padding(20)
+        .frame(width: 560, height: 560)
     }
 }
 

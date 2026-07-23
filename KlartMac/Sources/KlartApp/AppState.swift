@@ -499,7 +499,11 @@ final class AppState: ObservableObject {
                     config: currentSettings.activeConfig,
                     secrets: self.secrets
                 )
-                let messages = PromptBuilder.coachMessages(action: action, documentText: text)
+                let messages = PromptBuilder.coachMessages(
+                    action: action,
+                    documentText: text,
+                    template: currentSettings.effectiveCoachPrompt
+                )
                 let options = CompletionOptions(
                     temperature: currentSettings.temperature,
                     maxTokens: currentSettings.maxTokens

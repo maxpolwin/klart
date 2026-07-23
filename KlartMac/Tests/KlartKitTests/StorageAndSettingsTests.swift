@@ -93,6 +93,38 @@ final class SettingsTests: XCTestCase {
         XCTAssertTrue(decoded.showWordCount)
     }
 
+    func testSystemPromptOverrideRoundtripAndOmittedWhenNil() throws {
+        var settings = AppSettings()
+        // Defaults: no override, effective prompts are the built-in templates.
+        XCTAssertNil(settings.feedbackSystemPrompt)
+        XCTAssertNil(settings.coachSystemPrompt)
+        XCTAssertEqual(settings.effectiveFeedbackPrompt, PromptBuilder.defaultFeedbackTemplate)
+        XCTAssertEqual(settings.effectiveCoachPrompt, PromptBuilder.defaultCoachTemplate)
+
+        // Nil overrides are omitted from the JSON, keeping settings.json clean.
+        let nilJSON = String(decoding: try JSONEncoder().encode(settings), as: UTF8.self)
+        XCTAssertFalse(nilJSON.contains("feedbackSystemPrompt"))
+        XCTAssertFalse(nilJSON.contains("coachSystemPrompt"))
+
+        // A custom override survives a round-trip and drives the effective prompt.
+        settings.feedbackSystemPrompt = "Custom feedback {{JSON_SHAPE}}"
+        settings.coachSystemPrompt = "Custom coach {{ACTION_INSTRUCTION}}"
+        let decoded = try JSONDecoder().decode(
+            AppSettings.self, from: JSONEncoder().encode(settings)
+        )
+        XCTAssertEqual(decoded, settings)
+        XCTAssertEqual(decoded.effectiveFeedbackPrompt, "Custom feedback {{JSON_SHAPE}}")
+        XCTAssertEqual(decoded.effectiveCoachPrompt, "Custom coach {{ACTION_INSTRUCTION}}")
+    }
+
+    func testOldSettingsWithoutPromptFieldsDecodeToDefaults() throws {
+        let json = #"{"activeProvider":"ollama"}"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+        XCTAssertNil(decoded.feedbackSystemPrompt)
+        XCTAssertNil(decoded.coachSystemPrompt)
+        XCTAssertEqual(decoded.effectiveFeedbackPrompt, PromptBuilder.defaultFeedbackTemplate)
+    }
+
     func testDecodingClampsOutOfRangeValues() throws {
         let json = #"{"debounceSeconds":9999,"temperature":-5,"maxTokens":1,"tipStyle":{"maxTips":50}}"#
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
