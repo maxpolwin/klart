@@ -44,7 +44,11 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
     /// leading markdown heading marker stripped — but only when the line is
     /// actually a valid heading (`# `–`###### `). A "#" used as plain text
     /// ("#idea", "C# notes", "#1 priority") is left exactly as typed.
-    public var title: String {
+    public var title: String { Self.title(of: content) }
+
+    /// The same derivation against arbitrary markdown — for callers holding a
+    /// live editor buffer that has not been flushed into a `Note` yet.
+    public static func title(of content: String) -> String {
         for rawLine in content.split(separator: "\n", omittingEmptySubsequences: false) {
             let trimmed = rawLine.trimmingCharacters(in: .whitespaces)
             guard !trimmed.isEmpty else { continue }

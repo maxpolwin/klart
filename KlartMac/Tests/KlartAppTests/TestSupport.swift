@@ -327,7 +327,12 @@ final class AppFixture {
             // Never the login keychain: the real store writes items that
             // outlive the process, and on a runner with a locked keychain it
             // fails silently rather than loudly.
-            secrets: InMemorySecretStore()
+            secrets: InMemorySecretStore(),
+            // Likewise never the default path: judging a tip in a test must
+            // not append to the developer's own learning log.
+            recommendationLog: RecommendationLog(
+                fileURL: directory.appendingPathComponent("recommendations.json")
+            )
         )
         // No provider call can be reached without this: typing is wired to the
         // feedback debounce, which would otherwise fire a request mid-test.

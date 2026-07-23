@@ -172,6 +172,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var feedbackSystemPrompt: String?
     /// User override for the Quiet-coach system prompt. `nil` = current default.
     public var coachSystemPrompt: String?
+    /// Include note text (title, section, the paragraph a tip reacted to, and
+    /// the tip's own prose) in the local learning log. Off by default: the
+    /// signal tier — outcome, kind, model, system-prompt hash — is always
+    /// recorded, but note content is opt-in. See `RecommendationRecord`.
+    public var logRecommendationContent: Bool
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -189,7 +194,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         teleprompterMode: Bool = true,
         showWordCount: Bool = false,
         feedbackSystemPrompt: String? = nil,
-        coachSystemPrompt: String? = nil
+        coachSystemPrompt: String? = nil,
+        logRecommendationContent: Bool = false
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -207,6 +213,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.showWordCount = showWordCount
         self.feedbackSystemPrompt = feedbackSystemPrompt
         self.coachSystemPrompt = coachSystemPrompt
+        self.logRecommendationContent = logRecommendationContent
     }
 
     public init(from decoder: Decoder) throws {
@@ -228,6 +235,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showWordCount = try c.decodeIfPresent(Bool.self, forKey: .showWordCount) ?? defaults.showWordCount
         feedbackSystemPrompt = try c.decodeIfPresent(String.self, forKey: .feedbackSystemPrompt)
         coachSystemPrompt = try c.decodeIfPresent(String.self, forKey: .coachSystemPrompt)
+        logRecommendationContent = try c.decodeIfPresent(Bool.self, forKey: .logRecommendationContent) ?? defaults.logRecommendationContent
     }
 
     /// The live-feedback system prompt actually sent to the model: the user's

@@ -217,6 +217,7 @@ private struct ProviderSettingsView: View {
 private struct CoachingSettingsView: View {
     @EnvironmentObject var state: AppState
     @State private var showPromptEditor = false
+    @State private var showClearLogConfirm = false
 
     var body: some View {
         Form {
@@ -292,10 +293,55 @@ private struct CoachingSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section {
+                Toggle(
+                    "Include my note text in the log",
+                    isOn: $state.settings.logRecommendationContent
+                )
+                HStack {
+                    Text("Export")
+                    Spacer()
+                    Menu("Export Log…") {
+                        Button("Without note text") {
+                            state.exportRecommendationLog(includeContent: false)
+                        }
+                        Button("With note text") {
+                            state.exportRecommendationLog(includeContent: true)
+                        }
+                    }
+                    .fixedSize()
+                    Button("Clear…") { showClearLogConfirm = true }
+                }
+                if let result = state.recommendationExportResult {
+                    Text(result)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } header: {
+                Text("Learning log")
+            } footer: {
+                Text("Which editor notes you confirm or reject is recorded locally so coaching can improve. The record always keeps the verdict, the note type, and which model and system prompt produced it — never your writing, unless you switch that on above. Notes marked sensitive never contribute their text. The log is encrypted with your notes when protection is on, and only leaves this Mac if you export it.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .sheet(isPresented: $showPromptEditor) {
             SystemPromptEditorSheet()
+        }
+        .confirmationDialog(
+            "Delete the learning log?",
+            isPresented: $showClearLogConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("Delete Log", role: .destructive) {
+                state.clearRecommendationLog()
+                state.recommendationExportResult = "Learning log cleared."
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("Every recorded verdict is removed. This cannot be undone.")
         }
     }
 

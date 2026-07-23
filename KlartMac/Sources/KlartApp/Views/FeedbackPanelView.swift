@@ -184,6 +184,7 @@ struct FeedbackPanelView: View {
 /// separation — no card chrome.
 private struct FeedbackRow: View {
     @EnvironmentObject var state: AppState
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: FeedbackItem
     @State private var showSuggestion = false
 
@@ -230,23 +231,57 @@ private struct FeedbackRow: View {
                         .font(.system(size: 11, weight: .medium))
                 }
                 .buttonStyle(.borderless)
-                .foregroundStyle(Theme.accent)
+                .foregroundStyle(outcome == nil ? Theme.accent : Theme.textTertiary)
+                .disabled(outcome != nil)
                 .help("Insert this into the current section as a quoted block")
 
-                Button {
-                    state.reject(item)
-                } label: {
-                    Label("Dismiss", systemImage: "hand.thumbsdown")
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.borderless)
-                .foregroundStyle(Theme.textTertiary)
-                .help("Hide this tip and don't show it again for this note")
-
                 Spacer()
+
+                judgement(
+                    .confirmed,
+                    systemImage: "checkmark",
+                    help: "This helped — good advice"
+                ) { state.confirm(item) }
+
+                judgement(
+                    .rejected,
+                    systemImage: "xmark",
+                    help: "This missed the mark — the coach got it wrong"
+                ) { state.reject(item) }
             }
         }
         .padding(.vertical, 9)
+        // Judged tips stay put and fade back rather than disappearing, so the
+        // panel reads as a record of what has been dealt with. Only the
+        // controls go inert — the text stays readable and selectable.
+        .opacity(outcome == nil ? 1 : 0.45)
+        .animation(reduceMotion ? nil : .easeOut(duration: 0.2), value: outcome)
+    }
+
+    private var outcome: RecommendationOutcome? { state.outcome(for: item) }
+
+    /// A minimal icon-only verdict control. Once the tip is judged, the chosen
+    /// verdict stays tinted and the other fades out, so the row still says
+    /// which way it went.
+    private func judgement(
+        _ verdict: RecommendationOutcome,
+        systemImage: String,
+        help: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        let chosen = outcome == verdict
+        return Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 10.5, weight: .semibold))
+                .frame(width: 18, height: 18)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .foregroundStyle(chosen ? Theme.accent : Theme.textTertiary)
+        .opacity(outcome == nil || chosen ? 1 : 0.35)
+        .disabled(outcome != nil)
+        .help(help)
+        .accessibilityLabel(verdict == .confirmed ? "Confirm suggestion" : "Reject suggestion")
     }
 }
 #endif

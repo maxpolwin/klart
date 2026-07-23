@@ -1036,8 +1036,9 @@ private struct RailCardHeightKey: PreferenceKey {
 
 /// One editor note: a monochrome glyph in place of the colored pill, the
 /// observation, then quiet actions — Insert when there is content to take,
-/// and Dismiss to never see the point again. Nothing else: a card that is
-/// only read costs no decision, and the whole rail retires on its own.
+/// and a two-glyph verdict (confirm / reject) that teaches the coach without
+/// touching the writing. A card that is only read costs no decision; a card
+/// that has been judged stays put and retreats.
 private struct RailCard: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
@@ -1083,22 +1084,19 @@ private struct RailCard: View {
                         Text("Insert")
                             .font(.system(size: 10.5, weight: .medium))
                             .foregroundStyle(Theme.textSecondary)
-                            .underline(hovering)
+                            .underline(hovering && outcome == nil)
                     }
                     .buttonStyle(.plain)
+                    .disabled(outcome != nil)
                     .help("Insert the suggested content into that section")
                 }
-                Button {
-                    state.reject(item)
-                } label: {
-                    Text("Dismiss")
-                        .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Theme.textSecondary)
-                        .underline(hovering)
-                }
-                .buttonStyle(.plain)
-                .help("Don't show this note again for this note file")
-                .accessibilityLabel("Dismiss permanently")
+
+                Spacer(minLength: 4)
+
+                // The verdict: two glyphs, no words. Confirming or rejecting
+                // teaches the coach; it does not touch the writing.
+                verdict(.confirmed, systemImage: "checkmark", help: "This helped — good note")
+                verdict(.rejected, systemImage: "xmark", help: "This missed the mark — the coach got it wrong")
             }
         }
         .padding(10)
@@ -1115,9 +1113,38 @@ private struct RailCard: View {
                 .frame(width: 2)
                 .padding(.vertical, 9)
         }
+        // An attended note retreats rather than vanishing: the rail keeps a
+        // record of what has been dealt with, without competing for the eye.
+        .opacity(outcome == nil ? 1 : 0.5)
         .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(item.kind.label). \(item.section.map { "Section \($0). " } ?? "")\(item.text)")
+    }
+
+    private var outcome: RecommendationOutcome? { state.outcome(for: item) }
+
+    private func verdict(
+        _ value: RecommendationOutcome,
+        systemImage: String,
+        help: String
+    ) -> some View {
+        let chosen = outcome == value
+        return Button {
+            if value == .confirmed { state.confirm(item) } else { state.reject(item) }
+        } label: {
+            Image(systemName: systemImage)
+                .font(.system(size: 10, weight: .semibold))
+                .foregroundStyle(Theme.textPrimary)
+                .frame(width: 17, height: 17)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        // Unjudged: quiet until the card is hovered. Judged: only the chosen
+        // glyph stays legible, so the card still reads its own verdict.
+        .opacity(chosen ? 1 : (outcome != nil ? 0.2 : (hovering ? 0.75 : 0.4)))
+        .disabled(outcome != nil)
+        .help(help)
+        .accessibilityLabel(value == .confirmed ? "Confirm note" : "Reject note")
     }
 }
 #endif

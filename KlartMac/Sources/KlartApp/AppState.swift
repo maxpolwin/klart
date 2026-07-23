@@ -44,7 +44,23 @@ final class AppState: ObservableObject {
 
     // MARK: Feedback / coach
 
-    @Published var feedbackItems: [FeedbackItem] = []
+    @Published var feedbackItems: [FeedbackItem] = [] {
+        didSet {
+            // Judgements belong to the tips on screen. Pruning here means
+            // every place that replaces or clears the list stays correct
+            // without having to remember this map exists.
+            let live = Set(feedbackItems.map(\.id))
+            if !itemOutcomes.keys.allSatisfy(live.contains) {
+                itemOutcomes = itemOutcomes.filter { live.contains($0.key) }
+            }
+        }
+    }
+    /// How the writer judged each visible tip. An attended tip stays in the
+    /// list — greyed out — rather than vanishing, so the panel shows what has
+    /// already been dealt with. Transient, and never persisted.
+    @Published var itemOutcomes: [UUID: RecommendationOutcome] = [:]
+    /// One-line outcome of the last learning-log export, shown in Settings.
+    @Published var recommendationExportResult: String?
     @Published var feedbackPhase: FeedbackPhase = .idle
     @Published var coachOutput = ""
     @Published var coachAction: CoachAction? = nil
@@ -109,6 +125,8 @@ final class AppState: ObservableObject {
     let secrets: SecretStore
     private let noteStore: NoteStore
     private let settingsStore: SettingsStore
+    /// Local learning log of judged recommendations.
+    let recommendationLog: RecommendationLog
 
     private var autosaveTask: Task<Void, Never>?
     private var feedbackTask: Task<Void, Never>?
@@ -118,11 +136,13 @@ final class AppState: ObservableObject {
     init(
         noteStore: NoteStore = NoteStore(directory: NoteStore.defaultDirectory()),
         settingsStore: SettingsStore = SettingsStore(fileURL: SettingsStore.defaultFileURL()),
-        secrets: SecretStore = KeychainSecretStore()
+        secrets: SecretStore = KeychainSecretStore(),
+        recommendationLog: RecommendationLog = RecommendationLog(fileURL: RecommendationLog.defaultFileURL())
     ) {
         self.noteStore = noteStore
         self.settingsStore = settingsStore
         self.secrets = secrets
+        self.recommendationLog = recommendationLog
         let loadedSettings = settingsStore.load()
         self.settings = loadedSettings
         // didSet doesn't fire during init; seed the monochrome flag here so
@@ -135,6 +155,7 @@ final class AppState: ObservableObject {
         if settings.vault != nil {
             isLocked = true          // notes stay sealed until the user unlocks
             Task { await noteStore.lock() }   // and the store refuses writes
+            Task { await recommendationLog.lock() }
         } else {
             Task { await loadNotes() }
         }
@@ -285,6 +306,14 @@ final class AppState: ObservableObject {
         if let oldID, let index = notes.firstIndex(where: { $0.id == oldID }) {
             flushEditor(into: index)
         }
+        // Anything left unjudged when the writer moves on is a (weak) signal
+        // in its own right. Logged against the outgoing note, while its text
+        // is still in the buffer.
+        logUnattendedAsDismissed(
+            note: oldID.flatMap { id in notes.first { $0.id == id } },
+            text: editorText,
+            cursor: cursorUTF16
+        )
         autosaveTask?.cancel()
         feedbackTask?.cancel()
         coachTask?.cancel()
@@ -456,21 +485,122 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Whether this tip has already been judged. Attended tips stay visible
+    /// but greyed out, and their controls are inert.
+    func outcome(for item: FeedbackItem) -> RecommendationOutcome? {
+        itemOutcomes[item.id]
+    }
+
+    /// Inserts the tip into the note as an editor note. The row stays, greyed.
     func accept(_ item: FeedbackItem) {
+        guard itemOutcomes[item.id] == nil else { return }
+        // Log before editing: the context a tip reacted to is the text as it
+        // stood when the tip was written, not after the insertion.
+        logRecommendation(item, outcome: .inserted)
+        itemOutcomes[item.id] = .inserted
         editorText = NoteEditing.insertSuggestion(item, into: editorText, cursorUTF16: cursorUTF16)
-        feedbackItems.removeAll { $0.id == item.id }
         scheduleAutosave()
     }
 
-    /// Rejects a suggestion for good: its fingerprint is remembered per note
-    /// and it will not be shown again.
+    /// Marks a tip as good advice without inserting it — a learning signal
+    /// only. No fingerprint: sound advice may legitimately recur.
+    func confirm(_ item: FeedbackItem) {
+        guard itemOutcomes[item.id] == nil else { return }
+        logRecommendation(item, outcome: .confirmed)
+        itemOutcomes[item.id] = .confirmed
+    }
+
+    /// Rejects a suggestion for good — the coach got it wrong. Its fingerprint
+    /// is remembered per note so it is not shown again; the row stays, greyed.
     func reject(_ item: FeedbackItem) {
-        feedbackItems.removeAll { $0.id == item.id }
+        guard itemOutcomes[item.id] == nil else { return }
+        logRecommendation(item, outcome: .rejected)
+        itemOutcomes[item.id] = .rejected
         guard let id = selectedNoteID, let index = notes.firstIndex(where: { $0.id == id }) else { return }
         if !notes[index].rejectedFingerprints.contains(item.fingerprint) {
             notes[index].rejectedFingerprints.append(item.fingerprint)
             persist(notes[index])
         }
+    }
+
+    // MARK: - Learning log
+
+    /// Records how a recommendation was judged, so coaching quality and the
+    /// system prompt can be improved over time.
+    ///
+    /// The signal tier is always written; note text rides along only when the
+    /// writer opted in, and never for a note marked sensitive. Nothing is
+    /// written while locked — the store would refuse the write anyway.
+    private func logRecommendation(
+        _ item: FeedbackItem,
+        outcome: RecommendationOutcome,
+        note: Note? = nil,
+        text: String? = nil,
+        cursor: Int? = nil
+    ) {
+        guard !isLocked else { return }
+        let subject = note ?? selectedNote
+        let sensitive = subject?.isSensitive == true
+        let withContent = settings.logRecommendationContent && !sensitive
+        // The buffer, not the saved note: a tip is judged against what is on
+        // screen, which autosave may not have flushed yet.
+        let liveText = text ?? editorText
+
+        var noteTitle: String?
+        var topic: String?
+        var sectionTitle: String?
+        var paragraph: String?
+        if withContent {
+            // Reuse the same derivation the prompt uses, so the logged context
+            // is exactly what the model was reacting to.
+            let context = PromptContext.from(
+                text: liveText,
+                cursorUTF16: cursor ?? cursorUTF16
+            )
+            noteTitle = Note.title(of: liveText)
+            topic = context?.topic
+            sectionTitle = item.section ?? context?.currentSectionTitle
+            paragraph = context.map { RecommendationRecord.clipContext($0.currentSectionBody) }
+        }
+
+        let record = RecommendationRecord(
+            outcome: outcome,
+            kind: item.kind,
+            fingerprint: item.fingerprint,
+            model: settings.activeConfig.model.isEmpty ? nil : settings.activeConfig.model,
+            provider: settings.activeProvider.displayName,
+            systemPromptHash: StableHash.fnv1a(settings.effectiveFeedbackPrompt),
+            usesDefaultPrompt: settings.feedbackSystemPrompt == nil,
+            noteID: subject?.id,
+            fromSensitiveNote: sensitive,
+            noteTitle: noteTitle,
+            documentTopic: topic,
+            sectionTitle: sectionTitle,
+            contextParagraph: paragraph,
+            observation: withContent ? item.text : nil,
+            suggestion: withContent ? item.suggestion : nil
+        )
+        let log = recommendationLog
+        Task { try? await log.append(record) }
+    }
+
+    /// Logs everything still unjudged as `.dismissed` — the weak signal of a
+    /// writer moving on. Called with the outgoing note's own text so the
+    /// context matches what was on screen.
+    ///
+    /// A nil note means it was just deleted, and nothing is logged: attributing
+    /// its tips to the note selected in its place would be wrong, and keeping a
+    /// deleted note's text in the log would be worse.
+    private func logUnattendedAsDismissed(note: Note?, text: String, cursor: Int) {
+        guard let note else { return }
+        for item in feedbackItems where itemOutcomes[item.id] == nil {
+            logRecommendation(item, outcome: .dismissed, note: note, text: text, cursor: cursor)
+        }
+    }
+
+    func clearRecommendationLog() {
+        let log = recommendationLog
+        Task { try? await log.clear() }
     }
 
     // MARK: - Coach
@@ -620,6 +750,7 @@ final class AppState: ObservableObject {
             storeBiometricKey(masterKey)
         }
         try await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        try? await recommendationLog.encryptOnDisk(masterKey: masterKey)
         await auditLog.record(.vaultEnabled)
     }
 
@@ -632,6 +763,7 @@ final class AppState: ObservableObject {
         }.value
         if let previous {
             try await noteStore.rotateAllOnDisk(oldKey: previous, newKey: current)
+            try? await recommendationLog.rotateOnDisk(oldKey: previous, newKey: current)
             settings.vault = VaultCrypto.completeRotation(config)
         }
         return current
@@ -644,6 +776,7 @@ final class AppState: ObservableObject {
         let masterKey = try await resolveMasterKey(password: password)
         await flushEditorToStoreNow()
         try await noteStore.decryptAllOnDisk(masterKey: masterKey)
+        try? await recommendationLog.decryptOnDisk(masterKey: masterKey)
         removeBiometricKey()
         vaultKey = nil
         settings.vault = nil
@@ -680,6 +813,7 @@ final class AppState: ObservableObject {
         await flushEditorToStoreNow()
         settings.vault = pending                              // resumable from here
         try await noteStore.rotateAllOnDisk(oldKey: oldKey, newKey: newKey)
+        try? await recommendationLog.rotateOnDisk(oldKey: oldKey, newKey: newKey)
         settings.vault = VaultCrypto.completeRotation(pending)
         vaultKey = SecureBytes(newKey)
         if settings.vault?.biometricUnlock == true {
@@ -780,6 +914,7 @@ final class AppState: ObservableObject {
         let secured = SecureBytes(masterKey)
         vaultKey = secured
         await noteStore.setEncryptionKey(secured)
+        await recommendationLog.setEncryptionKey(secured)
         await loadNotes()
         lastActivity = Date()
         isLocked = false
@@ -809,6 +944,7 @@ final class AppState: ObservableObject {
                 try? await self.noteStore.save(pendingSave)   // key still set
             }
             await self.noteStore.lock()
+            await self.recommendationLog.lock()
             self.vaultKey = nil
             self.notes = []
             self.selectedNoteID = nil
@@ -849,6 +985,50 @@ final class AppState: ObservableObject {
             let header = "<!-- klart:id=\(note.id.uuidString) created=\(formatter.string(from: note.createdAt)) -->\n"
             let url = folder.appendingPathComponent(name)
             try? (header + note.content).data(using: .utf8)?.write(to: url, options: .atomic)
+        }
+    }
+
+    /// Writes the learning log to a single JSON file the writer can share, so
+    /// confirm/reject patterns can inform future coaching and prompt work.
+    ///
+    /// `includeContent` decides whether note text rides along. Records from
+    /// notes marked sensitive are redacted either way — a sensitive note's
+    /// text must not leave the machine through this door either.
+    func exportRecommendationLog(includeContent: Bool) {
+        guard !isLocked else { return }
+        let log = recommendationLog
+        Task { [weak self] in
+            let records = await log.loadAll()
+            guard let self else { return }
+            guard !records.isEmpty else {
+                self.recommendationExportResult = "The learning log is empty — nothing to export yet."
+                return
+            }
+            let payload = RecommendationExport.make(from: records, includeContent: includeContent)
+            guard let data = try? payload.encoded() else {
+                self.recommendationExportResult = "Could not encode the log for export."
+                return
+            }
+
+            let panel = NSSavePanel()
+            panel.nameFieldStringValue = includeContent
+                ? "klart-coaching-log-with-content.json"
+                : "klart-coaching-log.json"
+            panel.allowedContentTypes = [.json]
+            panel.prompt = "Export"
+            panel.message = includeContent
+                ? "This file includes your note text and is written as plain text — share it only with someone you trust."
+                : "This file contains no note text: only which tips you confirmed or rejected, and which model and system prompt produced them."
+            guard panel.runModal() == .OK, let url = panel.url else { return }
+            do {
+                try data.write(to: url, options: .atomic)
+                let redacted = payload.records.filter { !$0.carriesContent }.count
+                self.recommendationExportResult =
+                    "Exported \(payload.recordCount) record\(payload.recordCount == 1 ? "" : "s")"
+                    + (includeContent && redacted > 0 ? " (\(redacted) redacted as sensitive)." : ".")
+            } catch {
+                self.recommendationExportResult = "Export failed: \(error.localizedDescription)"
+            }
         }
     }
 

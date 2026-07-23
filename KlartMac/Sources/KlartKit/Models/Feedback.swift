@@ -96,11 +96,6 @@ public struct FeedbackItem: Identifiable, Codable, Equatable, Sendable {
             .components(separatedBy: .whitespacesAndNewlines)
             .filter { !$0.isEmpty }
             .joined(separator: " ")
-        var hash: UInt64 = 0xcbf29ce484222325
-        for byte in normalized.utf8 {
-            hash ^= UInt64(byte)
-            hash = hash &* 0x100000001b3
-        }
-        return String(format: "%016llx", hash)
+        return StableHash.fnv1a(normalized)
     }
 }
