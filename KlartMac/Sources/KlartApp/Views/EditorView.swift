@@ -104,11 +104,16 @@ final class KlartTextView: NSTextView {
         guard let layoutManager, let textContainer else { return .zero }
         // This runs from `updateInsertionPointStateAndRestartTimer`, i.e.
         // immediately after an edit and before AppKit has necessarily laid the
-        // text out. Measuring then reads a stale layout: press Enter at the
-        // end of a note and the extra line fragment does not exist yet, so the
-        // caret falls back to the line above and the page centres on it. The
-        // typewriter centring already forces a full layout on every keystroke,
-        // so this costs nothing that was not already being paid.
+        // text out — press Enter at the end of a note and the extra line
+        // fragment does not exist yet, so a read here would land on the line
+        // above for the one frame before `centerCaretLine` re-reads with the
+        // layout forced. Ensuring it here removes that flicker. Cheap: the
+        // typewriter centring already forces the same layout every keystroke,
+        // and `ensureLayout` is a no-op once the layout is valid. (Not covered
+        // by a test — the stale window is a reentrant instant inside AppKit's
+        // own edit handling that `KlartAppTests` cannot pause on; the caret
+        // *landing* on the right line is covered, via the extra-fragment
+        // branch below.)
         layoutManager.ensureLayout(for: textContainer)
         let length = (string as NSString).length
         let location = min(selectedRange().location, length)
