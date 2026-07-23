@@ -28,8 +28,11 @@ import KlartKit
 /// sync with anything else the way `calmAnimation` and `EditorRail`'s own
 /// literal spring once quietly had.
 private enum TeleprompterMotion {
-    static let duration: Double = 0.3
-    static let bounce: Double = 0.1
+    /// Deliberately slow: the chrome arriving and leaving is meant to read as
+    /// calm, never as a snap. Long enough that the spring's settle is legible
+    /// rather than a flicker you only half-see.
+    static let duration: Double = 2.0
+    static let bounce: Double = 0.18
 }
 
 struct TeleprompterView: View {
@@ -38,14 +41,14 @@ struct TeleprompterView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @StateObject private var bridge = EditorBridge()
 
-    // Left edge: dots → (dwell) → panel. Hover state is tracked per zone
-    // because enter/leave callbacks between adjacent zones arrive unordered —
-    // a collapse only goes through when the pointer is in none of them.
-    @State private var dotsVisible = false
+    // Left edge: hover/dwell (or a click) → panel. Hover state is tracked per
+    // zone because enter/leave callbacks between adjacent zones arrive
+    // unordered — a collapse only goes through when the pointer is in none.
     @State private var panelExpanded = false
     @State private var hoveringStrip = false
-    @State private var hoveringDots = false
     @State private var hoveringPanel = false
+    /// The right edge's own approach state, for the rail's handle.
+    @State private var hoveringRightStrip = false
     @State private var dwellTask: Task<Void, Never>?
     @State private var collapseTask: Task<Void, Never>?
     @FocusState private var searchFocused: Bool
@@ -55,10 +58,17 @@ struct TeleprompterView: View {
     @State private var railFadeTask: Task<Void, Never>?
     @State private var typedSinceRailShown = false
 
+    // Left panel: the same treatment, so neither edge outstays the other.
+    @State private var panelOpacity: Double = 1
+    @State private var panelFadeTask: Task<Void, Never>?
+    @State private var typedSincePanelShown = false
+
     @State private var noteToDelete: Note?
     /// Reveals the "Show/Hide editor" label next to the ¶ icon — the label
     /// only exists on hover, so the quiet chrome stays quiet at rest.
     @State private var hoveringEditorSummons = false
+    /// The search field's own hover, for the same treatment on its label.
+    @State private var hoveringSearch = false
 
     private enum Metrics {
         static let columnMaxWidth: CGFloat = 720
@@ -69,7 +79,18 @@ struct TeleprompterView: View {
         static let railMaxWidth: CGFloat = 264
         static let panelWidth: CGFloat = 268
         static let edgeStripWidth: CGFloat = 26
+        /// How far the waiting cards lean into the window when the pointer
+        /// nears the edge — enough to read as "these are here", not enough to
+        /// be mistaken for the panel actually opening.
+        static let peekAmount: CGFloat = 26
         static let titleBarHeight: CGFloat = 46
+        /// Both fogs — under the pinned title and above the word count — run
+        /// opaque across their own band, then fade over roughly five body
+        /// lines (15 pt text on ~22 pt leading), so text dissolves gradually
+        /// on its way past rather than sliding out from behind a hard edge,
+        /// and never shares pixels with the text pinned there.
+        static let fogFadeHeight: CGFloat = 110
+        static let wordCountBarHeight: CGFloat = 34
         /// Dwell on the dots before the panel expands on its own — a click
         /// expands it immediately, without waiting.
         static let dwellSeconds: Double = 2.0
@@ -85,9 +106,18 @@ struct TeleprompterView: View {
 
             if state.selectedNoteID != nil {
                 editorColumn
-                if state.editorRailVisible {
-                    rail
-                }
+                // Offset-driven for the same reason as the notes panel: a
+                // conditional `if` + `.transition` did not animate here at
+                // all, so the rail popped into place while the writing
+                // column's mirrored padding (a plain numeric spring) glided —
+                // which is exactly the asymmetry the shared constant was
+                // supposed to remove.
+                rail
+                    .offset(x: railOffset)
+                    .allowsHitTesting(state.editorRailVisible)
+                    .animation(handleSpring, value: hoveringRightStrip)
+                    .animation(calmAnimation, value: state.editorRailVisible)
+                    .animation(calmAnimation, value: railWidth)
             } else {
                 emptyState
             }
@@ -97,12 +127,14 @@ struct TeleprompterView: View {
                 wordCountBar
             }
             leftEdge
+            rightEdge
         }
         .animation(calmAnimation, value: state.editorRailVisible)
         .onDisappear {
             dwellTask?.cancel()
             collapseTask?.cancel()
             railFadeTask?.cancel()
+            panelFadeTask?.cancel()
         }
         .onChange(of: state.searchRequested) { _, _ in
             // There is no visible search field while writing — ⌘F (the
@@ -201,17 +233,28 @@ struct TeleprompterView: View {
         }
         .frame(maxWidth: .infinity)
         .frame(height: Metrics.titleBarHeight, alignment: .center)
-        .background(
-            LinearGradient(
-                stops: [
-                    .init(color: Theme.background, location: 0),
-                    .init(color: Theme.background.opacity(0.85), location: 0.6),
-                    .init(color: Theme.background.opacity(0), location: 1),
-                ],
-                startPoint: .top, endPoint: .bottom
-            )
-        )
+        .background(alignment: .top) {
+            fog(bandHeight: Metrics.titleBarHeight, from: .top)
+        }
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// A band of background that is fully opaque across `bandHeight` — so the
+    /// pinned text there can never be shared with scrolling prose — and then
+    /// fades out over five lines. Used at both ends of the column.
+    private func fog(bandHeight: CGFloat, from edge: VerticalEdge) -> some View {
+        let solidStop = bandHeight / (bandHeight + Metrics.fogFadeHeight)
+        return LinearGradient(
+            stops: [
+                .init(color: Theme.background, location: 0),
+                .init(color: Theme.background, location: solidStop),
+                .init(color: Theme.background.opacity(0), location: 1),
+            ],
+            startPoint: edge == .top ? .top : .bottom,
+            endPoint: edge == .top ? .bottom : .top
+        )
+        .frame(height: bandHeight + Metrics.fogFadeHeight)
+        .allowsHitTesting(false)
     }
 
     /// Sits to the right of the title so sensitivity reads as an attribute of
@@ -234,12 +277,19 @@ struct TeleprompterView: View {
     }
 
     private var wordCountBar: some View {
-        VStack {
-            Spacer()
+        VStack(spacing: 0) {
+            Spacer(minLength: 0)
             Text(NoteMetrics.summary(for: state.editorText))
                 .font(.system(size: 10.5, weight: .regular, design: .monospaced))
                 .foregroundStyle(Theme.textTertiary)
                 .padding(.bottom, 10)
+                .frame(maxWidth: .infinity)
+                .frame(height: Metrics.wordCountBarHeight, alignment: .bottom)
+                // The mirror of the title's fog: prose dissolves on its way
+                // down instead of running under the word count.
+                .background(alignment: .bottom) {
+                    fog(bandHeight: Metrics.wordCountBarHeight, from: .bottom)
+                }
         }
         .frame(maxWidth: .infinity)
         .allowsHitTesting(false)
@@ -275,84 +325,83 @@ struct TeleprompterView: View {
                     hoveringStrip = inside
                     if inside {
                         collapseTask?.cancel()
-                        guard !dotsVisible else { return }
-                        withAnimation(edgeAnimation) { dotsVisible = true }
+                        startDwell()
                     } else {
+                        dwellTask?.cancel()
                         scheduleCollapse()
                     }
                 }
-                // A click skips the dwell entirely — useful before the dots
-                // have even faded in, e.g. a confident click right at the
-                // window edge.
+                // A click skips the dwell entirely — a confident click right
+                // at the window edge opens the notes at once.
                 .onTapGesture { revealPanel() }
 
-            if dotsVisible && !panelExpanded {
-                dotSpine
-            }
-            if panelExpanded {
-                notesPanel
-            }
+            // Always mounted (never inserted/removed) and driven by offset
+            // instead of `.transition`: a conditional `if` + `.transition`
+            // here did not animate at all inside the chromeless window, so
+            // the panel appeared fully-formed with no slide. An always-present
+            // view with an animated offset has no insertion to race against,
+            // so the spring always runs.
+            notesPanel
+                .offset(x: panelOffset)
+                .opacity(panelOpacity)
+                .allowsHitTesting(panelExpanded)
+                // Two springs, keyed separately: the peek bounces (it's an
+                // invitation), the open glides (it's the real motion).
+                .animation(handleSpring, value: hoveringStrip)
+                .animation(edgeAnimation, value: panelExpanded)
         }
     }
 
-    /// The dots→panel expand — same calm speed as the editor's margin rail.
+    /// The panel's slide — same calm speed as the editor's margin rail.
     private var edgeAnimation: Animation? { calmAnimation }
 
-    /// One dot per note, current note in full ink. Clicking a dot switches
-    /// straight to that note; clicking the spine itself (its padding and
-    /// background, not a dot) expands the full panel immediately, and
-    /// dwelling here for 2 s does the same without a click.
-    private var dotSpine: some View {
-        VStack(spacing: 10) {
-            ForEach(spineNotes) { note in
-                Button {
-                    state.selectedNoteID = note.id
-                } label: {
-                    Circle()
-                        .fill(note.id == state.selectedNoteID
-                              ? Theme.textPrimary
-                              : Theme.textTertiary.opacity(0.55))
-                        .frame(width: note.id == state.selectedNoteID ? 7 : 5,
-                               height: note.id == state.selectedNoteID ? 7 : 5)
-                        .frame(width: 14, height: 14)
-                        .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-                .help(note.title)
-                .accessibilityLabel(note.title)
-            }
-        }
-        .padding(.vertical, 14)
-        .padding(.horizontal, 5)
-        .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Theme.surfaceRaised)
-        )
-        .padding(.leading, 8)
-        .frame(maxHeight: .infinity, alignment: .center)
-        // A pure slide, no fade: fading at the same time as the move hides
-        // most of the spring's travel behind low opacity, which is why the
-        // right rail (a plain numeric spring on the column's padding, no
-        // opacity at all) reads as springy and this didn't.
-        .transition(.move(edge: .leading))
-        .contentShape(Rectangle())
-        // Landing on a dot's own Button fires that dot's action instead —
-        // this only fires for the spine's padding and background.
-        .onTapGesture { revealPanel() }
-        .onHover { inside in
-            hoveringDots = inside
-            if inside {
-                collapseTask?.cancel()
-                startDwell()
-            } else {
-                dwellTask?.cancel()
-                scheduleCollapse()
-            }
-        }
+    // MARK: - Edge handles
+
+    /// Labels that only exist on hover — the editor's "Show editor" and the
+    /// search field's "Search notes" — appear in place, never sliding, at one
+    /// shared pace so the panel's two pieces of text behave identically.
+    private var labelFade: Animation? {
+        reduceMotion ? nil : .easeInOut(duration: 0.7)
     }
 
-    private var spineNotes: [Note] {
-        Array(sortedNotes.prefix(14))
+    /// Livelier than the panels themselves, on purpose: this is an
+    /// invitation, and a hint that doesn't visibly spring doesn't read as
+    /// one. The panels stay calm; only the 4 pt lip is allowed to bounce.
+    private var handleSpring: Animation? {
+        reduceMotion ? nil : .spring(duration: 1.0, bounce: 0.5)
+    }
+
+    /// Where the notes panel sits: open, leaning in because the pointer is
+    /// near, or parked off-screen. The lean is the affordance — the actual
+    /// note cards nudge into view rather than a stand-in handle.
+    private var panelOffset: CGFloat {
+        if panelExpanded { return 0 }
+        if hoveringStrip { return -(Metrics.panelWidth - Metrics.peekAmount) }
+        return -(Metrics.panelWidth + 40)
+    }
+
+    /// The rail's mirror of `panelOffset` — the waiting suggestion cards lean
+    /// in from the right on approach.
+    private var railOffset: CGFloat {
+        if state.editorRailVisible { return 0 }
+        if hoveringRightStrip { return railWidth - Metrics.peekAmount }
+        return railWidth + 40
+    }
+
+    /// The right edge's mirror of `leftEdge`: the same approach zone, summoning the
+    /// editor's rail instead of the notes. Inert while the rail is open so it
+    /// can never swallow a click meant for a suggestion card.
+    private var rightEdge: some View {
+        HStack(spacing: 0) {
+            Spacer(minLength: 0)
+            Color.clear
+                .frame(width: Metrics.edgeStripWidth)
+                .frame(maxHeight: .infinity)
+                .contentShape(Rectangle())
+                .onHover { hoveringRightStrip = $0 }
+                .onTapGesture { state.activateEditor() }
+                .allowsHitTesting(!state.editorRailVisible)
+        }
     }
 
     private var sortedNotes: [Note] {
@@ -404,8 +453,7 @@ struct TeleprompterView: View {
         .shadow(color: .black.opacity(0.10), radius: 18, x: 6, y: 0)
         // Same reasoning as the dot spine: no opacity fade, so the spring
         // actually carries the panel's 268 pt slide instead of hiding most
-        // of it behind translucency.
-        .transition(.move(edge: .leading))
+        // of it behind translucency. (Offset-driven, see the call site.)
         .onHover { inside in
             hoveringPanel = inside
             if inside {
@@ -438,14 +486,12 @@ struct TeleprompterView: View {
                         .font(.system(size: 11.5, weight: .medium))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
-                        .transition(.opacity.combined(with: .move(edge: .leading)))
+                        // Appears, never travels: a label sliding out from
+                        // under the glyph reads as a second moving object in
+                        // a surface whose whole point is stillness.
+                        .transition(.opacity)
                 }
                 Spacer(minLength: 0)
-                if !state.feedbackItems.isEmpty {
-                    Text("\(state.feedbackItems.count)")
-                        .font(.system(size: 10.5, weight: .semibold, design: .monospaced))
-                        .foregroundStyle(Theme.textSecondary)
-                }
             }
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
@@ -455,7 +501,7 @@ struct TeleprompterView: View {
         .buttonStyle(.plain)
         .disabled(state.selectedNoteID == nil)
         .onHover { inside in
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+            withAnimation(labelFade) {
                 hoveringEditorSummons = inside
             }
         }
@@ -476,15 +522,31 @@ struct TeleprompterView: View {
             Image(systemName: "magnifyingglass")
                 .font(.system(size: 11))
                 .foregroundStyle(Theme.textTertiary)
-            TextField("Search notes", text: $state.searchText)
+            TextField("", text: $state.searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.textPrimary)
                 .focused($searchFocused)
+                .overlay(alignment: .leading) {
+                    // The same treatment as the editor's label: the word only
+                    // exists on hover and fades in place, so the panel carries
+                    // no standing text at rest.
+                    if hoveringSearch, state.searchText.isEmpty {
+                        Text("Search notes")
+                            .font(.system(size: 12.5))
+                            .foregroundStyle(Theme.textTertiary)
+                            .lineLimit(1)
+                            .allowsHitTesting(false)
+                            .transition(.opacity)
+                    }
+                }
         }
         .padding(.bottom, 6)
         .overlay(alignment: .bottom) {
             Rectangle().fill(Theme.border).frame(height: 1)
+        }
+        .onHover { inside in
+            withAnimation(labelFade) { hoveringSearch = inside }
         }
     }
 
@@ -507,7 +569,7 @@ struct TeleprompterView: View {
                         .foregroundStyle(selected ? Theme.textPrimary : Theme.textPrimary.opacity(0.78))
                         .lineLimit(1)
                 }
-                Text(Self.relativeDate(note.updatedAt))
+                Text(Self.modifiedStamp(note.updatedAt))
                     .font(.system(size: 11))
                     .foregroundStyle(Theme.textTertiary)
             }
@@ -525,7 +587,7 @@ struct TeleprompterView: View {
             Button("Delete Note", role: .destructive) { noteToDelete = note }
         }
         .accessibilityLabel(
-            "\(note.isSensitive ? "Sensitive note. " : "")\(note.title). Edited \(Self.relativeDate(note.updatedAt))"
+            "\(note.isSensitive ? "Sensitive note. " : "")\(note.title). Edited \(Self.modifiedStamp(note.updatedAt))"
         )
     }
 
@@ -576,7 +638,7 @@ struct TeleprompterView: View {
             guard !Task.isCancelled else { return }
             // Enter/leave events between adjacent zones arrive unordered;
             // only collapse when the pointer has really left all of them.
-            guard !hoveringStrip, !hoveringDots, !hoveringPanel else { return }
+            guard !hoveringStrip, !hoveringPanel else { return }
             collapseEdge()
         }
     }
@@ -584,36 +646,36 @@ struct TeleprompterView: View {
     private func collapseEdge() {
         dwellTask?.cancel()
         collapseTask?.cancel()
+        panelFadeTask?.cancel()
         searchFocused = false
         hoveringStrip = false
-        hoveringDots = false
         hoveringPanel = false
         withAnimation(edgeAnimation) {
             panelExpanded = false
-            dotsVisible = false
         }
+        // The countdown is over, but the panel must come back at full ink
+        // next time it is summoned — mid-fade opacity would otherwise stick.
+        panelOpacity = 1
     }
 
     /// Expands straight to the full panel — from the dwell timer completing,
-    /// a click on the spine, or ⌘F. All three converge here so they can
-    /// never leave the state machine's flags out of sync with each other.
+    /// a click at the edge, or ⌘F. All three converge here so they can never
+    /// leave the state machine's flags out of sync with each other.
     private func revealPanel() {
         dwellTask?.cancel()
         collapseTask?.cancel()
-        // The dots leave the hierarchy once the panel replaces them, and a
-        // removed view never reports hover-exit — clear it by hand.
-        hoveringDots = false
         withAnimation(edgeAnimation) {
-            dotsVisible = true
             panelExpanded = true
         }
+        wakePanel()
         searchFocused = true
     }
 
     /// Typing is the strongest signal of intent: put the notes panel away
     /// and let the rail's fade countdown know writing continued.
     private func writingResumed() {
-        if dotsVisible || panelExpanded {
+        if panelExpanded {
+            typedSincePanelShown = true
             collapseEdge()
         }
         if state.editorRailVisible {
@@ -639,7 +701,6 @@ struct TeleprompterView: View {
                     if inside { wakeRail() }
                 }
                 .overlay(alignment: .topLeading) { hideRailButton }
-                .transition(.opacity.combined(with: .move(edge: .trailing)))
         }
     }
 
@@ -662,6 +723,29 @@ struct TeleprompterView: View {
         .padding(.leading, 6)
         .help("Hide the editor's notes (⌘E)")
         .accessibilityLabel("Hide editor notes")
+    }
+
+    /// The notes panel's mirror of `wakeRail()` — same opacity, same delay,
+    /// same twenty-second fade, so both edges retire on one schedule instead
+    /// of the left simply vanishing while the right dissolves.
+    private func wakePanel() {
+        panelFadeTask?.cancel()
+        withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.2)) { panelOpacity = 1 }
+        typedSincePanelShown = false
+        panelFadeTask = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(Metrics.railFadeDelay * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                if typedSincePanelShown { break }
+            }
+            guard !Task.isCancelled else { return }
+            let duration = reduceMotion ? 0.25 : Metrics.railFadeDuration
+            withAnimation(.linear(duration: duration)) { panelOpacity = 0 }
+            try? await Task.sleep(nanoseconds: UInt64(duration * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            panelExpanded = false
+            panelOpacity = 1
+        }
     }
 
     /// Full opacity, and (re)start the countdown: after five more minutes of
@@ -692,19 +776,21 @@ struct TeleprompterView: View {
     // MARK: - Helpers
 
     /// Compact relative time for the panel rows: "2m ago", "Yesterday", "4 Jul".
-    static func relativeDate(_ date: Date, now: Date = Date()) -> String {
-        let seconds = max(0, now.timeIntervalSince(date))
-        if seconds < 45 { return "Just now" }
-        let minutes = Int((seconds / 60).rounded())
-        if minutes < 60 { return "\(minutes)m ago" }
-        let hours = Int(seconds / 3600)
-        if hours < 24 { return "\(max(1, hours))h ago" }
-        if Calendar.current.isDateInYesterday(date) { return "Yesterday" }
-        let days = Int(seconds / 86400)
-        if days < 7 { return "\(days)d ago" }
+    /// The exact moment a note was last modified — "23.07.2026 08:41".
+    /// Deliberately absolute rather than relative ("3m ago"): a fixed
+    /// timestamp is the same fact every time it is read, where a relative one
+    /// silently goes stale the moment the panel stops being redrawn.
+    ///
+    /// The format is fixed, not localized: it is the format asked for, and a
+    /// locale-driven one would reorder day and month per machine.
+    private static let modifiedFormatter: DateFormatter = {
         let formatter = DateFormatter()
-        formatter.setLocalizedDateFormatFromTemplate("dMMM")
-        return formatter.string(from: date)
+        formatter.dateFormat = "dd.MM.yyyy HH:mm"
+        return formatter
+    }()
+
+    static func modifiedStamp(_ date: Date) -> String {
+        modifiedFormatter.string(from: date)
     }
 }
 

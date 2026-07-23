@@ -10,6 +10,14 @@ struct KlartApp: App {
 
     init() {
         Self.hardenProcess()
+        // Half the system's 500 ms insertion-point blink: on a surface built
+        // around stillness, a cursor flashing twice a second is the most
+        // restless thing on screen. `register` (not `set`) so a user who has
+        // deliberately configured these keeps their own value.
+        UserDefaults.standard.register(defaults: [
+            "NSTextInsertionPointBlinkPeriodOn": 1000,
+            "NSTextInsertionPointBlinkPeriodOff": 1000,
+        ])
         // Make sure windows come to the front when launched via `swift run`
         // (outside a .app bundle the activation policy isn't set for us).
         DispatchQueue.main.async {
