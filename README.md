@@ -41,8 +41,8 @@ CI builds, tests, and packages the app on every push to `main` or a `claude/**` 
 
 ```
 KlartMac/     The macOS app (SwiftPM: KlartKit library + Klart app)
-build/          Shared app icon (icon.svg source → icon.icns used by the build)
-scripts/        generate-icon.sh — regenerate build/icon.icns from the SVG
+build/          Shared app icon (icon.png master → icon.icns used by the build)
+scripts/        generate-icon.sh — regenerate build/icon.icns from the PNG master
 docs/           Product requirements and design-direction documents
 .github/        CI workflows (macOS build/test/package; security scan)
 ```

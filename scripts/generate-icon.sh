@@ -1,82 +1,82 @@
 #!/bin/bash
 
-# Generate macOS .icns icon from SVG
-# Requires: Inkscape or rsvg-convert, and iconutil (comes with Xcode)
+# Generate macOS .icns icon from a 1024x1024 master PNG (build/icon.png).
+# Requires: sips and iconutil (both come with macOS / Xcode command line tools).
+# If build/icon.png has transparency, it is flattened onto a solid
+# background color (ICON_BG, default #1a1a2e) using ImageMagick, since
+# macOS app icons should not rely on the Dock/Finder background showing
+# through. Install ImageMagick with: brew install imagemagick
 
 set -e
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BUILD_DIR="$PROJECT_DIR/build"
-SVG_FILE="$BUILD_DIR/icon.svg"
+PNG_FILE="$BUILD_DIR/icon.png"
 ICONSET_DIR="$BUILD_DIR/icon.iconset"
+ICON_BG="${ICON_BG:-#1a1a2e}"
 
-echo "Generating macOS icon from SVG..."
+echo "Generating macOS icon from PNG..."
 
-# Create iconset directory
-mkdir -p "$ICONSET_DIR"
-
-# Check for available SVG converter
-if command -v rsvg-convert &> /dev/null; then
-    CONVERTER="rsvg-convert"
-elif command -v inkscape &> /dev/null; then
-    CONVERTER="inkscape"
-elif command -v sips &> /dev/null; then
-    # Fallback: use sips with a pre-made PNG
-    CONVERTER="sips"
-else
-    echo "Error: No SVG converter found."
-    echo "Please install one of: librsvg, inkscape"
-    echo "  brew install librsvg"
-    echo "  OR"
-    echo "  brew install inkscape"
-    exit 1
+if [ ! -f "$PNG_FILE" ]; then
+  echo "Error: $PNG_FILE not found." >&2
+  echo "Put a 1024x1024 master PNG at build/icon.png first." >&2
+  exit 1
 fi
 
-# Function to convert SVG to PNG at specific size
-convert_svg() {
-    local size=$1
-    local output=$2
+if ! command -v sips &> /dev/null; then
+  echo "Error: sips not found (should ship with macOS)." >&2
+  exit 1
+fi
 
-    if [ "$CONVERTER" = "rsvg-convert" ]; then
-        rsvg-convert -w "$size" -h "$size" "$SVG_FILE" -o "$output"
-    elif [ "$CONVERTER" = "inkscape" ]; then
-        inkscape "$SVG_FILE" -w "$size" -h "$size" -o "$output" 2>/dev/null
-    fi
-}
+if command -v magick &> /dev/null; then
+  IM_CMD="magick"
+elif command -v convert &> /dev/null; then
+  IM_CMD="convert"
+else
+  IM_CMD=""
+fi
 
-echo "Using converter: $CONVERTER"
+if [ -n "$IM_CMD" ]; then
+  echo "Flattening $PNG_FILE onto solid background $ICON_BG..."
+  "$IM_CMD" "$PNG_FILE" -background "$ICON_BG" -flatten "$PNG_FILE"
+else
+  echo "Warning: ImageMagick not found — if $PNG_FILE has transparency it will stay" >&2
+  echo "transparent (invisible on light backgrounds). Install with:" >&2
+  echo "  brew install imagemagick" >&2
+  echo "and rerun, or flatten it yourself before running this script." >&2
+fi
 
-# Generate all required sizes for macOS iconset
-sizes=(16 32 64 128 256 512 1024)
+# Create iconset directory
+rm -rf "$ICONSET_DIR"
+mkdir -p "$ICONSET_DIR"
 
-for size in "${sizes[@]}"; do
-    echo "  Generating ${size}x${size}..."
-    convert_svg "$size" "$ICONSET_DIR/icon_${size}x${size}.png"
+# macOS iconset naming -> pixel size to render at from the 1024 master.
+# Plain array of "name:size" pairs instead of an associative array, since
+# macOS ships bash 3.2 (no declare -A support) as its default /bin/bash.
+SIZES="
+icon_16x16.png:16
+icon_16x16@2x.png:32
+icon_32x32.png:32
+icon_32x32@2x.png:64
+icon_128x128.png:128
+icon_128x128@2x.png:256
+icon_256x256.png:256
+icon_256x256@2x.png:512
+icon_512x512.png:512
+icon_512x512@2x.png:1024
+"
 
-    # For retina displays (@2x)
-    if [ "$size" -le 512 ]; then
-        double=$((size * 2))
-        half=$((size))
-        convert_svg "$double" "$ICONSET_DIR/icon_${half}x${half}@2x.png"
-    fi
+for pair in $SIZES; do
+  name="${pair%%:*}"
+  size="${pair##*:}"
+  echo "  Generating $name (${size}x${size})..."
+  sips -z "$size" "$size" "$PNG_FILE" --out "$ICONSET_DIR/$name" > /dev/null
 done
-
-# Rename files to match Apple's expected naming
-mv "$ICONSET_DIR/icon_16x16.png" "$ICONSET_DIR/icon_16x16.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_32x32.png" "$ICONSET_DIR/icon_32x32.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_64x64.png" "$ICONSET_DIR/icon_32x32@2x.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_128x128.png" "$ICONSET_DIR/icon_128x128.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_256x256.png" "$ICONSET_DIR/icon_256x256.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_512x512.png" "$ICONSET_DIR/icon_512x512.png" 2>/dev/null || true
-mv "$ICONSET_DIR/icon_1024x1024.png" "$ICONSET_DIR/icon_512x512@2x.png" 2>/dev/null || true
 
 # Create .icns file
 echo "Creating .icns file..."
 iconutil -c icns "$ICONSET_DIR" -o "$BUILD_DIR/icon.icns"
-
-# Also create a 1024x1024 PNG for other uses
-convert_svg 1024 "$BUILD_DIR/icon.png"
 
 # Cleanup
 rm -rf "$ICONSET_DIR"
