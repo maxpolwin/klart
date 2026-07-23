@@ -139,6 +139,7 @@ KlartMac/
 │       ├── AppState.swift        Single source of truth, debounce/cancellation logic
 │       └── Views/                Teleprompter surface, sidebar, NSTextView markdown editor, coach panel, settings
 ├── Tests/KlartKitTests/        Outline, parser, prompts, engine, storage, settings, vault crypto
+├── Tests/KlartAppTests/        The writing surface: caret geometry, typewriter centring, focus
 └── Scripts/make-app.sh           Release build → signed Klart.app
 ```
 

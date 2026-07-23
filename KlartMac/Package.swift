@@ -47,5 +47,14 @@ let package = Package(
             dependencies: ["KlartKit"],
             path: "Tests/KlartKitTests"
         ),
+        // The writing surface is geometry you can see, and none of it lives in
+        // KlartKit. Depending on the executable target is enough to reach it:
+        // SwiftPM emits the app's `@main` entry point under a renamed symbol
+        // when a test target links it, so there is no duplicate `main`.
+        .testTarget(
+            name: "KlartAppTests",
+            dependencies: ["Klart", "KlartKit"],
+            path: "Tests/KlartAppTests"
+        ),
     ]
 )

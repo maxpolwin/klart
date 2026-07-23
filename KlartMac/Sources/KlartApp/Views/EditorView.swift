@@ -96,18 +96,36 @@ final class KlartTextView: NSTextView {
     /// fragment's. The fragment carries `lineSpacing` and paragraph spacing,
     /// which belong to the page's rhythm; a caret drawn to them stands taller
     /// than the letters it is setting and reads as a rule rather than a mark.
-    private func currentCaretRect() -> NSRect {
-        guard let layoutManager, textContainer != nil else { return .zero }
+    ///
+    /// Internal rather than private only so `CaretGeometryTests` can measure
+    /// it directly; the alternative is counting caret-coloured pixels out of a
+    /// bitmap, which measures the same thing far less legibly.
+    func currentCaretRect() -> NSRect {
+        guard let layoutManager, let textContainer else { return .zero }
+        // This runs from `updateInsertionPointStateAndRestartTimer`, i.e.
+        // immediately after an edit and before AppKit has necessarily laid the
+        // text out. Measuring then reads a stale layout: press Enter at the
+        // end of a note and the extra line fragment does not exist yet, so the
+        // caret falls back to the line above and the page centres on it. The
+        // typewriter centring already forces a full layout on every keystroke,
+        // so this costs nothing that was not already being paid.
+        layoutManager.ensureLayout(for: textContainer)
         let length = (string as NSString).length
         let location = min(selectedRange().location, length)
         let font = caretFont(at: location)
         let ascent = font.ascender
         let height = ascent - font.descender
 
-        // Where the baseline sits; the caret hangs from it.
+        // Where the baseline sits; the caret hangs from it. On lines that hold
+        // no glyphs the x has to be built by hand, and the container's own
+        // padding is part of it: `location(forGlyphAt:)` already carries the
+        // padding on every other line, so leaving it out here would draw the
+        // caret to the left of where the first character actually lands and
+        // jump it right on the first keystroke.
+        let padding = textContainer.lineFragmentPadding
         var origin: CGPoint
         if layoutManager.numberOfGlyphs == 0 {
-            origin = CGPoint(x: 0, y: layoutManager.defaultBaselineOffset(for: font) - ascent)
+            origin = CGPoint(x: padding, y: layoutManager.defaultBaselineOffset(for: font) - ascent)
         } else if location == length, layoutManager.extraLineFragmentTextContainer != nil {
             // The empty last line — press Enter at the end of a note and you
             // are here. It holds no glyphs, so it lives in the layout
@@ -115,7 +133,7 @@ final class KlartTextView: NSTextView {
             // back to the previous line and the page centres on the wrong one.
             let fragment = layoutManager.extraLineFragmentRect
             origin = CGPoint(
-                x: fragment.origin.x,
+                x: fragment.origin.x + padding,
                 y: fragment.origin.y + layoutManager.defaultBaselineOffset(for: font) - ascent
             )
         } else if location == length {
@@ -273,7 +291,11 @@ final class KlartTextView: NSTextView {
     private var isCentering = false
     /// One centring per editor, when the note first lands on screen. The view
     /// is rebuilt per note (`.id(selectedNoteID)`), so every note gets one.
+    /// Set only once the centring has actually happened.
     private var hasCenteredOnOpen = false
+    /// An attempt is already queued for the next run-loop turn; layout passes
+    /// arrive in bursts and each one must not queue another.
+    private var isWaitingToCenter = false
 
     /// AppKit reveals the caret by scrolling to it *immediately*. Left alone
     /// it beats the spring to the destination, so the page appears to jump
@@ -392,23 +414,37 @@ final class KlartTextView: NSTextView {
     /// against a viewport that is about to change lands nowhere in particular.
     override func viewDidMoveToWindow() {
         super.viewDidMoveToWindow()
-        guard window != nil, !hasCenteredOnOpen else { return }
-        hasCenteredOnOpen = true
-        centerOnOpen(attemptsLeft: 5)
+        scheduleOpenCentring()
     }
 
-    private func centerOnOpen(attemptsLeft: Int) {
+    /// SwiftUI plants this view before it has a size, so the viewport can
+    /// arrive later than any fixed number of run-loop turns. Layout is the
+    /// moment a size actually exists — so it is also a chance to centre, and
+    /// the backstop for a note whose window took its time.
+    override func layout() {
+        super.layout()
+        scheduleOpenCentring()
+    }
+
+    private func scheduleOpenCentring() {
+        guard !hasCenteredOnOpen, !isWaitingToCenter, window != nil else { return }
+        guard let scrollView = enclosingScrollView, scrollView.frame.height > 0 else { return }
+        isWaitingToCenter = true
+        // Deferred rather than done here: `centerCaretLine` re-lays out the
+        // text, and doing that from inside a layout pass is how you get a
+        // recursive-layout warning at best.
         DispatchQueue.main.async { [weak self] in
-            guard let self, self.window != nil else { return }
-            // A scroll view with no height yet has no centre to aim at, so
-            // wait for the frame rather than centring against nothing.
-            guard let scrollView = self.enclosingScrollView, scrollView.frame.height > 0 else {
-                if attemptsLeft > 1 { self.centerOnOpen(attemptsLeft: attemptsLeft - 1) }
-                return
-            }
+            guard let self else { return }
+            self.isWaitingToCenter = false
+            guard self.window != nil,
+                  let scrollView = self.enclosingScrollView,
+                  scrollView.frame.height > 0 else { return }
             if let layoutManager = self.layoutManager, let textContainer = self.textContainer {
                 layoutManager.ensureLayout(for: textContainer)
             }
+            // Only now is it done — a chance that came too early must not
+            // count as the one chance this note gets.
+            self.hasCenteredOnOpen = true
             self.refreshCaretTarget()
             self.centerCaretLine(animated: false)
             self.claimFocusIfUnheld()

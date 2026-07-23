@@ -71,6 +71,7 @@ No Node, npm, Electron, or web view. The app is a single SwiftPM package.
 - **`KlartKit`** — depends on `CArgon2`. Core models, markdown parsing, storage, LLM clients, feedback engine.
 - **`Klart`** — executable, depends on `KlartKit`. SwiftUI app (`Sources/KlartApp`). Embeds `Resources/Info.plist` into the binary via a linker `-sectcreate` flag so `swift run` gets App Transport Security exceptions for localhost providers.
 - **`KlartKitTests`** — XCTest suite against `KlartKit`.
+- **`KlartAppTests`** — XCTest suite against the app itself. Depends on the `Klart` executable target, which SwiftPM supports: it emits the app's `@main` entry point under a renamed symbol when a test target links it, so there is no duplicate `main` and no library/executable split is needed.
 
 ```
 KlartMac/
@@ -87,7 +88,9 @@ KlartMac/
 │       ├── AppState.swift        Single source of truth, debounce/cancellation
 │       ├── Theme.swift           Design tokens
 │       └── Views/                Teleprompter surface, sidebar, editor, coach panel, settings, lock
-└── Tests/KlartKitTests/
+└── Tests/
+    ├── KlartKitTests/            Core (no UI)
+    └── KlartAppTests/            The writing surface, in a real window
 ```
 
 ### 2.3 Data flow
@@ -391,7 +394,7 @@ Out-of-range values are clamped on decode (see §7.3).
 ```bash
 cd KlartMac
 swift run                  # development
-swift test                 # unit tests (KlartKitTests)
+swift test                 # unit tests (KlartKitTests + KlartAppTests)
 bash Scripts/make-app.sh   # release build → dist/Klart.app (verifies Hardened Runtime + App Sandbox)
 bash Scripts/make-dmg.sh   # package → dist/Klart.dmg
 bash Scripts/notarize-app.sh   # submit to Apple + staple
@@ -406,6 +409,10 @@ bash Scripts/notarize-app.sh   # submit to Apple + staple
 ### 10.3 Tests
 
 `Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), end-to-end vault lifecycle (`VaultLifecycleTests`), the shared ATX heading rule (`MarkdownHeadingTests`), word count and reading time (`NoteMetricsTests`), and note titles and previews (`NoteTests`).
+
+`Tests/KlartAppTests/` (XCTest) covers the writing surface, which is geometry and therefore only measurable against the real thing: a real `NSWindow`, the real layout manager, real key events through the responder chain. `CaretGeometryTests` — the caret is the font's height rather than the line box's, scales with the font it stands in, and sits on the line it is actually on (including the empty one Enter opens at the end of a note). `WritingSurfaceTests` — the half-viewport margin lives in `textContainerInset` and not in `contentInsets`, the document view keeps filling the window so every click reaches the editor, the caret's line settles at the centre from a new note / the last line of a long one / a viewport that arrives late, re-centring does not rewrite the layout per keystroke, and the rail's anchors follow the same margin. `NewNoteTests` — the whole app: a new note holds the keyboard and typing lands in it, across note switches, without ever taking focus from a control that already has it. `ReadingPulseTests` — `editorIsReading` and the shared beat.
+
+These need a window server. Without one (an SSH or daemon session) they skip rather than hang; `swift test` on a GitHub Actions runner has an Aqua session and runs them.
 
 ---
 
