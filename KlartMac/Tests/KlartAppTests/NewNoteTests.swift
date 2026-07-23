@@ -88,7 +88,11 @@ final class NewNoteTests: XCTestCase {
         defer { editor.tearDown() }
 
         XCTAssertTrue(editor.window.firstResponder === holder, "fixture is wrong: the holder never had focus")
-        pumpFor(0.4)   // every chance for the deferred claim to fire
+        // Wait for a POSITIVE signal that the deferred open path — the same
+        // block that would claim focus — actually ran, so a green result means
+        // "declined to steal" rather than "the claim never fired yet".
+        XCTAssertTrue(pump(until: { editor.textView.textContainerInset.height > 100 },
+                           "the deferred open-centring never ran, so nothing was tested"))
 
         XCTAssertTrue(editor.window.firstResponder === holder, "the editor stole focus from a live control")
         XCTAssertFalse(editor.window.firstResponder === editor.textView)

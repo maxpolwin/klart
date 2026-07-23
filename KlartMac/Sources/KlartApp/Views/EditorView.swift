@@ -356,9 +356,17 @@ final class KlartTextView: NSTextView {
     /// it focus. Padding the container instead grows the document view past
     /// the window on both sides, which is what keeps the whole page clickable
     /// and every scroll offset a plain positive number.
+    /// Bumped each time the margin is actually rewritten (past the guard).
+    /// `centerCaretLine` runs on every keystroke, so a broken guard would
+    /// re-lay-out the whole document per character; this counter lets a test
+    /// see that thrashing, which the resulting geometry — identical each time —
+    /// cannot reveal.
+    private(set) var marginRelayoutCount = 0
+
     private func applyTypewriterMargin(forViewport viewport: CGFloat) {
         let margin = (viewport / 2).rounded()
         guard abs(textContainerInset.height - margin) > 1 else { return }
+        marginRelayoutCount += 1
         textContainerInset = NSSize(width: textContainerInset.width, height: margin)
         if let layoutManager, let textContainer {
             layoutManager.ensureLayout(for: textContainer)

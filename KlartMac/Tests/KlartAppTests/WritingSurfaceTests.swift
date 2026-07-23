@@ -131,17 +131,53 @@ final class WritingSurfaceTests: XCTestCase {
 
     /// `centerCaretLine` runs on every keystroke. If the margin were reapplied
     /// each time, every character would invalidate the whole layout — correct,
-    /// and unusable on a long note.
+    /// and unusable on a long note. The resulting geometry is identical either
+    /// way (same text, same margin → same frame), so this counts the actual
+    /// relayouts rather than comparing before/after values that cannot move.
     func testReCentringDoesNotKeepRewritingTheLayout() {
         let editor = makeFixture(longNote(lines: 200))
         XCTAssertTrue(pump(until: { editor.textView.textContainerInset.height > 100 }))
 
-        let inset = editor.textView.textContainerInset
-        let frame = editor.textView.frame
+        let relayoutsBefore = editor.textView.marginRelayoutCount
         for _ in 0..<200 { editor.textView.centerCaretLine(animated: false) }
 
-        XCTAssertEqual(editor.textView.textContainerInset.height, inset.height, accuracy: 0.001)
-        XCTAssertEqual(editor.textView.frame.height, frame.height, accuracy: 0.001)
+        XCTAssertEqual(
+            editor.textView.marginRelayoutCount, relayoutsBefore,
+            "the margin was rewritten \(editor.textView.marginRelayoutCount - relayoutsBefore) "
+                + "times across 200 no-op re-centres — the idempotence guard is gone"
+        )
+    }
+
+    // MARK: A deliberate scroll wins
+
+    /// The spring must yield to the trackpad: without `scrollWheel` cancelling
+    /// it, the page keeps pulling toward its old target while the user drags,
+    /// and the two fight. Only meaningful with an animation actually running,
+    /// so it skips under Reduce Motion (where centring is instant).
+    func testATrackpadScrollCancelsTheTypewriterSpring() throws {
+        try requireAnimation()
+        let editor = makeFixture(longNote(lines: 200))
+        let textView = editor.textView
+        editor.waitUntilReady()
+
+        // Aim the spring at the far end and let it get moving.
+        textView.setSelectedRange(NSRange(location: (textView.string as NSString).length, length: 0))
+        textView.centerCaretLine(animated: true)
+        XCTAssertTrue(pump(until: { editor.scrollOffset > 1 }, timeout: 4,
+                           "the spring never started moving"))
+
+        guard let scroll = CGEvent(
+            scrollWheelEvent2Source: nil, units: .pixel, wheelCount: 1, wheel1: -10, wheel2: 0, wheel3: 0
+        ), let event = NSEvent(cgEvent: scroll) else {
+            return XCTFail("could not synthesise a scroll event")
+        }
+        textView.scrollWheel(with: event)
+        let frozen = editor.scrollOffset
+
+        // Give the spring ample time to move if it were still alive.
+        pumpFor(0.6)
+        XCTAssertEqual(editor.scrollOffset, frozen, accuracy: 1.0,
+                       "the spring kept pulling after a manual scroll")
     }
 
     // MARK: The rail rides on the same margin

@@ -94,6 +94,10 @@ final class AppState: ObservableObject {
     let auditLog: AuditLog
     private var idleLockTask: Task<Void, Never>?
     private var activityMonitor: Any?
+    /// The auto-lock observers register with process-global centres, so they
+    /// outlive this object unless removed by hand — `NSObject`'s automatic
+    /// teardown does not reach block-based observers. Held so `deinit` can.
+    private var autoLockObservers: [NSObjectProtocol] = []
     private var lastActivity = Date()
 
     /// Raw master key behind a user-presence Keychain ACL — the fallback
@@ -144,23 +148,23 @@ final class AppState: ObservableObject {
     /// exposure. Handlers are installed once and check settings at fire time.
     private func installAutoLockMonitors() {
         let workspace = NSWorkspace.shared.notificationCenter
-        workspace.addObserver(
+        autoLockObservers.append(workspace.addObserver(
             forName: NSWorkspace.screensDidSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.lockForScreenEventIfEnabled() }
-        }
-        workspace.addObserver(
+        })
+        autoLockObservers.append(workspace.addObserver(
             forName: NSWorkspace.willSleepNotification, object: nil, queue: .main
         ) { [weak self] _ in
             Task { @MainActor in self?.lockForScreenEventIfEnabled() }
-        }
+        })
         let distributed = DistributedNotificationCenter.default()
         for name in ["com.apple.screenIsLocked", "com.apple.screensaver.didstart"] {
-            distributed.addObserver(
+            autoLockObservers.append(distributed.addObserver(
                 forName: Notification.Name(name), object: nil, queue: .main
             ) { [weak self] _ in
                 Task { @MainActor in self?.lockForScreenEventIfEnabled() }
-            }
+            })
         }
 
         // Any local user event counts as activity for the idle timer.
@@ -188,6 +192,27 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// Removes what `installAutoLockMonitors` registered with process-global
+    /// centres. Block-based notification observers and the local event monitor
+    /// are not torn down automatically, and the idle task holds a sleeping
+    /// reference; without this every discarded `AppState` leaks all three. The
+    /// closures capture `[weak self]` so a leak was inert, but a leaked event
+    /// monitor still runs on every keystroke and mouse move for the life of
+    /// the process, and each observer is one more thing fired at a state
+    /// nothing else can see.
+    deinit {
+        idleLockTask?.cancel()
+        if let activityMonitor {
+            NSEvent.removeMonitor(activityMonitor)
+        }
+        let workspace = NSWorkspace.shared.notificationCenter
+        let distributed = DistributedNotificationCenter.default()
+        for observer in autoLockObservers {
+            workspace.removeObserver(observer)
+            distributed.removeObserver(observer)
+        }
+    }
+
     private func lockForScreenEventIfEnabled() {
         if settings.vault != nil, !isLocked, settings.lockOnScreenSleep {
             lockNow()
@@ -209,6 +234,12 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// True once the initial disk load has run. The load is fired as a detached
+    /// `Task` from `init`, so anything that mutates `notes` right after
+    /// construction races it; a test can wait on this to know the load has
+    /// already landed.
+    private(set) var notesDidLoad = false
+
     func loadNotes() async {
         do {
             notes = try await noteStore.loadAll()
@@ -218,6 +249,7 @@ final class AppState: ObservableObject {
         } catch {
             notes = []
         }
+        notesDidLoad = true
     }
 
     func createNote() {

@@ -50,9 +50,12 @@ final class ReadingPulseTests: XCTestCase {
         XCTAssertFalse(state.editorIsReading)
     }
 
-    /// One beat: the caret's blink timer and the reading pulse read the same
-    /// constant, so the two can never drift into looking like separate clocks.
-    func testTheSurfaceHasOneBeat() {
+    /// Golden values for the shared beat. This pins the constants so a change
+    /// is deliberate; it cannot prove the caret blink and the reading pulse
+    /// both *read* `KlartPulse.period` (both call sites are private timers/
+    /// modifiers) — that they do is a one-line grep, kept honest here rather
+    /// than asserted as coverage it doesn't have.
+    func testThePulseConstantsAreWhatTheBeatExpects() {
         XCTAssertEqual(KlartPulse.period, 1.0, accuracy: 0.001)
         XCTAssertEqual(KlartPulse.dimmedOpacity, 0.42, accuracy: 0.001)
     }

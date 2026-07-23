@@ -86,8 +86,23 @@ func hasWindowServer() -> Bool {
 }
 
 func requireWindowServer(file: StaticString = #filePath, line: UInt = #line) throws {
-    try XCTSkipUnless(
-        hasWindowServer(),
+    if hasWindowServer() { return }
+    // Skipping when there is no window server keeps the suite runnable over
+    // SSH or in a daemon. But a skip reads as success, so an environment that
+    // is *meant* to have a window server (CI) and lost it would silently stop
+    // testing the editor. There, fail instead of skip. GitHub sets CI=true;
+    // KLART_REQUIRE_WINDOW_SERVER forces it anywhere.
+    let mustHave = ProcessInfo.processInfo.environment["KLART_REQUIRE_WINDOW_SERVER"] == "1"
+        || ProcessInfo.processInfo.environment["CI"] != nil
+    if mustHave {
+        XCTFail(
+            "no window server, but one is required here (CI / KLART_REQUIRE_WINDOW_SERVER) — "
+                + "the editor's geometry tests cannot run",
+            file: file, line: line
+        )
+        return
+    }
+    throw XCTSkip(
         "no window server in this session — the editor's geometry cannot be measured",
         file: file, line: line
     )
@@ -137,9 +152,9 @@ func typeIntoWindow(
     file: StaticString = #filePath,
     line: UInt = #line
 ) {
-    guard window.firstResponder is NSTextView else {
+    guard window.firstResponder is KlartTextView else {
         XCTFail(
-            "nothing in this window can accept text (first responder: "
+            "the editor does not hold the keyboard (first responder: "
                 + "\(String(describing: window.firstResponder))) — the keystrokes would go nowhere",
             file: file, line: line
         )
@@ -281,6 +296,10 @@ final class EditorFixture {
     func tearDown() {
         window.contentView = nil
         window.orderOut(nil)
+        // `Theme.monochrome` is process-global and defaults on; a stray
+        // AppState from another test may have left it either way. Reset so a
+        // later colour assertion cannot inherit this test's value.
+        Theme.monochrome = false
     }
 }
 
@@ -324,6 +343,12 @@ final class AppFixture {
         window.contentView = NSHostingView(rootView: TeleprompterView().environmentObject(state))
         window.makeKeyAndOrderFront(nil)
         window.layoutIfNeeded()
+
+        // AppState.init kicks off `Task { await loadNotes() }`. If a test calls
+        // createNote() before that lands, the load completes afterward and
+        // overwrites `notes` with the empty temp directory. Let it settle
+        // first: the directory is empty, so this is one turn of the loop.
+        pump(until: { self.state.notesDidLoad }, timeout: 4, failOnTimeout: false)
     }
 
     var textView: KlartTextView? {
