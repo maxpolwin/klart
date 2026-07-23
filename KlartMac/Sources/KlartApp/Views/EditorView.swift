@@ -223,6 +223,9 @@ final class KlartTextView: NSTextView {
     private var typewriterTimer: Timer?
     private var typewriterTarget: CGFloat = 0
     private var typewriterVelocity: CGFloat = 0
+    /// Guards against re-entering while adjusting the scroll view, which can
+    /// call back into `scrollRangeToVisible` and recurse.
+    private var isCentering = false
 
     /// AppKit reveals the caret by scrolling to it *immediately*. Left alone
     /// it beats the spring to the destination, so the page appears to jump
@@ -231,8 +234,29 @@ final class KlartTextView: NSTextView {
     /// viewport isn't (arrow keys past the edge, ⌘↓, Find, a selection made
     /// by any command). So the request is honoured, just smoothly: the same
     /// spring, aimed at the same caret.
-    override func scrollRangeToVisible(_ range: NSRange) {
+    /// True only while a key is being handled. AppKit also calls
+    /// `scrollRangeToVisible` from inside its *mouse*-tracking loop, and
+    /// interfering there cancels the click outright — the view never becomes
+    /// first responder, so neither the caret nor typing lands anywhere. So
+    /// the auto-scroll is intercepted for keyboard input only, and every
+    /// other caller keeps AppKit's stock behaviour.
+    private var isHandlingKey = false
+
+    override func keyDown(with event: NSEvent) {
+        isHandlingKey = true
+        super.keyDown(with: event)
+        isHandlingKey = false
+        // Typing and arrow keys both re-aim the spring; the suppressed jump
+        // above is what leaves it something to travel.
         centerCaretLine()
+    }
+
+    override func scrollRangeToVisible(_ range: NSRange) {
+        guard isHandlingKey else {
+            super.scrollRangeToVisible(range)
+            return
+        }
+        // Handled by the spring in `keyDown`.
     }
 
     /// A deliberate scroll always wins. Without this the typewriter spring
@@ -247,9 +271,14 @@ final class KlartTextView: NSTextView {
 
     /// Eases the view so the caret's line sits at the centre of the viewport.
     func centerCaretLine() {
-        guard let scrollView = enclosingScrollView else { return }
-        let clip = scrollView.contentView
-        let viewport = clip.bounds.height
+        guard !isCentering, let scrollView = enclosingScrollView else { return }
+        isCentering = true
+        defer { isCentering = false }
+
+        // The tail is derived from the scroll view's own height, never the
+        // clip view's: contentInsets resize the clip, so measuring it here
+        // would feed the inset back into itself and oscillate.
+        let viewport = scrollView.frame.height
         guard viewport > 0 else { return }
         let caret = currentCaretRect()
         guard caret.height > 0 else { return }
@@ -263,9 +292,10 @@ final class KlartTextView: NSTextView {
             scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: tail, right: 0)
         }
 
+        let visibleHeight = scrollView.contentView.bounds.height
         let documentHeight = frame.height
-        let maxOffset = max(0, documentHeight + tail - viewport)
-        typewriterTarget = min(max(0, caret.midY - viewport / 2), maxOffset)
+        let maxOffset = max(0, documentHeight + tail - visibleHeight)
+        typewriterTarget = min(max(0, caret.midY - visibleHeight / 2), maxOffset)
 
         if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             applyTypewriterOffset(typewriterTarget, in: scrollView)
