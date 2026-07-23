@@ -172,8 +172,23 @@ private struct WindowConfigurator: NSViewRepresentable {
         window.titlebarAppearsTransparent = chromeless
         if chromeless {
             window.styleMask.insert(.fullSizeContentView)
+            // A transparent title bar is not the same as an absent one: the
+            // scene still carries the classic layout's unified toolbar, and a
+            // visible toolbar paints its own translucent material across that
+            // band — which is why the desktop showed through, blurred, in the
+            // strip above the note's title. Hide it, drop the separator
+            // hairline, and pin the window to opaque ink so the band above
+            // the title is the same flat surface as the writing column.
+            window.toolbar?.isVisible = false
+            window.titlebarSeparatorStyle = .none
+            window.isOpaque = true
+            window.backgroundColor = Theme.nsBackground
         } else {
             window.styleMask.remove(.fullSizeContentView)
+            window.toolbar?.isVisible = true
+            window.titlebarSeparatorStyle = .automatic
+            window.isOpaque = true
+            window.backgroundColor = .windowBackgroundColor
         }
     }
 }

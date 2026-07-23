@@ -122,6 +122,7 @@ struct TeleprompterView: View {
                 emptyState
             }
 
+            titleBandBackdrop
             titleBar
             if state.settings.showWordCount, state.selectedNoteID != nil {
                 wordCountBar
@@ -237,6 +238,22 @@ struct TeleprompterView: View {
             fog(bandHeight: Metrics.titleBarHeight, from: .top)
         }
         .accessibilityAddTraits(.isHeader)
+    }
+
+    /// Everything above the pinned title: the chromeless window's title-bar
+    /// strip, which sits *outside* the safe area the title and the fog are
+    /// laid out in. Solid ink, edge to edge, so the strip is never a window
+    /// onto the desktop and prose can never surface crisply in it on its way
+    /// up. Flexible container + `ignoresSafeArea` on purpose — a fixed-height
+    /// view would simply be placed inside the inset instead of covering it.
+    private var titleBandBackdrop: some View {
+        VStack(spacing: 0) {
+            Theme.background
+                .frame(height: Metrics.titleBarHeight)
+            Spacer(minLength: 0)
+        }
+        .ignoresSafeArea(edges: .top)
+        .allowsHitTesting(false)
     }
 
     /// A band of background that is fully opaque across `bandHeight` — so the
@@ -695,12 +712,15 @@ struct TeleprompterView: View {
                 // rail's own edge would snap to the new width instead of
                 // moving with it whenever the widest note changes mid-session.
                 .animation(calmAnimation, value: railWidth)
+                .overlay(alignment: .topLeading) { hideRailButton }
+                // Applied over the close button too, so the whole rail
+                // retreats as one thing — the button used to stay at full ink
+                // while the cards it belongs to dissolved out from under it.
                 .opacity(railOpacity)
                 // Reaching for the notes restores them and resets the fade.
                 .onHover { inside in
                     if inside { wakeRail() }
                 }
-                .overlay(alignment: .topLeading) { hideRailButton }
         }
     }
 
@@ -886,9 +906,12 @@ private struct EditorRail: View {
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
+            // Full ink, like a real note's text: the rail is quiet because it
+            // is small and off to one side, never because it is hard to read.
+            // Retreating is what dims it — see `railOpacity`.
             Text(emptyMessage)
                 .font(.system(size: 11.5))
-                .foregroundStyle(Theme.textTertiary)
+                .foregroundStyle(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(11)
@@ -995,15 +1018,18 @@ private struct RailCard: View {
                 if let section = item.section, !section.isEmpty {
                     Text(section)
                         .font(.system(size: 10))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
             }
 
+            // The observation itself is prose to be read, so it carries the
+            // same ink as the writing column. Nothing in the rail is dimmed
+            // to signal "secondary" any more; only retreating dims it.
             Text(item.text)
                 .font(.system(size: 11.5))
-                .foregroundStyle(Theme.textPrimary.opacity(0.88))
+                .foregroundStyle(Theme.textPrimary)
                 .lineSpacing(2.5)
                 .lineLimit(6)
                 .fixedSize(horizontal: false, vertical: true)
@@ -1027,7 +1053,7 @@ private struct RailCard: View {
                 } label: {
                     Text("Dismiss")
                         .font(.system(size: 10.5, weight: .medium))
-                        .foregroundStyle(Theme.textTertiary)
+                        .foregroundStyle(Theme.textSecondary)
                         .underline(hovering)
                 }
                 .buttonStyle(.plain)
