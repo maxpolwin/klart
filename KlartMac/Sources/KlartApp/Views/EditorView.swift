@@ -317,6 +317,38 @@ final class KlartTextView: NSTextView {
         super.scrollWheel(with: event)
     }
 
+    /// Half a viewport of empty page above the first line and below the last,
+    /// so either can be scrolled to the centre — the first line of a fresh
+    /// note as readily as the last line of a long one.
+    ///
+    /// The margin lives in the *text container*, never in the scroll view's
+    /// `contentInsets`. Insets shrink the scroll view's content area, and two
+    /// half-viewport insets shrink it to nothing: the text view then collapses
+    /// to the height of its own text, and every click outside that band misses
+    /// the editor — including, on a new note, the click that would have given
+    /// it focus. Padding the container instead grows the document view past
+    /// the window on both sides, which is what keeps the whole page clickable
+    /// and every scroll offset a plain positive number.
+    private func applyTypewriterMargin(forViewport viewport: CGFloat) {
+        let margin = (viewport / 2).rounded()
+        guard abs(textContainerInset.height - margin) > 1 else { return }
+        textContainerInset = NSSize(width: textContainerInset.width, height: margin)
+        if let layoutManager, let textContainer {
+            layoutManager.ensureLayout(for: textContainer)
+        }
+        // The document view has to have *grown* before anything scrolls into
+        // the new margin: the clip view clamps against the frame it can see,
+        // and the text view resizes itself a beat later on its own.
+        sizeToFit()
+    }
+
+    /// The page's full height: the text as currently laid out, plus the margin
+    /// above and below it.
+    private var contentHeightIncludingMargin: CGFloat {
+        guard let layoutManager, let textContainer else { return 0 }
+        return layoutManager.usedRect(for: textContainer).height + textContainerInset.height * 2
+    }
+
     /// Eases the view so the caret's line sits at the centre of the viewport.
     /// `animated: false` puts it there outright — for the moment a note opens,
     /// where there is nothing to travel *from*.
@@ -325,32 +357,22 @@ final class KlartTextView: NSTextView {
         isCentering = true
         defer { isCentering = false }
 
-        // The margins are derived from the scroll view's own height. The clip
-        // view keeps that same height under contentInsets — they pad the
-        // scrollable range, not the visible rect — but reading the scroll
-        // view's frame keeps the margin independent of anything the insets
-        // below might do to it.
         let viewport = scrollView.frame.height
         guard viewport > 0 else { return }
+        applyTypewriterMargin(forViewport: viewport)
+
+        // Measured after the margin, which moves the text down the page.
         let caret = currentCaretRect()
         guard caret.height > 0 else { return }
 
-        // A line can only reach the centre if the document can scroll past the
-        // edge nearest it — past its end for the last lines, and past its
-        // start for the first. Without the head margin a new note would open
-        // pinned to the top of the window and the first words would have to
-        // walk down to the height every later line is held at.
-        let margin = viewport / 2
-        if abs(scrollView.contentInsets.top - margin) > 1
-            || abs(scrollView.contentInsets.bottom - margin) > 1 {
-            scrollView.automaticallyAdjustsContentInsets = false
-            scrollView.contentInsets = NSEdgeInsets(top: margin, left: 0, bottom: margin, right: 0)
-        }
-
         let visibleHeight = scrollView.contentView.bounds.height
-        let documentHeight = frame.height
-        let maxOffset = max(0, documentHeight + margin - visibleHeight)
-        typewriterTarget = min(max(-margin, caret.midY - visibleHeight / 2), maxOffset)
+        // Measured from the layout rather than read off `frame`: the text
+        // view resizes itself a beat after the text (or the margin) changes,
+        // and a frame that is one beat stale clamps the scroll short — which
+        // is exactly the moment a note opens.
+        let documentHeight = max(frame.height, contentHeightIncludingMargin)
+        let maxOffset = max(0, documentHeight - visibleHeight)
+        typewriterTarget = min(max(0, caret.midY - visibleHeight / 2), maxOffset)
 
         if !animated || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             typewriterTimer?.invalidate()
@@ -389,7 +411,20 @@ final class KlartTextView: NSTextView {
             }
             self.refreshCaretTarget()
             self.centerCaretLine(animated: false)
+            self.claimFocusIfUnheld()
         }
+    }
+
+    /// A note you have just opened should be one you can write in. SwiftUI
+    /// rebuilds this view per note (`.id(selectedNoteID)`), and removing the
+    /// old one hands first responder back to the window — so ⌘N left the caret
+    /// sitting at writing height in a view no keystroke could reach.
+    ///
+    /// Only claimed when nothing else holds it: focus is never taken from the
+    /// search field, or from any other control the user is actually using.
+    private func claimFocusIfUnheld() {
+        guard let window, window.firstResponder === window else { return }
+        window.makeFirstResponder(self)
     }
 
     private func startTypewriterAnimation(in scrollView: NSScrollView) {
