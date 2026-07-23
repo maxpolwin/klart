@@ -59,6 +59,12 @@ final class AppState: ObservableObject {
     /// suggestions fade out.
     @Published var editorRailVisible = false
 
+    /// True while the editor is actually reading the note — analysing it, or
+    /// running a coach action on it. What the reading pulse renders.
+    var editorIsReading: Bool {
+        feedbackPhase == .analyzing || coachRunning
+    }
+
     // MARK: Settings / provider
 
     @Published var settings: AppSettings {

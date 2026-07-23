@@ -35,6 +35,38 @@ private enum TeleprompterMotion {
     static let bounce: Double = 0.18
 }
 
+/// Breathes while the editor is reading — the same beat the caret blinks on
+/// (`KlartPulse.period`), so the surface has one pulse and "working" is legible
+/// without a spinner, a progress bar, or any new object on screen.
+private struct ReadingPulse: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let reading: Bool
+
+    @State private var dimmed = false
+
+    func body(content: Content) -> some View {
+        content
+            .opacity(dimmed ? KlartPulse.dimmedOpacity : 1)
+            .animation(
+                dimmed
+                    ? .easeInOut(duration: KlartPulse.period).repeatForever(autoreverses: true)
+                    // Stopping is a single fade back to full ink, not a
+                    // half-finished breath left hanging wherever it was.
+                    : .easeOut(duration: KlartPulse.period / 2),
+                value: dimmed
+            )
+            .onAppear { dimmed = reading && !reduceMotion }
+            .onChange(of: reading) { _, isReading in dimmed = isReading && !reduceMotion }
+            .onChange(of: reduceMotion) { _, reduced in dimmed = reading && !reduced }
+    }
+}
+
+private extension View {
+    func readingPulse(_ reading: Bool) -> some View {
+        modifier(ReadingPulse(reading: reading))
+    }
+}
+
 struct TeleprompterView: View {
     @EnvironmentObject var state: AppState
     @Environment(\.openSettings) private var openSettings
@@ -510,6 +542,10 @@ struct TeleprompterView: View {
                 }
                 Spacer(minLength: 0)
             }
+            // The mark itself breathes while the editor reads; its seat stays
+            // still, so the button never looks like it is flickering in and
+            // out of existence.
+            .readingPulse(state.editorIsReading)
             .padding(.horizontal, 9)
             .padding(.vertical, 7)
             .background(Theme.surfaceRaised, in: RoundedRectangle(cornerRadius: 8))
@@ -529,7 +565,7 @@ struct TeleprompterView: View {
     }
 
     private var editorSummonsLabel: String {
-        if state.feedbackPhase == .analyzing || state.coachRunning { return "Editor · reading…" }
+        if state.editorIsReading { return "Editor · reading…" }
         if state.editorRailVisible { return "Hide editor" }
         return "Show editor"
     }
@@ -902,7 +938,7 @@ private struct EditorRail: View {
                 Text("¶")
                     .font(.system(size: 13, design: .serif))
                     .foregroundStyle(Theme.textSecondary)
-                Text(state.feedbackPhase == .analyzing ? "Reading…" : "Editor")
+                Text(state.editorIsReading ? "Reading…" : "Editor")
                     .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Theme.textSecondary)
             }
@@ -914,6 +950,10 @@ private struct EditorRail: View {
                 .foregroundStyle(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // Glyph and words dim together, on the caret's beat: the card is
+        // plainly working on something rather than sitting there stalled.
+        // The card's own frame holds steady underneath.
+        .readingPulse(state.editorIsReading)
         .padding(11)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(Theme.background, in: RoundedRectangle(cornerRadius: 9))

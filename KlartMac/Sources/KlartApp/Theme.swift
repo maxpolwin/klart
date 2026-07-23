@@ -3,6 +3,17 @@ import SwiftUI
 import AppKit
 import KlartKit
 
+/// The one beat in the app. The caret blinks on it; the editor breathes on
+/// it while it is reading. Two things pulsing at two rates read as two
+/// clocks — at one rate they read as the same surface being alive.
+enum KlartPulse {
+    /// Seconds per half-cycle: caret on → caret off, full ink → dimmed.
+    static let period: TimeInterval = 1.0
+    /// How far the reading pulse dims. Deep enough to be unmistakably
+    /// moving, shallow enough that the words stay readable throughout.
+    static let dimmedOpacity: Double = 0.42
+}
+
 /// Klårt's "Quiet" palette: system-adaptive light/dark, one accent,
 /// hairlines and air instead of chrome. Colors are dynamic NSColors so
 /// both SwiftUI views and the AppKit editor re-resolve on appearance

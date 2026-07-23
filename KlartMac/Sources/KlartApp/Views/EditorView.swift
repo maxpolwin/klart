@@ -52,7 +52,6 @@ final class KlartTextView: NSTextView {
         static let damping: CGFloat = 26
         /// Below this gap the spring is over — snap and stop the timer.
         static let restEpsilon: CGFloat = 0.35
-        static let blinkPeriod: TimeInterval = 1.0
     }
 
     private var caretTarget: NSRect = .zero
@@ -77,30 +76,76 @@ final class KlartTextView: NSTextView {
         refreshCaretTarget()
     }
 
+    /// The font the caret is standing in: the character it sits on, or — at
+    /// the end of a line or on a fresh empty one — what the next keystroke
+    /// will be. Headings therefore get a taller caret than body text, because
+    /// the mark is scaled to the type it is about to set.
+    private func caretFont(at location: Int) -> NSFont {
+        let fallback = typingAttributes[.font] as? NSFont ?? EditorStyler.bodyFont
+        guard let storage = textStorage, storage.length > 0, location < storage.length else {
+            return fallback
+        }
+        return storage.attribute(.font, at: location, effectiveRange: nil) as? NSFont ?? fallback
+    }
+
     /// The caret's rect in view coordinates, derived from the layout manager
     /// rather than `firstRect(forCharacterRange:)` so it stays in this view's
     /// space and works at end-of-line and in empty documents.
+    ///
+    /// Its height is the font's own — ascender to descender — never the line
+    /// fragment's. The fragment carries `lineSpacing` and paragraph spacing,
+    /// which belong to the page's rhythm; a caret drawn to them stands taller
+    /// than the letters it is setting and reads as a rule rather than a mark.
     private func currentCaretRect() -> NSRect {
-        guard let layoutManager, let textContainer else { return .zero }
-        let location = min(selectedRange().location, (string as NSString).length)
-        let glyphIndex = layoutManager.glyphIndexForCharacter(at: location)
+        guard let layoutManager, textContainer != nil else { return .zero }
+        let length = (string as NSString).length
+        let location = min(selectedRange().location, length)
+        let font = caretFont(at: location)
+        let ascent = font.ascender
+        let height = ascent - font.descender
 
-        var line: NSRect
+        // Where the baseline sits; the caret hangs from it.
+        var origin: CGPoint
         if layoutManager.numberOfGlyphs == 0 {
-            line = NSRect(origin: .zero, size: CGSize(width: 0, height: EditorStyler.bodyFont.boundingRectForFont.height))
-        } else if glyphIndex >= layoutManager.numberOfGlyphs {
-            line = layoutManager.lineFragmentRect(forGlyphAt: layoutManager.numberOfGlyphs - 1, effectiveRange: nil)
-            line.origin.x += layoutManager.location(forGlyphAt: layoutManager.numberOfGlyphs - 1).x
+            origin = CGPoint(x: 0, y: layoutManager.defaultBaselineOffset(for: font) - ascent)
+        } else if location == length, layoutManager.extraLineFragmentTextContainer != nil {
+            // The empty last line — press Enter at the end of a note and you
+            // are here. It holds no glyphs, so it lives in the layout
+            // manager's extra fragment; without this branch the caret falls
+            // back to the previous line and the page centres on the wrong one.
+            let fragment = layoutManager.extraLineFragmentRect
+            origin = CGPoint(
+                x: fragment.origin.x,
+                y: fragment.origin.y + layoutManager.defaultBaselineOffset(for: font) - ascent
+            )
+        } else if location == length {
+            // Past the last character, with no empty line after it: there is
+            // no glyph *at* the caret, so it stands after the final one —
+            // `location(forGlyphAt:)` alone would put it before.
+            let lastGlyph = layoutManager.numberOfGlyphs - 1
+            let fragment = layoutManager.lineFragmentRect(forGlyphAt: lastGlyph, effectiveRange: nil)
+            let used = layoutManager.lineFragmentUsedRect(forGlyphAt: lastGlyph, effectiveRange: nil)
+            origin = CGPoint(
+                x: used.maxX,
+                y: fragment.origin.y + layoutManager.location(forGlyphAt: lastGlyph).y - ascent
+            )
         } else {
-            line = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
-            line.origin.x += layoutManager.location(forGlyphAt: glyphIndex).x
+            // Clamped: markers hidden from layout carry null glyphs, and a
+            // run of them at the caret can hand back an index past the end.
+            let glyphIndex = min(
+                layoutManager.glyphIndexForCharacter(at: location),
+                layoutManager.numberOfGlyphs - 1
+            )
+            let fragment = layoutManager.lineFragmentRect(forGlyphAt: glyphIndex, effectiveRange: nil)
+            let glyph = layoutManager.location(forGlyphAt: glyphIndex)
+            origin = CGPoint(x: fragment.origin.x + glyph.x, y: fragment.origin.y + glyph.y - ascent)
         }
-        _ = textContainer
+
         return NSRect(
-            x: line.origin.x + textContainerInset.width,
-            y: line.origin.y + textContainerInset.height,
+            x: origin.x + textContainerInset.width,
+            y: origin.y + textContainerInset.height,
             width: 2,
-            height: line.height
+            height: height
         )
     }
 
@@ -153,7 +198,7 @@ final class KlartTextView: NSTextView {
     private func startBlinking() {
         guard caretBlinkTimer == nil else { return }
         caretBlinkTimer = Timer.scheduledTimer(
-            withTimeInterval: CaretSpring.blinkPeriod,
+            withTimeInterval: KlartPulse.period,
             repeats: true
         ) { [weak self] _ in
             guard let self else { return }
@@ -226,6 +271,9 @@ final class KlartTextView: NSTextView {
     /// Guards against re-entering while adjusting the scroll view, which can
     /// call back into `scrollRangeToVisible` and recurse.
     private var isCentering = false
+    /// One centring per editor, when the note first lands on screen. The view
+    /// is rebuilt per note (`.id(selectedNoteID)`), so every note gets one.
+    private var hasCenteredOnOpen = false
 
     /// AppKit reveals the caret by scrolling to it *immediately*. Left alone
     /// it beats the spring to the destination, so the page appears to jump
@@ -270,38 +318,78 @@ final class KlartTextView: NSTextView {
     }
 
     /// Eases the view so the caret's line sits at the centre of the viewport.
-    func centerCaretLine() {
+    /// `animated: false` puts it there outright — for the moment a note opens,
+    /// where there is nothing to travel *from*.
+    func centerCaretLine(animated: Bool = true) {
         guard !isCentering, let scrollView = enclosingScrollView else { return }
         isCentering = true
         defer { isCentering = false }
 
-        // The tail is derived from the scroll view's own height, never the
-        // clip view's: contentInsets resize the clip, so measuring it here
-        // would feed the inset back into itself and oscillate.
+        // The margins are derived from the scroll view's own height. The clip
+        // view keeps that same height under contentInsets — they pad the
+        // scrollable range, not the visible rect — but reading the scroll
+        // view's frame keeps the margin independent of anything the insets
+        // below might do to it.
         let viewport = scrollView.frame.height
         guard viewport > 0 else { return }
         let caret = currentCaretRect()
         guard caret.height > 0 else { return }
 
-        // The last lines of a note can only reach the centre if the document
-        // can scroll past its own end — otherwise typing at the bottom would
-        // drift off-centre with nowhere left to go.
-        let tail = viewport / 2
-        if abs(scrollView.contentInsets.bottom - tail) > 1 {
+        // A line can only reach the centre if the document can scroll past the
+        // edge nearest it — past its end for the last lines, and past its
+        // start for the first. Without the head margin a new note would open
+        // pinned to the top of the window and the first words would have to
+        // walk down to the height every later line is held at.
+        let margin = viewport / 2
+        if abs(scrollView.contentInsets.top - margin) > 1
+            || abs(scrollView.contentInsets.bottom - margin) > 1 {
             scrollView.automaticallyAdjustsContentInsets = false
-            scrollView.contentInsets = NSEdgeInsets(top: 0, left: 0, bottom: tail, right: 0)
+            scrollView.contentInsets = NSEdgeInsets(top: margin, left: 0, bottom: margin, right: 0)
         }
 
         let visibleHeight = scrollView.contentView.bounds.height
         let documentHeight = frame.height
-        let maxOffset = max(0, documentHeight + tail - visibleHeight)
-        typewriterTarget = min(max(0, caret.midY - visibleHeight / 2), maxOffset)
+        let maxOffset = max(0, documentHeight + margin - visibleHeight)
+        typewriterTarget = min(max(-margin, caret.midY - visibleHeight / 2), maxOffset)
 
-        if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+        if !animated || NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            typewriterTimer?.invalidate()
+            typewriterTimer = nil
+            typewriterVelocity = 0
             applyTypewriterOffset(typewriterTarget, in: scrollView)
             return
         }
         startTypewriterAnimation(in: scrollView)
+    }
+
+    /// The note arrives already centred: the caret is where writing happens
+    /// before the first keystroke, not after it.
+    ///
+    /// Deferred by one turn of the run loop because the scroll view's frame
+    /// and the text's layout both settle after the view is planted — centring
+    /// against a viewport that is about to change lands nowhere in particular.
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        guard window != nil, !hasCenteredOnOpen else { return }
+        hasCenteredOnOpen = true
+        centerOnOpen(attemptsLeft: 5)
+    }
+
+    private func centerOnOpen(attemptsLeft: Int) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self, self.window != nil else { return }
+            // A scroll view with no height yet has no centre to aim at, so
+            // wait for the frame rather than centring against nothing.
+            guard let scrollView = self.enclosingScrollView, scrollView.frame.height > 0 else {
+                if attemptsLeft > 1 { self.centerOnOpen(attemptsLeft: attemptsLeft - 1) }
+                return
+            }
+            if let layoutManager = self.layoutManager, let textContainer = self.textContainer {
+                layoutManager.ensureLayout(for: textContainer)
+            }
+            self.refreshCaretTarget()
+            self.centerCaretLine(animated: false)
+        }
     }
 
     private func startTypewriterAnimation(in scrollView: NSScrollView) {
