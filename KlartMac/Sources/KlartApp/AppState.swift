@@ -41,6 +41,10 @@ final class AppState: ObservableObject {
     /// Cursor position (UTF-16) in the editor. Deliberately not @Published:
     /// it changes on every keystroke and nothing needs to re-render for it.
     var cursorUTF16 = 0
+    /// Where the editor should put the caret after the next text push — set
+    /// by `respond(to:)` so the writer lands on the empty line under the
+    /// note's prompt block. Consumed by `MarkdownEditor.updateNSView`.
+    var pendingCaretUTF16: Int?
 
     // MARK: Feedback / coach
 
@@ -68,11 +72,11 @@ final class AppState: ObservableObject {
     /// The Quiet coach popover — closed by default, only ever opened by the
     /// user (or by running a coach action, whose output lives inside it).
     @Published var showCoachPopover = false
-    /// Teleprompter: whether the editor's margin rail (suggestions on the
-    /// right) is on screen. Analysis runs in the background either way; the
-    /// rail only appears when the user summons the editor — via the icon in
-    /// the notes panel, ⌘E, or typing /editor — and retires again when the
-    /// suggestions fade out.
+    /// Teleprompter: whether the editor's margin rail (notes on the right)
+    /// is on screen. Reading happens in the background either way; the rail
+    /// only appears when the user summons the editor — via the icon in the
+    /// notes panel, ⌘E, or typing //show (//editor reads and shows) — and
+    /// retires again when the notes fade out.
     @Published var editorRailVisible = false
 
     /// True while the editor is actually reading the note — analysing it, or
@@ -131,7 +135,17 @@ final class AppState: ObservableObject {
     private var autosaveTask: Task<Void, Never>?
     private var feedbackTask: Task<Void, Never>?
     private var coachTask: Task<Void, Never>?
+    /// The long-pause trigger: restarted on every keystroke, fires when the
+    /// writer has stopped for `settings.debounceSeconds`.
+    private var pauseTask: Task<Void, Never>?
     private let engine = FeedbackEngine()
+    /// Which section has been edited and whether the caret has left it —
+    /// the section-complete signal that starts a read.
+    private var completion = SectionCompletionTracker()
+    /// Heading start of the section a read in flight is about, so a
+    /// keystroke inside it cancels the read (its notes would be about text
+    /// that no longer exists) while a keystroke elsewhere lets it finish.
+    private var readingSectionStart: Int?
 
     init(
         noteStore: NoteStore = NoteStore(directory: NoteStore.defaultDirectory()),
@@ -316,7 +330,10 @@ final class AppState: ObservableObject {
         )
         autosaveTask?.cancel()
         feedbackTask?.cancel()
+        pauseTask?.cancel()
         coachTask?.cancel()
+        completion.reset()
+        readingSectionStart = nil
         feedbackItems = []
         feedbackPhase = .idle
         coachOutput = ""
@@ -325,10 +342,11 @@ final class AppState: ObservableObject {
         editorRailVisible = false
         editorText = selectedNote?.content ?? ""
         cursorUTF16 = 0
+        pendingCaretUTF16 = nil
     }
 
     /// Summons the editor (Teleprompter): shows the margin rail and, when no
-    /// suggestions are waiting yet, asks for an analysis right away.
+    /// notes are waiting yet, reads the current section right away.
     func activateEditor() {
         guard selectedNoteID != nil else { return }
         editorRailVisible = true
@@ -337,11 +355,58 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// `//editor`: read the section under the caret now, and show the notes.
+    func readCurrentSection() {
+        guard selectedNoteID != nil else { return }
+        if settings.teleprompterMode {
+            editorRailVisible = true
+        } else {
+            showCoachPopover = true
+        }
+        requestFeedback(manual: true)
+    }
+
     /// Called by the editor on every text change.
     func editorTextChanged() {
         scheduleAutosave()
-        if settings.autoFeedback {
-            requestFeedback(manual: false)
+        completion.noteEdit(at: cursorUTF16, in: editorText)
+        guard settings.autoFeedback else { return }
+        // A read of the section being edited is a read of text that no
+        // longer exists; one of any other section is still worth having.
+        if feedbackPhase == .analyzing,
+           let reading = readingSectionStart,
+           DocumentOutline.parse(editorText).section(atUTF16Offset: cursorUTF16)?.headingStart ?? -1 == reading {
+            feedbackTask?.cancel()
+            feedbackPhase = .waiting
+        } else if feedbackPhase != .analyzing {
+            feedbackPhase = .waiting
+        }
+        schedulePauseRead()
+    }
+
+    /// Called by the editor whenever the caret moves, typing included. The
+    /// caret leaving a section it edited is the strongest "done with it"
+    /// signal there is — moving on, or opening a new heading beneath it.
+    func cursorMoved(to offset: Int) {
+        cursorUTF16 = offset
+        guard settings.autoFeedback, selectedNoteID != nil else { return }
+        if let done = completion.caretMoved(to: offset, in: editorText) {
+            pauseTask?.cancel()
+            requestFeedback(at: done.cursorUTF16)
+        }
+    }
+
+    private func schedulePauseRead() {
+        pauseTask?.cancel()
+        let delay = settings.debounceSeconds
+        pauseTask = Task { [weak self] in
+            try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
+            guard let self, !Task.isCancelled else { return }
+            if let done = self.completion.pauseElapsed(at: self.cursorUTF16, in: self.editorText) {
+                self.requestFeedback(at: done.cursorUTF16)
+            } else if self.feedbackPhase == .waiting {
+                self.feedbackPhase = .idle
+            }
         }
     }
 
@@ -373,19 +438,26 @@ final class AppState: ObservableObject {
 
     // MARK: - Feedback loop
 
+    /// On demand (⌘R, `//editor`, summoning an empty rail): read the section
+    /// under the caret now. `manual` is kept for call sites; every read is
+    /// immediate now that the trigger is "section finished", not "typing
+    /// paused".
     func requestFeedback(manual: Bool) {
+        guard selectedNoteID != nil else { return }
+        pauseTask?.cancel()
+        completion.markRead(at: cursorUTF16, in: editorText)
+        requestFeedback(at: cursorUTF16)
+    }
+
+    /// Reads the section containing `cursor` — the one the writer has just
+    /// finished, which need not be where the caret is now.
+    private func requestFeedback(at cursor: Int) {
         feedbackTask?.cancel()
         guard selectedNoteID != nil else { return }
-
-        let delay = manual ? 0 : settings.debounceSeconds
-        feedbackPhase = manual ? .analyzing : .waiting
-
+        feedbackPhase = .analyzing
         feedbackTask = Task { [weak self] in
-            if delay > 0 {
-                try? await Task.sleep(nanoseconds: UInt64(delay * 1_000_000_000))
-            }
             guard let self, !Task.isCancelled else { return }
-            await self.runFeedback()
+            await self.runFeedback(cursor: cursor)
         }
     }
 
@@ -422,16 +494,31 @@ final class AppState: ObservableObject {
         }
     }
 
-    private func runFeedback() async {
-        guard !sensitiveNoteBlocked else {
-            feedbackPhase = .skipped(Self.sensitiveBlockedMessage)
-            feedbackItems = []
-            return
-        }
+    private func runFeedback(cursor: Int) async {
         let text = editorText
-        let cursor = cursorUTF16
         let currentSettings = settings
         let rejected = Set(selectedNote?.rejectedFingerprints ?? [])
+        let outline = DocumentOutline.parse(text)
+        let section = outline.section(atUTF16Offset: cursor)
+        readingSectionStart = section?.headingStart ?? -1
+        defer { readingSectionStart = nil }
+
+        if section?.excludedFromAI == true {
+            feedbackPhase = .skipped("This section is marked [no-ai].")
+            return
+        }
+
+        // The offline pass first: instant, needs no provider, and stays on
+        // screen whatever the model does next. These very instances are
+        // handed to the model pass so the merged round keeps their identity
+        // — a verdict given while the model is still reading is not lost.
+        let local = engine.localItems(text: text, cursorUTF16: cursor, rejectedFingerprints: rejected)
+        replaceNotes(for: section?.title, with: local)
+
+        guard !sensitiveNoteBlocked else {
+            feedbackPhase = .skipped(Self.sensitiveBlockedMessage)
+            return
+        }
 
         let client: any LLMClient
         do {
@@ -456,21 +543,19 @@ final class AppState: ObservableObject {
                 cursorUTF16: cursor,
                 settings: currentSettings,
                 rejectedFingerprints: rejected,
+                local: local,
                 client: client
             )
             guard !Task.isCancelled else { return }
             switch outcome {
             case .skipped(.tooShort):
-                feedbackPhase = .skipped("Keep writing — feedback starts at ~80 characters per section.")
-                feedbackItems = []
+                feedbackPhase = .skipped("Keep writing — the editor reads a section from ~80 characters.")
             case .skipped(.sectionExcluded):
                 feedbackPhase = .skipped("This section is marked [no-ai].")
-                feedbackItems = []
             case .skipped(.noKindsEnabled):
                 feedbackPhase = .skipped("All feedback types are disabled in Settings.")
-                feedbackItems = []
             case .items(let items):
-                feedbackItems = items
+                replaceNotes(for: section?.title, with: items)
                 feedbackPhase = .idle
                 connection = .connected(currentSettings.activeProvider.displayName)
             }
@@ -485,20 +570,48 @@ final class AppState: ObservableObject {
         }
     }
 
+    /// A fresh round for one section replaces that section's notes and
+    /// leaves the others' in place — the rail is a record of the document,
+    /// not of the last read. Notes the round re-raises elsewhere (a thin
+    /// section, an overlapping title) replace their earlier selves by
+    /// fingerprint, keeping the earlier card's identity and verdict.
+    /// Whatever this displaces unjudged is logged as dismissed: the writer
+    /// finished the section without answering it.
+    private func replaceNotes(for sectionTitle: String?, with fresh: [FeedbackItem]) {
+        let freshPrints = Set(fresh.map(\.fingerprint))
+        var kept: [FeedbackItem] = []
+        var carried: [String: FeedbackItem] = [:]
+        for item in feedbackItems {
+            if freshPrints.contains(item.fingerprint) {
+                carried[item.fingerprint] = item
+            } else if item.section == sectionTitle {
+                if itemOutcomes[item.id] == nil { logRecommendation(item, outcome: .dismissed) }
+            } else {
+                kept.append(item)
+            }
+        }
+        let merged = fresh.map { carried[$0.fingerprint] ?? $0 }
+        feedbackItems = FeedbackEngine.ordered(kept + merged)
+    }
+
     /// Whether this tip has already been judged. Attended tips stay visible
     /// but greyed out, and their controls are inert.
     func outcome(for item: FeedbackItem) -> RecommendationOutcome? {
         itemOutcomes[item.id]
     }
 
-    /// Inserts the tip into the note as an editor note. The row stays, greyed.
-    func accept(_ item: FeedbackItem) {
+    /// Takes the note into the text as a prompt block and puts the caret on
+    /// the empty line beneath it, for the writer's own answer. The card
+    /// stays, greyed. Nothing the model wrote becomes the writer's text.
+    func respond(to item: FeedbackItem) {
         guard itemOutcomes[item.id] == nil else { return }
-        // Log before editing: the context a tip reacted to is the text as it
-        // stood when the tip was written, not after the insertion.
-        logRecommendation(item, outcome: .inserted)
-        itemOutcomes[item.id] = .inserted
-        editorText = NoteEditing.insertSuggestion(item, into: editorText, cursorUTF16: cursorUTF16)
+        // Log before editing: the context a note reacted to is the text as it
+        // stood when the note was written, not after the block landed.
+        logRecommendation(item, outcome: .responded)
+        itemOutcomes[item.id] = .responded
+        let response = NoteEditing.respond(to: item, in: editorText, cursorUTF16: cursorUTF16)
+        pendingCaretUTF16 = response.caretUTF16
+        editorText = response.text
         scheduleAutosave()
     }
 
@@ -563,12 +676,16 @@ final class AppState: ObservableObject {
             paragraph = context.map { RecommendationRecord.clipContext($0.currentSectionBody) }
         }
 
+        let local = item.source == .local
         let record = RecommendationRecord(
             outcome: outcome,
             kind: item.kind,
             fingerprint: item.fingerprint,
-            model: settings.activeConfig.model.isEmpty ? nil : settings.activeConfig.model,
-            provider: settings.activeProvider.displayName,
+            severity: item.severity,
+            source: item.source,
+            rule: item.rule,
+            model: local || settings.activeConfig.model.isEmpty ? nil : settings.activeConfig.model,
+            provider: local ? "Local checks" : settings.activeProvider.displayName,
             systemPromptHash: StableHash.fnv1a(settings.effectiveFeedbackPrompt),
             usesDefaultPrompt: settings.feedbackSystemPrompt == nil,
             noteID: subject?.id,
@@ -577,8 +694,9 @@ final class AppState: ObservableObject {
             documentTopic: topic,
             sectionTitle: sectionTitle,
             contextParagraph: paragraph,
+            anchor: withContent ? item.anchor : nil,
             observation: withContent ? item.text : nil,
-            suggestion: withContent ? item.suggestion : nil
+            why: withContent ? item.why : nil
         )
         let log = recommendationLog
         Task { try? await log.append(record) }

@@ -79,12 +79,16 @@ public enum FeedbackTone: String, Codable, CaseIterable, Sendable, Identifiable 
     public var id: String { rawValue }
     public var label: String { rawValue.capitalized }
 
+    /// Register only — every tone stays opinionated. "Encouraging" is the one
+    /// that names what the section is trying to do before saying where it
+    /// fails, and praises method, never the author: person-praise makes
+    /// feedback worse, process-praise does not (Mueller & Dweck).
     var promptFragment: String {
         switch self {
-        case .neutral: return "Use a neutral, professional tone."
-        case .academic: return "Use a precise academic tone."
-        case .direct: return "Be direct and to the point; no hedging."
-        case .encouraging: return "Be encouraging and constructive."
+        case .neutral: return "Plain, professional register. Still no softeners."
+        case .academic: return "Precise academic register; name the standard a reviewer would hold the section to."
+        case .direct: return "Blunt. The problem goes in the first clause. No softeners, no compliments, no 'consider'."
+        case .encouraging: return "Firm but warm: say what the section is trying to do before saying where it falls short. If you credit anything, credit the method, never the author."
         }
     }
 }
@@ -96,9 +100,9 @@ public enum FeedbackDetail: String, Codable, CaseIterable, Sendable, Identifiabl
 
     var promptFragment: String {
         switch self {
-        case .brief: return "Keep each item to one or two sentences."
-        case .standard: return "Keep each item concise but complete."
-        case .detailed: return "Give thorough items with concrete, ready-to-insert suggestions."
+        case .brief: return "One sentence per field."
+        case .standard: return "Keep each field concise but complete."
+        case .detailed: return "Be thorough: say what a fix would have to achieve — still without drafting it."
         }
     }
 }
@@ -113,7 +117,7 @@ public struct TipStyle: Codable, Equatable, Sendable {
     public var customGuidance: String
 
     public init(
-        tone: FeedbackTone = .neutral,
+        tone: FeedbackTone = .direct,
         detail: FeedbackDetail = .standard,
         maxTips: Int = 3,
         language: String = "",
@@ -128,7 +132,7 @@ public struct TipStyle: Codable, Equatable, Sendable {
 
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
-        tone = try c.decodeIfPresent(FeedbackTone.self, forKey: .tone) ?? .neutral
+        tone = try c.decodeIfPresent(FeedbackTone.self, forKey: .tone) ?? .direct
         detail = try c.decodeIfPresent(FeedbackDetail.self, forKey: .detail) ?? .standard
         maxTips = min(6, max(1, try c.decodeIfPresent(Int.self, forKey: .maxTips) ?? 3))
         language = try c.decodeIfPresent(String.self, forKey: .language) ?? ""
@@ -143,9 +147,11 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var providers: [ProviderKind: ProviderConfig]
     public var enabledFeedbackKinds: [FeedbackKind]
     public var tipStyle: TipStyle
-    /// Seconds of typing inactivity before feedback is requested.
+    /// Seconds of typing inactivity that count as "done with this section
+    /// for now" — the pause trigger. Leaving the section fires regardless.
     public var debounceSeconds: Double
-    /// Whether feedback runs automatically while typing (vs. manual only).
+    /// Whether the editor reads a section on its own when the writer finishes
+    /// it (leaves it, or pauses), vs. only on demand (⌘R, `//editor`).
     public var autoFeedback: Bool
     public var temperature: Double
     public var maxTokens: Int
@@ -183,7 +189,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         providers: [ProviderKind: ProviderConfig] = [:],
         enabledFeedbackKinds: [FeedbackKind] = FeedbackKind.defaultEnabled,
         tipStyle: TipStyle = TipStyle(),
-        debounceSeconds: Double = 2.5,
+        debounceSeconds: Double = 20,
         autoFeedback: Bool = true,
         temperature: Double = 0.4,
         maxTokens: Int = 1024,
@@ -223,7 +229,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
         providers = try c.decodeIfPresent([ProviderKind: ProviderConfig].self, forKey: .providers) ?? [:]
         enabledFeedbackKinds = try c.decodeIfPresent([FeedbackKind].self, forKey: .enabledFeedbackKinds) ?? defaults.enabledFeedbackKinds
         tipStyle = try c.decodeIfPresent(TipStyle.self, forKey: .tipStyle) ?? TipStyle()
-        debounceSeconds = min(15, max(0.5, try c.decodeIfPresent(Double.self, forKey: .debounceSeconds) ?? defaults.debounceSeconds))
+        // A pause shorter than five seconds is a keystroke debounce from an
+        // older build, not a "done with this section" signal; lift it.
+        debounceSeconds = min(120, max(5, try c.decodeIfPresent(Double.self, forKey: .debounceSeconds) ?? defaults.debounceSeconds))
         autoFeedback = try c.decodeIfPresent(Bool.self, forKey: .autoFeedback) ?? defaults.autoFeedback
         temperature = min(2, max(0, try c.decodeIfPresent(Double.self, forKey: .temperature) ?? defaults.temperature))
         maxTokens = min(8192, max(64, try c.decodeIfPresent(Int.self, forKey: .maxTokens) ?? defaults.maxTokens))

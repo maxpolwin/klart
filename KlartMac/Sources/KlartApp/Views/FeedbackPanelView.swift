@@ -88,7 +88,7 @@ struct FeedbackPanelView: View {
         case .skipped(let reason):
             banner(text: reason, systemImage: "moon.zzz", color: Theme.textTertiary)
         case .waiting:
-            banner(text: "Watching for a pause in your typing…", systemImage: "ellipsis", color: Theme.textTertiary)
+            banner(text: "Reading this section when you finish it — or after a pause.", systemImage: "ellipsis", color: Theme.textTertiary)
         case .analyzing, .idle:
             EmptyView()
         }
@@ -112,7 +112,7 @@ struct FeedbackPanelView: View {
     private var feedbackList: some View {
         if !state.feedbackItems.isEmpty {
             VStack(alignment: .leading, spacing: 0) {
-                Text("SUGGESTIONS")
+                Text("NOTES")
                     .font(.system(size: 10, weight: .bold))
                     .tracking(1.2)
                     .foregroundStyle(Theme.textTertiary)
@@ -130,7 +130,7 @@ struct FeedbackPanelView: View {
             }
         } else if state.feedbackPhase == .idle && state.coachOutput.isEmpty {
             banner(
-                text: "Write, then pause — I'll point out gaps, overlaps, and sharper structure. Mark a section [no-ai] to keep me out of it.",
+                text: "Finish a section and I'll read it: gaps, unstated assumptions, claims with nothing behind them, the objection you haven't met. Type //editor to make me read now. Mark a section [no-ai] to keep me out of it.",
                 systemImage: "lightbulb",
                 color: Theme.textTertiary
             )
@@ -180,19 +180,29 @@ struct FeedbackPanelView: View {
     }
 }
 
-/// One suggestion as a quiet row: kind label, observation, hairline
-/// separation — no card chrome.
+/// One note as a quiet row: kind badge, severity, the words it is about, the
+/// observation, why it matters, hairline separation — no card chrome.
 private struct FeedbackRow: View {
     @EnvironmentObject var state: AppState
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let item: FeedbackItem
-    @State private var showSuggestion = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 KindBadge(kind: item.kind)
-                if let section = item.section, !section.isEmpty {
+                if let mark = Theme.severityMark(item.severity) {
+                    Text(mark)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundStyle(Theme.color(for: item.kind))
+                        .accessibilityHidden(true)
+                }
+                if item.source == .local, let rule = item.rule {
+                    Text(rule)
+                        .font(.system(size: 10, design: .monospaced))
+                        .foregroundStyle(Theme.textTertiary)
+                        .lineLimit(1)
+                } else if let section = item.section, !section.isEmpty {
                     Text(section)
                         .font(.system(size: 10.5))
                         .foregroundStyle(Theme.textTertiary)
@@ -200,53 +210,52 @@ private struct FeedbackRow: View {
                 }
                 Spacer()
             }
+            if let anchor = item.anchor {
+                Text("“\(anchor)”")
+                    .font(.system(size: 12).italic())
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(2)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
             Text(item.text)
                 .font(.system(size: 12.5))
                 .foregroundStyle(Theme.textPrimary)
                 .lineSpacing(3)
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
-
-            if let suggestion = item.suggestion {
-                DisclosureGroup(isExpanded: $showSuggestion) {
-                    Text(suggestion)
-                        .font(.system(size: 12))
-                        .foregroundStyle(Theme.textSecondary)
-                        .lineSpacing(3)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .textSelection(.enabled)
-                        .padding(.top, 4)
-                } label: {
-                    Text("Suggested content")
-                        .font(.system(size: 11, weight: .medium))
-                        .foregroundStyle(Theme.accent)
-                }
+            if let why = item.why {
+                Text(why)
+                    .font(.system(size: 11.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
             }
 
             HStack(spacing: 8) {
                 Button {
-                    state.accept(item)
+                    state.respond(to: item)
                 } label: {
-                    Label("Insert", systemImage: "text.insert")
+                    Label("Respond", systemImage: "text.insert")
                         .font(.system(size: 11, weight: .medium))
                 }
                 .buttonStyle(.borderless)
                 .foregroundStyle(outcome == nil ? Theme.accent : Theme.textTertiary)
                 .disabled(outcome != nil)
-                .help("Insert this into the current section as a quoted block")
+                .help("Put this note into that section as a prompt, and answer it in your own words")
 
                 Spacer()
 
                 judgement(
                     .confirmed,
                     systemImage: "checkmark",
-                    help: "This helped — good advice"
+                    help: "Fair — the editor is right"
                 ) { state.confirm(item) }
 
                 judgement(
                     .rejected,
                     systemImage: "xmark",
-                    help: "This missed the mark — the coach got it wrong"
+                    help: "Wrong — never raise this here again"
                 ) { state.reject(item) }
             }
         }
@@ -281,7 +290,7 @@ private struct FeedbackRow: View {
         .opacity(outcome == nil || chosen ? 1 : 0.35)
         .disabled(outcome != nil)
         .help(help)
-        .accessibilityLabel(verdict == .confirmed ? "Confirm suggestion" : "Reject suggestion")
+        .accessibilityLabel(verdict == .confirmed ? "Confirm note" : "Reject note")
     }
 }
 #endif
