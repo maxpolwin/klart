@@ -15,6 +15,15 @@ struct ContentView: View {
                 LockView()
             } else {
                 mainInterface
+                    // Over both layouts, never over the lock screen: the
+                    // tour waits until the notes are open.
+                    .overlay {
+                        if state.welcomeVisible {
+                            WelcomeView()
+                                .transition(.opacity)
+                        }
+                    }
+                    .animation(reduceMotion ? nil : .easeOut(duration: 0.25), value: state.welcomeVisible)
             }
         }
         .background(WindowConfigurator(

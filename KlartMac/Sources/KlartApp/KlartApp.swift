@@ -96,6 +96,10 @@ struct AppCommands: Commands {
                 .keyboardShortcut("l", modifiers: .command)
                 .disabled(state.settings.vault == nil || state.isLocked)
         }
+        CommandGroup(replacing: .help) {
+            Button("Welcome Tour…") { state.showWelcome() }
+                .disabled(state.isLocked)
+        }
         CommandMenu("Editor") {
             Button("Analyze Note") { state.requestFeedback(manual: true) }
                 .keyboardShortcut("r", modifiers: .command)

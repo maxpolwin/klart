@@ -24,7 +24,7 @@ final class RailOverflowTests: XCTestCase {
         try await super.tearDown()
     }
 
-    private static let cardCount = 8
+    private nonisolated static let cardCount = 8
     /// Short enough that eight cards cannot fit however tightly they stack.
     private static let shortWindow = CGSize(width: 1200, height: 560)
 
@@ -60,8 +60,9 @@ final class RailOverflowTests: XCTestCase {
         let items = (1...Self.cardCount).map { n in
             FeedbackItem(
                 kind: .gap,
+                anchor: n.isMultiple(of: 2) ? "reliably takes a full line" : nil,
                 text: "Section \(n) states a claim it never backs with a number or an example.",
-                suggestion: n.isMultiple(of: 2) ? "Add one figure." : nil,
+                why: n.isMultiple(of: 2) ? "A reader who doubts it has nothing to check." : nil,
                 section: "Section \(n)"
             )
         }

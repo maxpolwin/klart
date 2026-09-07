@@ -313,7 +313,7 @@ final class AppFixture {
     let state: AppState
     let window: NSWindow
 
-    private let directory: URL
+    let directory: URL
 
     /// - Parameter size: the window's content size. The default is a normal
     ///   working window; a shorter one models the rail running out of room.

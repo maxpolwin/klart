@@ -44,6 +44,13 @@ private struct InterfaceSettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+
+            Section("Getting started") {
+                Button("Show the Welcome Tour Again") { state.showWelcome() }
+                Text("The first-launch walkthrough: the hidden notes panel, how the editor reads, and a sample note with problems for it to find.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
     }

@@ -820,6 +820,15 @@ struct MarkdownEditor: NSViewRepresentable {
         context.coordinator.isPushingText = true
         textView.string = text
         EditorStyler.restyleAll(textView)
+        if let caret = pendingCaret {
+            // A note opened at a chosen place (the welcome tour's sample,
+            // at the section the editor is reading): the opening centring
+            // then puts that line, not the document's end, at writing
+            // height. Reported applied a turn later, like the cursor.
+            let length = (text as NSString).length
+            textView.setSelectedRange(NSRange(location: min(max(0, caret), length), length: 0))
+            DispatchQueue.main.async { [onCaretApplied] in onCaretApplied?() }
+        }
         context.coordinator.isPushingText = false
         context.coordinator.lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
         bridge?.attach(textView: textView, scrollView: scrollView)
