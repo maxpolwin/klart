@@ -1,0 +1,635 @@
+<title>Klårt Build Plan</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#F4F5F8; --bg-2:#FFFFFF;
+  --glass:rgba(255,255,255,0.72); --glass-2:rgba(255,255,255,0.86); --line:rgba(16,24,40,0.10); --line-2:rgba(16,24,40,0.18);
+  --ink:#141922; --ink-2:#4B5563; --ink-3:#7B8494;
+  --accent:#2F5FD0; --accent-ink:#2F5FD0; --accent-soft:rgba(47,95,208,0.10);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --good:#0E8F5A; --warn:#B7791F; --crit:#C43C3C;
+  --blob-a:#7C9CFF; --blob-b:#C9B6FF; --blob-c:#8EE0C8;
+  --shadow:0 8px 28px rgba(16,24,40,0.08);
+  --radius:20px; --radius-s:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0A0E14; --bg-2:#111721;
+    --glass:rgba(255,255,255,0.055); --glass-2:rgba(255,255,255,0.09); --line:rgba(255,255,255,0.11); --line-2:rgba(255,255,255,0.20);
+    --ink:#F2F4F7; --ink-2:#B4BBC7; --ink-3:#7F8898;
+    --accent:#7C9CFF; --accent-ink:#9DB4FF; --accent-soft:rgba(124,156,255,0.14);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --good:#4ADE80; --warn:#FACC15; --crit:#F87171;
+    --blob-a:#3F5BD9; --blob-b:#7A4FD0; --blob-c:#1F8F7A;
+    --shadow:0 12px 40px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0A0E14; --bg-2:#111721;
+  --glass:rgba(255,255,255,0.055); --glass-2:rgba(255,255,255,0.09); --line:rgba(255,255,255,0.11); --line-2:rgba(255,255,255,0.20);
+  --ink:#F2F4F7; --ink-2:#B4BBC7; --ink-3:#7F8898;
+  --accent:#7C9CFF; --accent-ink:#9DB4FF; --accent-soft:rgba(124,156,255,0.14);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --good:#4ADE80; --warn:#FACC15; --crit:#F87171;
+  --blob-a:#3F5BD9; --blob-b:#7A4FD0; --blob-c:#1F8F7A;
+  --shadow:0 12px 40px rgba(0,0,0,0.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-feature-settings:'cv11','ss01';font-size:16px;line-height:1.6;padding-inline:20px;padding-block:0 96px;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.blob{position:absolute;width:56vw;height:56vw;max-width:760px;max-height:760px;filter:blur(80px);opacity:.42;border-radius:30% 70% 70% 30%/30% 30% 70% 70%;animation:blob-rotate 48s linear infinite}
+.blob.a{top:-18vw;left:-14vw;background-image:linear-gradient(var(--blob-a),var(--blob-b))}
+.blob.b{bottom:-22vw;right:-16vw;background-image:linear-gradient(var(--blob-c),var(--blob-a));animation-duration:64s;animation-direction:reverse;opacity:.32}
+@keyframes blob-rotate{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.blob{animation:none}}
+.page{position:relative;z-index:1;max-width:1120px;margin:0 auto}
+.prose{max-width:760px}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-family:Lora,Georgia,serif;font-weight:600;font-size:clamp(34px,5vw,52px);letter-spacing:-0.02em;line-height:1.1}
+h2{font-size:clamp(24px,3vw,32px);font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+h3{font-size:19px;font-weight:600;letter-spacing:-0.01em;line-height:1.3}
+p{margin:0 0 14px}
+a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid transparent}
+a:hover,a:focus-visible{border-bottom-color:currentColor}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.muted{color:var(--ink-2)}
+.small{font-size:14px}
+sup{font-size:.68em;line-height:0;vertical-align:baseline;position:relative;top:-.45em}
+sup a{color:var(--accent-ink);font-weight:600;border:0}
+header.hero{padding-block:72px 40px;display:grid;gap:18px}
+header.hero .lede{font-size:19px;color:var(--ink-2);max-width:720px}
+.meta{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:600}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+nav.toc a{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--ink-2)}
+nav.toc a:hover{border-color:var(--line-2);color:var(--ink)}
+section{padding-block:40px 8px}
+section>.head{display:grid;gap:8px;margin-bottom:22px;max-width:760px}
+.glass{background:var(--glass);backdrop-filter:blur(14px) saturate(120%);-webkit-backdrop-filter:blur(14px) saturate(120%);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);background-image:linear-gradient(to top right,rgba(255,255,255,0.05),rgba(255,255,255,0))}
+.summary{padding:30px 32px;display:grid;gap:22px}
+.summary .verdict{font-family:Lora,Georgia,serif;font-size:clamp(20px,2.4vw,26px);font-weight:500;line-height:1.35;letter-spacing:-0.01em}
+.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px 26px;margin:0;padding:0;list-style:none;counter-reset:f}
+.findings li{counter-increment:f;display:grid;grid-template-columns:30px 1fr;gap:10px;font-size:15px;line-height:1.5}
+.findings li::before{content:counter(f);font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-ink);font-size:14px;padding-top:2px}
+.findings b{font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:460px){.kpis{grid-template-columns:1fr}}
+.kpi{padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass-2)}
+.kpi .n{font-size:26px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .l{font-size:12.5px;color:var(--ink-2);margin-top:4px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px}
+@media (max-width:900px){.grid3{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:560px){.grid3{grid-template-columns:1fr}}
+.card{padding:20px 22px;border:1px solid var(--line);border-radius:var(--radius);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.card h3{margin-bottom:8px}
+.card p:last-child{margin-bottom:0}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th,td{padding:11px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td b{font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line-2);white-space:nowrap;color:var(--ink-2)}
+.chip.good{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.chip.crit{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,transparent)}
+.chip.acc{color:var(--accent-ink);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+.score{display:inline-block;font-variant-numeric:tabular-nums;font-weight:600}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-right:8px}
+.note{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:16px 18px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass)}
+.note .g{font-size:22px;line-height:1;color:var(--ink);padding-top:2px;text-align:center}
+.note .k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;display:flex;gap:8px;align-items:center}
+.note .k .sev{color:var(--crit);letter-spacing:0;font-size:13px}
+.note .anchor{font-style:italic;color:var(--ink-2);font-size:14px;margin:4px 0 6px}
+.note .why{color:var(--ink-2);font-size:14px;margin-top:6px}
+.notes{display:grid;gap:12px}
+ol.q,ul.plain{margin:0;padding-left:22px;display:grid;gap:8px}
+ol.q li::marker{font-weight:600;color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.kill{border-left:3px solid var(--crit);padding-left:14px}
+.approach{display:grid;gap:14px}
+.approach .row{display:grid;grid-template-columns:150px 1fr;gap:12px;font-size:14.5px;border-top:1px solid var(--line);padding-top:10px}
+.approach .row .l{color:var(--ink-3);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;padding-top:3px}
+.approach .row:first-of-type{border-top:0;padding-top:0}
+figure{margin:0;padding:18px 20px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+figure figcaption{font-size:13px;color:var(--ink-2);margin-top:10px}
+figure .t{font-weight:600;font-size:15px;margin-bottom:4px}
+figure .st{font-size:13px;color:var(--ink-3);margin-bottom:10px}
+svg{max-width:100%;height:auto;display:block;font-family:inherit}
+svg text{fill:var(--ink-2);font-size:12px}
+svg .ax{stroke:var(--line-2);stroke-width:1}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .lab{fill:var(--ink);font-weight:600}
+svg .k{fill:var(--accent);}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink-2);margin-top:8px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:-1px;background:var(--c)}
+.tip{position:fixed;z-index:5;pointer-events:none;padding:8px 10px;font-size:12.5px;border-radius:8px;background:var(--bg-2);color:var(--ink);border:1px solid var(--line-2);box-shadow:var(--shadow);opacity:0;transition:opacity .12s;max-width:260px}
+.tip.on{opacity:1}
+.sources{font-size:13.5px;color:var(--ink-2)}
+.sources ol{padding-left:26px;margin:0;display:grid;gap:5px}
+.sources li{padding-left:4px;word-break:break-word}
+.sources li:target{color:var(--ink);background:var(--accent-soft);border-radius:6px}
+.callout{padding:18px 20px;border-radius:var(--radius-s);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:var(--accent-soft)}
+.step{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.step .w{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);text-transform:uppercase;padding-top:3px}
+.step:first-child{border-top:0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:40px 0 0}
+@media (max-width:640px){
+  header.hero{padding-block:44px 28px}
+  .summary{padding:22px 20px}
+  .approach .row{grid-template-columns:1fr;gap:4px}
+  .step{grid-template-columns:1fr;gap:4px}
+}
+@media print{.sky{display:none}.glass,.card,figure,.tablewrap{box-shadow:none;background:transparent}}
+</style>
+<style>
+code{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:.86em;background:var(--glass-2);padding:1px 6px;border-radius:5px;border:1px solid var(--line);white-space:nowrap}
+pre{font-family:ui-monospace,"SF Mono",Menlo,Consolas,monospace;font-size:12.5px;line-height:1.5;background:var(--glass-2);border:1px solid var(--line);border-radius:var(--radius-s);padding:14px 16px;overflow-x:auto;margin:10px 0 14px;color:var(--ink)}
+pre code{background:none;border:0;padding:0;white-space:pre}
+pre.mermaid{background:var(--glass);padding:12px}
+.feature{padding:26px 28px}
+.feature .lead{font-size:16.5px;color:var(--ink-2);max-width:760px}
+.spec{display:grid;grid-template-columns:170px 1fr;gap:10px 16px;font-size:14.5px;margin-top:14px}
+.spec .l{color:var(--ink-3);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;padding-top:3px}
+.spec ul,.spec ol{margin:0;padding-left:20px;display:grid;gap:5px}
+.done li::marker{content:"☐ ";color:var(--accent-ink)}
+.done{list-style:none;padding-left:0}
+.done li{padding-left:22px;position:relative}
+.done li::before{content:"☐";position:absolute;left:0;color:var(--accent-ink)}
+.tag{display:inline-block;font-size:11.5px;font-weight:600;letter-spacing:.04em;padding:2px 8px;border-radius:6px;border:1px solid var(--line-2);color:var(--ink-2);margin-right:6px;vertical-align:middle}
+.tag.now{color:var(--accent-ink);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+.week{display:grid;grid-template-columns:90px 1fr 120px;gap:12px;padding:10px 0;border-top:1px solid var(--line);font-size:14.5px;align-items:start}
+.week:first-child{border-top:0}
+.week .w{font-weight:700;color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.week .m{color:var(--ink-3);font-size:12.5px;text-align:right}
+@media (max-width:640px){.spec{grid-template-columns:1fr;gap:4px 0}.week{grid-template-columns:1fr}.week .m{text-align:left}}
+</style>
+<div class="sky" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div></div>
+<div class="page">
+
+<header class="hero">
+  <div class="eyebrow">Implementation plan · 14 September 2026</div>
+  <h1>Klårt Build Plan</h1>
+  <p class="lede">How to implement the five features the market analysis rated High or Very High, in the order that gets a validation cohort started soonest: open any markdown folder, an Apple on-device provider, Discuss with a writer profile, the whole-document read, and rubric packs. Team rubrics are designed for, not built.</p>
+  <div class="meta">
+    <span><b>Codebase</b> KlartMac at commit 16058d9, Swift 5.9, macOS 14 target<sup><a href="#r1">1</a></sup></span>
+    <span><b>Scope source</b> Market analysis §6, priorities High and Very High<sup><a href="#r2">2</a></sup></span>
+    <span><b>Estimates</b> focused developer-days for one engineer who knows the code</span>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#summary">Summary</a>
+    <a href="#principles">Principles</a>
+    <a href="#f1">1 · Folder library</a>
+    <a href="#f2">2 · Apple provider</a>
+    <a href="#f3">3 · Discuss and profile</a>
+    <a href="#f4">4 · Document read</a>
+    <a href="#f5">5 · Rubric packs</a>
+    <a href="#f6">6 · Team constraints</a>
+    <a href="#cross">Cross-cutting</a>
+    <a href="#schedule">Schedule</a>
+    <a href="#risks">Risks</a>
+    <a href="#refs">References</a>
+  </nav>
+</header>
+
+<section id="summary">
+  <div class="glass summary">
+    <div>
+      <div class="eyebrow">Summary</div>
+      <p class="verdict">Build in the order the validation cohort needs it: remove the two reasons not to start (a note silo, a model to install), then add the one thing that makes people come back (an editor that argues and remembers), then widen what it reads (the whole document) and what it reads for (rubrics). About 40 developer-days, in five shippable increments, none of which throws away existing code.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="n">5</div><div class="l">features, each a separate release; a sixth is designed for but not built</div></div>
+      <div class="kpi"><div class="n">36–48</div><div class="l">developer-days in total, sequenced over 10 working weeks plus a 3-week buffer</div></div>
+      <div class="kpi"><div class="n">Week 3</div><div class="l">cohort can start: folder mode and the Apple provider are the gate</div></div>
+      <div class="kpi"><div class="n">0</div><div class="l">breaking changes to note files, settings or the learning log; every schema change decodes leniently</div></div>
+      <div class="kpi"><div class="n">2</div><div class="l">new sealed files under the vault: discussions and the writer profile</div></div>
+      <div class="kpi"><div class="n">1</div><div class="l">CI change: a macOS 26 runner so the Apple provider compiles in CI</div></div>
+    </div>
+    <ol class="findings">
+      <li><span><b>Folder library first.</b> Abstract <code>NoteStore</code> behind a <code>NoteStoring</code> protocol and add a <code>FolderNoteStore</code> that reads and writes plain <code>.md</code> files in a user-chosen folder, with a <code>.klart/</code> sidecar for identity and verdicts. Vault encryption stays a managed-library feature. 7–9 days.</span></li>
+      <li><span><b>Apple provider second.</b> A <code>ProviderKind.apple</code> backed by the Foundation Models framework behind <code>canImport</code> and availability checks, with guided generation instead of JSON parsing and a compact prompt profile for the 4,096-token window. Zero setup, zero cost, weak model: position it as the starter. 4–6 days.</span></li>
+      <li><span><b>Discuss and the writer profile third.</b> Threads stored in a sealed <code>discussions.json</code>, a discussion prompt that must end <code>[withdrawn]</code> or <code>[stands]</code>, a card that expands in place, and a deterministic profile rendered into a new optional <code>{{WRITER_PROFILE}}</code> token. This is the retention feature and the A/B test in the 90-day plan. 11–14 days.</span></li>
+      <li><span><b>Whole-document read fourth.</b> A second read mode with its own template and a document skeleton (outline plus first and last paragraph per section), notes tagged with a <code>scope</code> so the rail can pin them under the title, and three new offline checks. Designed with a <code>{{DOCUMENT_RUBRIC}}</code> token that rubric packs fill later. 5–7 days.</span></li>
+      <li><span><b>Rubric packs fifth.</b> A JSON rubric format that reconfigures the nine lenses, adds section and document rules, and ships six built-in packs; per-note selection; import and export; a <code>.klart/rubrics/</code> folder in folder libraries so teams can share via git. Custom lenses deferred. 6–8 days.</span></li>
+      <li><span><b>Team rubrics are a set of constraints on the above,</b> not a build item: rubrics never carry endpoints, managed rubrics are read-only, and the profile can be exported without content. Honouring them now costs nothing and keeps alternative 2 open.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="principles">
+  <div class="head">
+    <div class="eyebrow">Principles</div>
+    <h2>Rules every increment follows</h2>
+  </div>
+  <div class="grid3">
+    <div class="card"><h3>Lenient decoding, always</h3><p>Every new field on <code>Note</code>, <code>AppSettings</code>, <code>FeedbackItem</code> and <code>RecommendationRecord</code> decodes with a default, exactly as the existing custom <code>init(from:)</code> implementations do. A settings file from any build opens in any other build.</p></div>
+    <div class="card"><h3>The vault covers every new file</h3><p><code>DiscussionLog</code> and the profile store mirror <code>RecommendationLog</code>: <code>setEncryptionKey</code>, <code>lock</code>, <code>encryptOnDisk</code>, <code>decryptOnDisk</code>, <code>rotateOnDisk</code>, and calls from <code>enableProtection</code>, <code>disableProtection</code>, <code>resolveMasterKey</code> and <code>rotateMasterKey</code> in <code>AppState</code>. Each gets its own AAD string.</p></div>
+    <div class="card"><h3>Sensitive stays sensitive</h3><p>The request-time rule in <code>AppState.sensitiveNoteBlocked</code> applies to Discuss, the document read and the Apple provider alike. Private Cloud Compute counts as cloud for this rule, whatever Apple's privacy claims: the promise to the user is literal.</p></div>
+    <div class="card"><h3>Pure logic in KlartKit, tested there</h3><p>Prompt building, parsing, skeletons, the profile derivation and the rubric format are pure functions in <code>KlartKit</code> with XCTest coverage. The app layer only orchestrates. The sample note in <code>SampleNote.swift</code> gains cases that trip each new feature.</p></div>
+    <div class="card"><h3>No telemetry, still measurable</h3><p>The 90-day plan needs numbers. They come from the learning log and the new discussion log, exported by the user. The profile A/B is a local setting, not a remote flag.</p></div>
+    <div class="card"><h3>One release per feature</h3><p>Each section below ends in a definition of done, a version bump in <code>project.yml</code> and a PRD update. Nothing waits on the next feature to ship.</p></div>
+  </div>
+</section>
+
+<section id="f1">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag now">Now</span> Feature 1 · Very high impact · 7–9 days</div>
+    <h2>Open any folder of markdown</h2>
+    <p class="lead">Klårt keeps every note as a JSON file under a UUID in Application Support and only round-trips markdown through export and import<sup><a href="#r1">1</a></sup>. The change: a second library type where the notes are the user's own <code>.md</code> files in a folder they pick, edited in place, with Klårt's metadata in a sidecar. Obsidian vaults, iA Writer libraries and git repositories become usable without migration.</p>
+
+    <h3 style="margin-top:22px">Design decisions</h3>
+    <div class="spec">
+      <div class="l">Identity</div><div>A folder note's identity is its path relative to the library root. A stable UUID is minted on first sight and kept in the sidecar, so <code>RecommendationRecord.noteID</code>, rejected fingerprints and the coming discussion threads keep working unchanged. A rename outside Klårt looks like delete plus create; the sidecar entry is reattached when a file with the same content hash reappears within the same scan, otherwise it is orphaned and pruned after 30 days.</div>
+      <div class="l">Sidecar, not front matter</div><div><code>&lt;root&gt;/.klart/meta.json</code> maps relative path to <code>{ id, rejectedFingerprints, isSensitive, rubricID, lastSeenModified, contentHash }</code>. The user's files are never rewritten with Klårt data. Front matter can be offered later as an opt-in for Obsidian users; it is not needed for v1. <code>.klart/</code> is documented as safe to git-ignore or to commit.</div>
+      <div class="l">File format</div><div>UTF-8 markdown, exactly what the editor holds. Writes go to a temporary file in the same directory followed by <code>replaceItemAt</code>, preserving the original's attributes. Line endings are preserved as read (CRLF files stay CRLF). <code>Note.title(of:)</code> falls back to the filename without extension when the file has no heading or first line.</div>
+      <div class="l">Scope of a scan</div><div>Recursive, <code>.md</code> and <code>.markdown</code> only, skipping any directory that starts with a dot (<code>.obsidian</code>, <code>.git</code>, <code>.klart</code>) and <code>node_modules</code>. Symlinks are not followed. A scan of 2,000 files should stay under one second; contents are loaded eagerly in v1 because <code>AppState.notes</code> holds full notes, and a lazy-content variant is listed as a follow-up if the cohort brings larger vaults.</div>
+      <div class="l">External edits</div><div>A <code>DispatchSource</code> on the root directory plus a rescan on <code>NSApplication.didBecomeActiveNotification</code>. For the selected note: if the file's modification date moved and the editor buffer is unchanged since load, reload silently; if both changed, keep the buffer, write nothing, and show a one-line conflict notice in the rail with "Reload from disk" and "Keep mine". Autosave never overwrites a file whose modification date is newer than the one last read.</div>
+      <div class="l">Sandbox</div><div>The existing <code>com.apple.security.files.user-selected.read-write</code> entitlement covers a folder chosen in an open panel and all its descendants<sup><a href="#r1">1</a></sup>. Persist a security-scoped bookmark (<code>URL.bookmarkData(options: .withSecurityScope)</code>) in settings and call <code>startAccessingSecurityScopedResource</code> at library open. A stale bookmark falls back to the managed library with a notice rather than an empty screen.</div>
+      <div class="l">Encryption</div><div>The vault seals the managed library only. Opening a folder while the vault is on is allowed; Settings → Security states plainly that folder libraries are plain files. App lock, auto-lock and capture exclusion still apply to the window. Sensitive marking works in folder mode through the sidecar.</div>
+      <div class="l">One library at a time</div><div>Settings gain a <code>library: LibraryLocation</code> with cases <code>managed</code> and <code>folder(bookmark: Data, displayName: String)</code>, plus a recent-folders list of five. Switching flushes the editor, tears down the store and reloads. The managed library remains the default for new installs; the welcome tour gains one screen offering "Open a folder you already write in".</div>
+    </div>
+
+    <h3 style="margin-top:22px">Changes by file</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td><code>KlartKit/Storage/NoteStoring.swift</code> (new)</td><td>Protocol with <code>loadAll</code>, <code>save</code>, <code>delete</code>, <code>setEncryptionKey</code>, <code>lock</code>, <code>supportsVault</code>, <code>displayName</code>, <code>changes: AsyncStream&lt;LibraryChange&gt;</code>. <code>NoteStore</code> conforms; its vault migration methods stay on the concrete type.</td></tr>
+        <tr><td><code>KlartKit/Storage/FolderNoteStore.swift</code> (new)</td><td>Actor: scan, sidecar load and save, atomic write, conflict detection, directory watch. Pure helpers (<code>scan(root:)</code>, <code>Sidecar.merge</code>) are static and tested without a watcher.</td></tr>
+        <tr><td><code>KlartKit/Models/Note.swift</code></td><td>Add <code>relativePath: String?</code> (nil for managed notes) and <code>rubricID: String?</code>, both lenient. Title fallback to filename.</td></tr>
+        <tr><td><code>KlartKit/Models/Settings.swift</code></td><td><code>LibraryLocation</code> enum, <code>recentFolders</code>, lenient decode.</td></tr>
+        <tr><td><code>KlartApp/AppState.swift</code></td><td><code>noteStore</code> becomes <code>any NoteStoring</code>; new <code>openFolder()</code> (NSOpenPanel, <code>canChooseDirectories</code>), <code>useManagedLibrary()</code>, <code>switchLibrary(to:)</code>, conflict state; vault operations guard on <code>supportsVault</code>.</td></tr>
+        <tr><td><code>KlartApp/KlartApp.swift</code></td><td>File ▸ Open Folder… (⌘⇧O), File ▸ Recent Folders, File ▸ Use Klårt Library.</td></tr>
+        <tr><td><code>KlartApp/Views/TeleprompterView.swift</code>, <code>SidebarView.swift</code></td><td>Library name in the panel footer; conflict notice in the rail; folder icon on rows that come from disk.</td></tr>
+        <tr><td><code>KlartApp/Views/SettingsView.swift</code></td><td>New Library pane: current library, open folder, recents, the plain-files notice.</td></tr>
+        <tr><td><code>KlartApp/Views/WelcomeView.swift</code></td><td>One added page.</td></tr>
+        <tr><td><code>docs/REQUIREMENTS.md</code></td><td>New §3.8 Libraries; §7.1 and §8 updated.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin-top:22px">Tests</h3>
+    <ul class="plain">
+      <li><code>FolderNoteStoreTests</code>: scan ignores dot directories and non-markdown; round-trip preserves bytes and CRLF; atomic write leaves siblings untouched; sidecar assigns stable ids across two scans; a renamed file with the same content hash keeps its id; an external change with a clean buffer reloads, with a dirty buffer conflicts; a stale bookmark falls back.</li>
+      <li><code>StorageAndSettingsTests</code>: <code>LibraryLocation</code> decodes from an old settings file as <code>managed</code>.</li>
+      <li><code>KlartAppTests</code>: switching libraries flushes the editor and clears the rail; vault enable is refused with a clear message while a folder library is active.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Definition of done</h3>
+    <ul class="done">
+      <li>An Obsidian vault of 1,000 notes opens, edits save in place, and Obsidian sees the change without restart.</li>
+      <li>No Klårt data is written outside <code>.klart/</code>.</li>
+      <li>Verdicts and rejections survive a library switch and an app relaunch.</li>
+      <li>A file edited in another app while open in Klårt never loses either side's text.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="f2">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag now">Now</span> Feature 2 · High impact · 4–6 days, plus 2 for macOS 27</div>
+    <h2>Apple Foundation Models provider</h2>
+    <p class="lead">Today the quick start says "install Ollama and pull llama3.2". On macOS 26 an Apple-silicon Mac with Apple Intelligence carries a free on-device model behind the Foundation Models framework, with guided generation and a 4,096-token context<sup><a href="#r3">3</a>,<a href="#r4">4</a></sup>. Klårt should read with it out of the box and treat Ollama, LM Studio and OpenRouter as upgrades.</p>
+
+    <h3 style="margin-top:22px">Design decisions</h3>
+    <div class="spec">
+      <div class="l">Compile and run guards</div><div>The deployment target stays macOS 14. The client lives in <code>#if canImport(FoundationModels)</code> and every call site checks <code>if #available(macOS 26, *)</code>. <code>SystemLanguageModel.default.availability</code> decides whether the provider is listed: unavailable reasons (device not eligible, Apple Intelligence off, model downloading) are shown verbatim in Settings and in the welcome tour<sup><a href="#r3">3</a></sup>. On macOS 14 and 15 the provider does not appear at all.</div>
+      <div class="l">A structured path beside the text path</div><div>Add <code>protocol StructuredFeedbackClient: LLMClient { func feedback(system: String, user: String, kinds: [FeedbackKind], maxItems: Int) async throws -> [FeedbackItem] }</code>. The Apple client implements it with a <code>@Generable</code> round type whose <code>type</code> is constrained to the enabled kinds and <code>severity</code> to 1...3, so the parser's salvage logic is never needed. <code>FeedbackEngine.analyze</code> prefers the structured path when the client offers it and falls back to <code>complete</code> plus <code>FeedbackParser</code> otherwise. Anchor verification and rejected-fingerprint filtering stay exactly where they are.</div>
+      <div class="l">Compact prompt profile</div><div>The current budgets (8,000 characters of section, 16,000 of document) exceed a 4,096-token window on their own. Introduce <code>PromptBudget</code> with two presets: <code>standard</code> (today's numbers) and <code>compact</code> (section 2,500 characters, document context replaced by the outline plus the first sentence of each section, capped at 800 characters, <code>maxTips</code> forced to 3, detail <code>brief</code>). <code>LLMClient</code> gains <code>var promptBudget: PromptBudget { get }</code> with a default of <code>standard</code>. A context overflow error from the framework is caught and retried once at half the section budget before surfacing.</div>
+      <div class="l">Streaming for coach actions</div><div><code>stream</code> wraps <code>session.streamResponse(to:)</code>, which yields cumulative snapshots; the client emits the delta between snapshots so the existing coach popover code is untouched.</div>
+      <div class="l">Locality</div><div><code>ProviderFactory.isLocal</code> returns true for the on-device model: sensitive notes may use it. When the macOS 27 Private Cloud Compute variant is adopted, it is a separate <code>ProviderKind.applePrivateCloud</code> that reports non-local, so sensitive notes refuse it under the existing rule<sup><a href="#r4">4</a></sup>.</div>
+      <div class="l">Default selection</div><div>On first launch, if the Apple model is available the active provider is set to <code>.apple</code>; otherwise <code>.ollama</code> as today. The welcome tour's provider page says which happened. Settings keep the full picker.</div>
+      <div class="l">Quality framing</div><div>A 3B model will miss warrants and counters a frontier model catches. The provider's Settings row carries one line: "Good for offline and quick reads; for a demanding editor, connect a larger model." The Nordbrot sample becomes the acceptance test: the on-device read must surface at least the uncited claim, the hedging and one overlap.</div>
+      <div class="l">macOS 27</div><div>When the macOS 27 SDK is in use, adopt the <code>LanguageModel</code> protocol so the Apple, Anthropic and Google packages plug into the same client, and add the Private Cloud Compute model with the standard prompt budget. Eligibility for Apple's free cloud tier is tied to the App Store Small Business Program and needs the App Store build, so a <code>KLART_DISTRIBUTION</code> compile flag distinguishes the App Store and direct builds<sup><a href="#r4">4</a></sup>. These API names come from session summaries and must be checked against the SDK headers before implementation.</div>
+    </div>
+
+    <h3 style="margin-top:22px">Changes by file</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td><code>KlartKit/LLM/AppleFoundationClient.swift</code> (new)</td><td>Guarded client; availability, <code>listModels</code> returning <code>["on-device"]</code>, <code>complete</code>, <code>stream</code>, <code>feedback</code> with the <code>@Generable</code> types.</td></tr>
+        <tr><td><code>KlartKit/LLM/LLMClient.swift</code></td><td><code>StructuredFeedbackClient</code>, <code>PromptBudget</code>, <code>promptBudget</code> default.</td></tr>
+        <tr><td><code>KlartKit/LLM/ProviderFactory.swift</code>, <code>Models/Settings.swift</code></td><td><code>ProviderKind.apple</code>: no base URL, no key, <code>usesAPIKey</code> false, <code>isLocal</code> true; availability query helper.</td></tr>
+        <tr><td><code>KlartKit/Feedback/PromptBuilder.swift</code></td><td><code>feedbackMessages</code> takes a <code>PromptBudget</code>; <code>PromptContext.outlineSummary</code> for the compact profile.</td></tr>
+        <tr><td><code>KlartKit/Feedback/FeedbackEngine.swift</code></td><td>Structured path, overflow retry.</td></tr>
+        <tr><td><code>KlartApp/AppState.swift</code>, <code>SettingsView.swift</code>, <code>WelcomeView.swift</code></td><td>First-launch default, availability row, tour copy.</td></tr>
+        <tr><td><code>.github/workflows/macos-app.yml</code></td><td>Run on a macOS 26 image so the framework compiles; keep a macOS 15 job to prove the guarded build still passes.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin-top:22px">Tests</h3>
+    <ul class="plain">
+      <li><code>PromptAndEngineTests</code>: the compact profile stays under a token estimate of 3,000 for the sample note; the outline summary lists every non-excluded heading and omits <code>[no-ai]</code> bodies; the engine uses the structured path when offered and the text path otherwise (a fake client for each).</li>
+      <li><code>AppleFoundationClientTests</code> (macOS 26 only, skipped elsewhere with <code>XCTSkip</code>): availability maps to a user-readable reason; a generated round maps to <code>FeedbackItem</code> with kinds inside the enabled set.</li>
+      <li>Manual acceptance on device: the Nordbrot sample read, offline, with the network disabled.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Definition of done</h3>
+    <ul class="done">
+      <li>A fresh install on an eligible Mac reads the sample note without any setup screen.</li>
+      <li>The same binary launches and runs on macOS 14 with the provider absent.</li>
+      <li>Sensitive notes read with the on-device model; the request-time rule still refuses OpenRouter.</li>
+      <li>CI is green on both runner images.</li>
+    </ul>
+  </div>
+</section>
+<section id="f3">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag now">Now</span> Feature 3 · Very high impact · 11–14 days</div>
+    <h2>Discuss, and the writer profile</h2>
+    <p class="lead">PRD §3.6 already specifies the interaction and the storage<sup><a href="#r1">1</a></sup>. This section turns it into a build order, fills in the pieces the PRD leaves open (how preferences are captured deterministically, how the profile enters the prompt, how the A/B test works), and splits the work so a usable Discuss ships before the profile.</p>
+
+    <h3 style="margin-top:22px">3a · Thread model and storage (2 days)</h3>
+    <div class="spec">
+      <div class="l">Model</div><div><code>DiscussionThread { id: UUID, noteID: UUID?, fingerprint: String, kind: FeedbackKind, sectionTitle: String?, turns: [Turn], outcome: DiscussionOutcome, createdAt, updatedAt, fromSensitiveNote: Bool }</code> with <code>Turn { role: .writer | .editor, text: String, at: Date, rememberAsPreference: Bool }</code> and <code>DiscussionOutcome { open, withdrawn, stands, abandoned }</code>. For a sensitive note the turns are stored with empty text and only the signal survives, matching the learning log's two tiers.</div>
+      <div class="l">Store</div><div><code>DiscussionLog</code> actor, one sealed file <code>discussions.json</code> beside <code>recommendations.json</code>, AAD <code>klart.discussions</code>, the same key lifecycle. <code>AppState</code> vault methods call it alongside the recommendation log. Threads are keyed by note id plus fingerprint so re-opening Discuss on the same note resumes the thread.</div>
+      <div class="l">Log linkage</div><div><code>RecommendationRecord</code> gains <code>reason: String?</code> (values <code>argued</code>, <code>conceded</code>) and <code>threadID: UUID?</code>, both lenient. Export schema becomes <code>klart.recommendations.v3</code>; the v2 reader still loads.</div>
+    </div>
+
+    <h3 style="margin-top:22px">3b · Prompting and parsing (2 days)</h3>
+    <div class="spec">
+      <div class="l">Template</div><div><code>PromptBuilder.defaultDiscussionTemplate</code>: the editor defends the note against the section, concedes when the writer is right and says so plainly, never drafts, and ends every turn with exactly one marker, <code>[withdrawn]</code> when the note was wrong, <code>[stands]</code> when it holds, or nothing while the point is still open. Tokens: <code>{{DISCUSSION}}</code> (the instruction), <code>{{STYLE}}</code>, <code>{{WRITER_PROFILE}}</code>. Stored override in <code>AppSettings.discussionSystemPrompt</code>, editable in Settings → Editor with the same legend and missing-token warning.</div>
+      <div class="l">Messages</div><div><code>discussionMessages(context:item:thread:style:template:)</code> sends the system prompt, the anchored section in full, the note (kind, anchor, text, why), and the thread so far as alternating user and assistant messages. Budget: the section clipped to <code>sectionBudget</code>, the thread to its last twelve turns.</div>
+      <div class="l">Parsing</div><div><code>DiscussionReply.parse(_:) -> (text: String, verdict: DiscussionOutcome?)</code> strips a trailing marker case-insensitively and tolerates it inside a code span or on its own line. A reply with two markers counts as none.</div>
+    </div>
+
+    <h3 style="margin-top:22px">3c · The card that argues (4 days)</h3>
+    <div class="spec">
+      <div class="l">Teleprompter</div><div>Third quiet action on every card, <b>Discuss</b>, beside Respond. The card expands in place into a thread: note at the top, the writer's turns right-aligned in secondary ink, the editor's turns streaming into the card under the reading pulse, a reply field at the foot (⌘↩ sends, Esc folds). While a thread is open the rail widens to <code>railMaxWidth</code> and the layout pass in <code>EditorBridge</code> treats the open card's measured height as its anchor extent so cards below step down rather than overlap. Folded, the card carries a count, <code>3 ↩</code>.</div>
+      <div class="l">Classic</div><div>The same thread as a sheet from the popover row, reusing the thread view.</div>
+      <div class="l">Outcomes</div><div><code>[withdrawn]</code> records <code>rejected</code> with reason <code>argued</code>, adds the fingerprint to the note's rejected list, and fades the card as a rejection does today. <code>[stands]</code> records <code>confirmed</code> with reason <code>conceded</code> only if the writer then presses Respond or Confirm; otherwise the thread stays <code>open</code> and is marked <code>abandoned</code> when the note is replaced by a later read, which logs <code>dismissed</code> as now.</div>
+      <div class="l">Respond from a thread</div><div><code>NoteEditing.respond(to:conclusion:in:cursorUTF16:)</code> quotes the editor's last turn instead of the original observation. The block keeps the kind and anchor so the writer sees which note it came from.</div>
+      <div class="l">State</div><div><code>AppState</code>: <code>openThread: DiscussionThread?</code>, <code>discussionTask</code>, <code>sendTurn(_:for:)</code>, <code>foldThread()</code>. A keystroke in the editor does not cancel a running discussion turn; a new read of the same section does.</div>
+    </div>
+
+    <h3 style="margin-top:22px">3d · Writer profile (3 days)</h3>
+    <div class="spec">
+      <div class="l">Derivation</div><div><code>WriterProfile.derive(records:threads:now:) -> WriterProfile</code> is pure, deterministic and model-free. It computes acceptance per kind (responded plus confirmed over all judged, kinds with fewer than five verdicts omitted), the writer's standing preferences, and the three most recent conceded points as kind, section title and date. <code>render()</code> produces at most 600 characters in a fixed order so the same inputs always give the same prompt bytes and the prompt hash stays stable between verdicts.</div>
+      <div class="l">Preferences without NLP</div><div>The PRD's "stated standing preferences" are captured explicitly: a writer turn has a small "remember this" toggle. Only toggled turns enter the profile, verbatim, capped at five and at 120 characters each, newest first. Nothing is inferred from free text, so the profile never surprises the writer with a preference they did not set.</div>
+      <div class="l">Prompt entry</div><div>The default feedback template gains, after the rules, the block: <code>What you know about this writer (may be empty):\n{{WRITER_PROFILE}}</code>. The token is optional; a custom template without it simply gets no profile. Rendering it changes <code>systemPromptHash</code> for every user of the default, which is what the hash is for; the log shows the version boundary.</div>
+      <div class="l">Storage and control</div><div><code>profile.json</code>, sealed under the vault with AAD <code>klart.profile</code>, regenerated after every verdict and thread outcome. Settings → Editor: view the rendered profile, export it, clear it, and a toggle <code>useWriterProfile</code> (default on).</div>
+      <div class="l">Recall in notes</div><div>The template asks the editor, when a profile point matches the current note, to name it in <code>why</code> ("you conceded this in Pricing on 12 Aug"). This costs no new fields.</div>
+    </div>
+
+    <h3 style="margin-top:22px">3e · Measurement for the cohort (1 day)</h3>
+    <div class="spec">
+      <div class="l">A/B</div><div>The cohort is split by hand: half are asked to leave <code>useWriterProfile</code> off for weeks 7 to 10. Each exported log carries the setting's value at verdict time (new signal-tier field <code>profileUsed: Bool</code>), so acceptance rates can be compared per arm without any server.</div>
+      <div class="l">Progress view (optional, 1 day)</div><div>The same derivation renders a Settings → Editor panel: acceptance per kind over the last 30 and 90 days, threads opened, points conceded. It is the visible form of the coaching claim and costs almost nothing once <code>WriterProfile.derive</code> exists.</div>
+    </div>
+
+    <h3 style="margin-top:22px">Tests</h3>
+    <ul class="plain">
+      <li><code>DiscussionLogTests</code>: append, resume by note and fingerprint, vault enable, disable and rotate, sensitive stripping.</li>
+      <li><code>DiscussionReplyTests</code>: markers at end, on their own line, in a code span, doubled, absent.</li>
+      <li><code>WriterProfileTests</code>: determinism, the 600-character cap, the five-verdict threshold, ordering of conceded points, preference cap and truncation, empty inputs render an empty string.</li>
+      <li><code>PromptAndEngineTests</code>: the discussion messages carry the thread in order and clip it; the feedback prompt with an empty profile equals today's prompt byte for byte except the new block.</li>
+      <li><code>KlartAppTests</code>: an open thread widens the rail and steps the cards below it; Esc folds and restores; a read of another section does not cancel a running turn.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Definition of done</h3>
+    <ul class="done">
+      <li>A writer can argue a note to a withdrawal and see it recorded as rejected with reason argued.</li>
+      <li>After twenty verdicts the profile appears in the prompt and Settings shows the same text.</li>
+      <li>Turning the profile off restores the exact previous prompt.</li>
+      <li>Threads and profile are sealed, rotated and cleared with the rest of the library.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="f4">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag now">Now</span> Feature 4 · High impact · 5–7 days</div>
+    <h2>Whole-document read</h2>
+    <p class="lead">Every read today is about one finished section against the document. The failures partners and supervisors care about most are document-level: an opening that does not state the answer, an order that is bottom-up, a section that does not earn its place, a conclusion that promises more than the body delivered. This adds a second read mode with its own trigger, prompt, skeleton and card treatment.</p>
+
+    <h3 style="margin-top:22px">Design decisions</h3>
+    <div class="spec">
+      <div class="l">Trigger</div><div>On demand only in v1: Editor ▸ Read the Whole Document (⌘⇧R), the typed command <code>//document</code>, and a "Read everything" action in the rail's empty card once at least three sections have been read. An automatic trigger (all sections read and five minutes idle) is a setting, off by default, added after the cohort says whether it wants it.</div>
+      <div class="l">What the model sees</div><div><code>PromptContext.skeleton(text:budget:)</code> builds, in order: the H1, the outline with levels, the opening section in full, and for every other non-excluded section its first and last paragraph, clipped so the whole fits the client's <code>PromptBudget.documentBudget</code>. Clients with the standard budget get the full redacted document when it fits and the skeleton when it does not. The compact budget always gets the skeleton.</div>
+      <div class="l">Template</div><div><code>PromptBuilder.defaultDocumentTemplate</code>: the same voice, the same JSON shape, but every item names the section it is about in a required <code>section</code> field, which must be a heading from the outline; items about the document as a whole use the H1. Rules: does the opening state the conclusion the body supports; is each top-level section a reason for it; which section does not bear on the claim; does the close deliver what the opening promised; do the top-level sections overlap or leave a gap. A <code>{{DOCUMENT_RUBRIC}}</code> token, empty by default, is where rubric packs (feature 5) insert genre rules. Override stored in <code>AppSettings.documentSystemPrompt</code>.</div>
+      <div class="l">Scope on items</div><div><code>FeedbackItem</code> gains <code>scope: FeedbackScope</code> with cases <code>section</code> and <code>document</code>, lenient default <code>section</code>. The fingerprint includes the scope so a document note and a section note on the same words are different identities. The engine verifies the named section against the outline (case and whitespace folded); a miss falls back to the H1 rather than dropping the note, because a document-level observation without a section is still useful.</div>
+      <div class="l">Replacement rule</div><div><code>replaceNotes(for:with:)</code> is extended: a document read replaces only document-scope notes; a section read replaces only section-scope notes for that section. Verdict carry-over by fingerprint is unchanged.</div>
+      <div class="l">Rail treatment</div><div>Document notes render as a group pinned under the title band, above the first section's cards, with a small <code>¶</code> beside the kind glyph. In the classic layout they lead the list under a "Whole document" header. Respond on a document note inserts the block at the end of the named section, or directly under the H1 for H1-scoped notes.</div>
+      <div class="l">Offline checks</div><div>Three new document-scope rules in <code>LocalChecks</code>, run on every document read and, cheaply, on every section read so they appear before any model: <code>heading-depth-jump</code> (H1 to H3 with no H2, kind <code>structure</code>), <code>no-conclusion</code> (no heading matching a small per-language list such as conclusion, recommendation, summary, so what, Fazit, Empfehlung, conclusión, in a document with three or more sections, kind <code>gap</code>), and <code>question-title-unanswered</code> (an H1 ending in a question mark with no section whose first paragraph contains a claim word from the language list, kind <code>warrant</code>). Each is one function with a table-driven test.</div>
+      <div class="l">Cost control</div><div>A document read is the most expensive call the app makes. It is never automatic in v1, it is skipped when the document is under three sections, and it reuses the last skeleton when the text has not changed since the previous document read.</div>
+    </div>
+
+    <h3 style="margin-top:22px">Changes by file</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td><code>KlartKit/Models/Feedback.swift</code></td><td><code>FeedbackScope</code>, lenient <code>scope</code>, fingerprint update, <code>withScope</code>.</td></tr>
+        <tr><td><code>KlartKit/Feedback/PromptBuilder.swift</code></td><td><code>skeleton</code>, <code>defaultDocumentTemplate</code>, <code>documentMessages</code>, <code>documentPlaceholders</code>.</td></tr>
+        <tr><td><code>KlartKit/Feedback/FeedbackEngine.swift</code></td><td><code>analyzeDocument(text:settings:rejected:local:client:)</code> with section-name verification.</td></tr>
+        <tr><td><code>KlartKit/Feedback/LocalChecks.swift</code></td><td>Three document rules, language tables for EN, DE, ES.</td></tr>
+        <tr><td><code>KlartApp/AppState.swift</code></td><td><code>readWholeDocument()</code>, scope-aware replacement, respond placement.</td></tr>
+        <tr><td><code>KlartApp/Views/TeleprompterView.swift</code>, <code>FeedbackPanelView.swift</code>, <code>EditorView.swift</code></td><td>Pinned document group, ¶ mark, <code>//document</code> command, menu item.</td></tr>
+        <tr><td><code>KlartKit/Models/SampleNote.swift</code></td><td>The Nordbrot note gains a bottom-up order and an opening that names the topic but not the decision, so the document read has something to find.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin-top:22px">Tests</h3>
+    <ul class="plain">
+      <li><code>PromptAndEngineTests</code>: the skeleton keeps every heading, the full opening, the first and last paragraph of each section, omits <code>[no-ai]</code> bodies and never exceeds the budget; a document note naming a heading with different case anchors to it; an unknown heading anchors to the H1.</li>
+      <li><code>LocalChecksTests</code>: the three rules across the three sample languages, including the negative cases.</li>
+      <li><code>FeedbackVerdictTests</code>: a section read leaves document notes in place and a document read leaves section notes in place; verdicts survive both.</li>
+      <li><code>RailOverflowTests</code>: the pinned group never overlaps the first section's cards.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Definition of done</h3>
+    <ul class="done">
+      <li>On the sample note the document read flags the topic-not-answer opening and the bottom-up order.</li>
+      <li>Document notes and section notes coexist in the rail with distinct marks and independent replacement.</li>
+      <li>The compact profile completes a document read of a 3,000-word note on the Apple provider without a context error.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="f5">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag">Next</span> Feature 5 · High impact · 6–8 days</div>
+    <h2>Rubric packs</h2>
+    <p class="lead">The nine lenses are one rubric, the general one. A consulting memo, a thesis chapter, a grant proposal and a product requirements document each fail a demanding reader in their own ways. A rubric pack is a file that retunes the lenses, adds section and document rules and offline checks, and can be shared. Custom lenses with their own glyphs are deliberately out of v1: the monochrome glyph system and <code>FeedbackKind</code> stay closed.</p>
+
+    <h3 style="margin-top:22px">Format</h3>
+<pre><code>{
+  "schema": "klart.rubric.v1",
+  "id": "consulting-memo",
+  "name": "Consulting memo",
+  "description": "SCQA opening, answer first, MECE reasons, every number sourced.",
+  "languages": ["en", "de"],
+  "lenses": {
+    "gap":      { "enabled": true,  "instruction": "A consideration a partner would raise that the memo does not address." },
+    "evidence": { "enabled": true,  "instruction": "A number or fact with no source, or a source that does not say this." },
+    "warrant":  { "enabled": true },
+    "clarity":  { "enabled": false }
+  },
+  "sectionRules": [
+    "The first sentence of a section is its conclusion; flag a section that opens with background.",
+    "Any recommendation without a named owner, cost or date is incomplete."
+  ],
+  "documentRules": [
+    "The opening must state the situation, the complication, and the answer within the first 120 words.",
+    "Every top-level section must be a reason for the answer, not a chapter of background."
+  ],
+  "localChecks": {
+    "hedgeWords": ["might", "could", "perhaps", "möglicherweise"],
+    "requiredSections": ["Recommendation", "Empfehlung"],
+    "maxSectionWords": 400
+  },
+  "defaults": { "tone": "direct", "detail": "standard", "maxTips": 3 },
+  "managedBy": null
+}</code></pre>
+
+    <h3 style="margin-top:22px">Design decisions</h3>
+    <div class="spec">
+      <div class="l">Where rubrics live</div><div>Built-in packs are resources in <code>KlartKit</code>: general (today's behaviour, byte-identical prompt), consulting memo, thesis chapter, grant proposal, product requirements or RFC, policy brief. User packs live in <code>Application Support/Klart/Rubrics/</code>. In a folder library, <code>.klart/rubrics/</code> is read as well, so a team can commit a rubric to its repository and everyone who opens the folder sees it. Precedence on id collision: library folder, then user folder, then built-in.</div>
+      <div class="l">Selection</div><div><code>AppSettings.defaultRubricID</code> (default <code>general</code>) and <code>Note.rubricID</code> per note, stored in the note JSON or the sidecar. The Teleprompter shows the rubric name in secondary ink beside the pinned title; clicking opens a small picker. The classic toolbar gets the same picker.</div>
+      <div class="l">Prompt integration</div><div><code>PromptBuilder.feedbackMessages</code> and <code>documentMessages</code> take a <code>Rubric</code>. Lens instructions from the rubric replace <code>FeedbackKind.instruction</code> for enabled kinds; <code>sectionRules</code> join the rules list before <code>{{STYLE}}</code>; <code>documentRules</code> fill <code>{{DOCUMENT_RUBRIC}}</code>. A user-edited template keeps working because the rubric content enters through the existing tokens plus one new optional <code>{{RUBRIC_RULES}}</code>. The rubric id and a hash of its content join the signal tier of the learning log so acceptance rates can be read per rubric.</div>
+      <div class="l">Offline checks</div><div><code>LocalChecks.run</code> takes a <code>RubricChecks</code> value: the hedge-word list replaces the built-in one when present, <code>requiredSections</code> produces a <code>missing-section</code> gap note at document scope, <code>maxSectionWords</code> produces a <code>long-section</code> structure note. Rule names stay learnable in the card.</div>
+      <div class="l">Import and export</div><div>File ▸ Import Rubric… copies a validated file into the user folder; a malformed file reports the first schema error and is not copied. Export writes the active rubric, including a built-in one, so a user can start from it. Rubrics never contain endpoints, keys or model names (see feature 6); the validator rejects unknown top-level keys.</div>
+      <div class="l">Validation</div><div><code>Rubric.validate</code> checks the schema string, that every lens key is a known kind, that instructions are under 300 characters, that rules number at most ten each, and that the file is under 32 KB. Errors are user-readable and tested.</div>
+    </div>
+
+    <h3 style="margin-top:22px">Changes by file</h3>
+    <div class="tablewrap"><table>
+      <thead><tr><th>File</th><th>Change</th></tr></thead>
+      <tbody>
+        <tr><td><code>KlartKit/Models/Rubric.swift</code> (new)</td><td><code>Rubric</code>, <code>LensConfig</code>, <code>RubricChecks</code>, validation, the built-in six as Swift constants (no bundle resources needed, which keeps <code>swift run</code> simple).</td></tr>
+        <tr><td><code>KlartKit/Storage/RubricStore.swift</code> (new)</td><td>Load from the three locations with precedence; import and export helpers; folder-library hook.</td></tr>
+        <tr><td><code>KlartKit/Feedback/PromptBuilder.swift</code>, <code>LocalChecks.swift</code>, <code>FeedbackEngine.swift</code></td><td>Rubric parameters threaded through; <code>{{RUBRIC_RULES}}</code> and <code>{{DOCUMENT_RUBRIC}}</code> placeholders.</td></tr>
+        <tr><td><code>KlartKit/Models/Note.swift</code>, <code>Settings.swift</code>, <code>RecommendationRecord.swift</code></td><td><code>rubricID</code>, <code>defaultRubricID</code>, <code>rubricID</code> and <code>rubricHash</code> in the signal tier.</td></tr>
+        <tr><td><code>KlartApp/...</code></td><td>Picker beside the title, Settings → Rubrics pane, File menu items.</td></tr>
+        <tr><td><code>docs/rubrics/</code> (new)</td><td>The six built-ins exported as JSON with a README, so the format is public and citable.</td></tr>
+      </tbody>
+    </table></div>
+
+    <h3 style="margin-top:22px">Tests</h3>
+    <ul class="plain">
+      <li><code>RubricTests</code>: the general rubric renders today's prompt byte for byte; each built-in validates; each validation error fires on a crafted file; precedence across the three locations.</li>
+      <li><code>LocalChecksTests</code>: hedge-word override, required section present and missing, section length.</li>
+      <li><code>RecommendationLogTests</code>: v3 records carry the rubric id; v2 records still load.</li>
+    </ul>
+
+    <h3 style="margin-top:22px">Definition of done</h3>
+    <ul class="done">
+      <li>Switching a note from general to consulting memo changes the next read's notes and the rail shows the rubric name.</li>
+      <li>A rubric committed to a vault's <code>.klart/rubrics/</code> appears for a second machine that opens the folder.</li>
+      <li>A rubric with an <code>endpoint</code> key is rejected with a clear message.</li>
+    </ul>
+  </div>
+</section>
+
+<section id="f6">
+  <div class="glass feature">
+    <div class="eyebrow"><span class="tag">Later</span> Feature 6 · High impact for B2B · constraints only</div>
+    <h2>Team rubrics and supervisor mode: what to protect now</h2>
+    <p class="lead">Not built in this plan. Alternative 2 in the market analysis (a review desk for advisory firms) depends on it, and four small constraints keep the path open at no cost<sup><a href="#r2">2</a></sup>.</p>
+    <div class="grid2">
+      <div class="card"><h3>Rubrics carry no configuration of where text goes</h3><p>No endpoint, key, model or provider fields, ever. A rubric is a set of standards, not a route. Anything that decides where notes are sent lives in settings, and for managed fleets in managed preferences under the bundle id, which the app reads before its own settings file.</p></div>
+      <div class="card"><h3>A managed rubric is read-only</h3><p>The <code>managedBy</code> field, when set, marks a rubric the app will not let the user edit in place; they can duplicate it. This is enough for a firm to publish standards through a shared folder.</p></div>
+      <div class="card"><h3>The profile exports without content</h3><p>The writer profile and the progress view derive from the signal tier alone when content logging is off. A supervisor report is therefore a content-free export the writer chooses to share, never something the app sends.</p></div>
+      <div class="card"><h3>Verdicts are attributable to rubric and prompt</h3><p>With rubric id and hash in the log (feature 5), a firm can compare acceptance across its own rubric versions. This is the data a quality lead would buy, and it is already being collected locally.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="cross">
+  <div class="head">
+    <div class="eyebrow">Cross-cutting work</div>
+    <h2>Schema, security, tests and documentation touched by every feature</h2>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Area</th><th>Work</th><th class="num">Days</th></tr></thead>
+    <tbody>
+      <tr><td>Settings schema</td><td><code>library</code>, <code>recentFolders</code>, <code>useWriterProfile</code>, <code>discussionSystemPrompt</code>, <code>documentSystemPrompt</code>, <code>defaultRubricID</code>, <code>autoDocumentRead</code>; all lenient; <code>StorageAndSettingsTests</code> round-trip an old file</td><td class="num">1</td></tr>
+      <tr><td>Learning log v3</td><td><code>reason</code>, <code>threadID</code>, <code>profileUsed</code>, <code>scope</code>, <code>rubricID</code>, <code>rubricHash</code> in the signal tier; export schema bump; v2 still loads</td><td class="num">1</td></tr>
+      <tr><td>Vault lifecycle</td><td>Two new sealed files wired into enable, disable, unlock, rotate; <code>VaultLifecycleTests</code> extended to assert all four files change state together</td><td class="num">1</td></tr>
+      <tr><td>Prompt editor</td><td>Settings → Editor grows from two templates to four (feedback, coach, discussion, document) with one shared editor view and legend</td><td class="num">1</td></tr>
+      <tr><td>CI</td><td>macOS 26 runner for the Apple provider; macOS 15 job kept for the guarded build; <code>swift test</code> on both</td><td class="num">0.5</td></tr>
+      <tr><td>Sample note</td><td>Cases for the document read and for one rubric, in all three languages under <code>docs/samples/</code></td><td class="num">1</td></tr>
+      <tr><td>Documentation</td><td>PRD §3.6 (Discuss) rewritten as shipped, new §3.8 Libraries, §3.9 Document read, §3.10 Rubrics; README and KlartMac README quick start updated to "no setup on macOS 26"</td><td class="num">1.5</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<section id="schedule">
+  <div class="head">
+    <div class="eyebrow">Schedule</div>
+    <h2>Ten working weeks for one engineer, aligned with the 90-day validation</h2>
+    <p class="muted">Dependencies are few and deliberate. Features 1 and 2 are independent and could run in parallel with a second engineer, bringing the cohort start forward by a week.</p>
+  </div>
+  <figure>
+    <div class="t">Dependency graph</div>
+    <pre class="mermaid">
+flowchart LR
+  F1[1 · Folder library]
+  F2[2 · Apple provider]
+  F3a[3a–c · Discuss]
+  F3d[3d–e · Writer profile]
+  F4[4 · Document read]
+  F5[5 · Rubric packs]
+  F6[6 · Team rubrics]
+  C[Cohort starts]
+  AB[Profile A/B]
+  F1 --> C
+  F2 --> C
+  F3a --> F3d
+  F3d --> AB
+  F2 -. compact budget .-> F4
+  F4 -. DOCUMENT_RUBRIC token .-> F5
+  F1 -. .klart/rubrics .-> F5
+  F5 --> F6
+  F3d -. content-free export .-> F6
+    </pre>
+    <figcaption>Solid arrows are hard dependencies. Dotted arrows are design hooks: the earlier feature leaves a seam the later one fills.</figcaption>
+  </figure>
+  <div class="card" style="margin-top:16px">
+    <div class="week"><div class="w">Weeks 1–2</div><div>Feature 1, folder library. Ship as 2.1.0. Landing page and pre-order go live in parallel (market analysis §7).</div><div class="m">7–9 days</div></div>
+    <div class="week"><div class="w">Week 3</div><div>Feature 2, Apple provider on macOS 26. Ship as 2.2.0. Cohort of 50 starts on this build.</div><div class="m">4–6 days</div></div>
+    <div class="week"><div class="w">Weeks 4–5</div><div>Feature 3a to 3c, Discuss. Ship as 2.3.0 to the cohort.</div><div class="m">8 days</div></div>
+    <div class="week"><div class="w">Week 6</div><div>Feature 3d and 3e, writer profile, progress view, A/B flag. Ship as 2.4.0; the A/B runs weeks 7 to 10.</div><div class="m">4–5 days</div></div>
+    <div class="week"><div class="w">Weeks 7–8</div><div>Feature 4, whole-document read. Ship as 2.5.0.</div><div class="m">5–7 days</div></div>
+    <div class="week"><div class="w">Weeks 9–10</div><div>Feature 5, rubric packs with the six built-ins; publish the format under <code>docs/rubrics/</code>. Ship as 2.6.0.</div><div class="m">6–8 days</div></div>
+    <div class="week"><div class="w">Weeks 11–13</div><div>Buffer: cohort findings, the macOS 27 provider work if the SDK is stable, price test, path decision against the kill criteria.</div><div class="m">buffer</div></div>
+  </div>
+</section>
+
+<section id="risks">
+  <div class="head">
+    <div class="eyebrow">Risks</div>
+    <h2>What could push the schedule, and the mitigation built into the plan</h2>
+  </div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Risk</th><th>Likelihood</th><th>Mitigation</th></tr></thead>
+    <tbody>
+      <tr><td>Folder watching and conflict handling take longer than the store itself</td><td><span class="chip warn">▲ medium</span></td><td>v1 rescans on activation and after saves; the directory watcher is the last task in the feature and can slip to 2.1.1 without blocking the cohort</td></tr>
+      <tr><td>The on-device model produces notes too weak to be worth showing</td><td><span class="chip warn">▲ medium</span></td><td>The compact profile leans on the offline checks; the sample-note acceptance test gates the release; the provider is framed as the starter and the tour points to Ollama for a demanding read</td></tr>
+      <tr><td>Foundation Models API names differ from the WWDC session summaries used here</td><td><span class="chip warn">▲ medium</span></td><td>The plan names the protocol boundary (<code>StructuredFeedbackClient</code>, <code>PromptBudget</code>) rather than Apple's types; one day is reserved for reading the SDK headers before coding</td></tr>
+      <tr><td>The rail layout for an expanded thread card fights the existing collision pass</td><td><span class="chip warn">▲ medium</span></td><td>Reuse the measured-frame reporting the overflow tests already rely on; treat the open card as a taller anchor rather than a new layout mode</td></tr>
+      <tr><td>The document read costs too much on paid cloud models</td><td><span class="chip good">✓ low</span></td><td>On demand only, skeleton by default when over budget, skipped under three sections, skeleton cached while text is unchanged</td></tr>
+      <tr><td>Rubric files become a vector for prompt injection or exfiltration</td><td><span class="chip crit">✕ real</span></td><td>No endpoint or key fields, strict schema with unknown keys rejected, instruction length caps, size cap; rubric content enters only through named tokens so it cannot rewrite the JSON contract</td></tr>
+      <tr><td>Changing the default template invalidates comparisons in the learning log</td><td><span class="chip good">✓ low</span></td><td>That is what <code>systemPromptHash</code> records; the progress view groups by prompt version</td></tr>
+    </tbody>
+  </table></div>
+</section>
+
+<hr class="sep">
+<section id="refs" class="sources">
+  <div class="head"><div class="eyebrow">References</div><h2 style="font-size:22px">Sources</h2></div>
+  <ol>
+    <li id="r1">Klårt repository, commit 16058d9: <code>docs/REQUIREMENTS.md</code> v2.0.0 (§3.2 feedback engine, §3.6 item dialogue, §4 providers, §7 data models, §8 vault); <code>KlartMac/Sources/KlartKit/Storage/NoteStore.swift</code>, <code>RecommendationLog.swift</code>; <code>LLM/LLMClient.swift</code>, <code>ProviderFactory.swift</code>; <code>Feedback/PromptBuilder.swift</code>, <code>FeedbackEngine.swift</code>; <code>Models/Settings.swift</code>, <code>Note.swift</code>, <code>RecommendationRecord.swift</code>; <code>KlartApp/AppState.swift</code>; <code>Scripts/Klart.entitlements</code>; <code>.github/workflows/macos-app.yml</code></li>
+    <li id="r2">Klårt Market Scoping, 14 September 2026, §6 Features worth considering, §7 90-day validation plan, §8 alternative 2: <code>docs/MARKET_ANALYSIS.html</code></li>
+    <li id="r3">Apple, Foundation Models framework (WWDC25): on-device model, availability API, guided generation, 4,096-token context: apple.com/newsroom/2025/09/apples-foundation-models-framework-unlocks-new-intelligent-app-experiences/; machinelearning.apple.com/research/apple-foundation-models-2025-updates</li>
+    <li id="r4">Apple, WWDC 2026 sessions 241 and 319 and the macOS 27 developer guide: LanguageModel protocol, Private Cloud Compute developer model (32K context) and its Small Business Program eligibility: developer.apple.com/videos/play/wwdc2026/241/; developer.apple.com/videos/play/wwdc2026/319/; developer.apple.com/wwdc26/guides/macos/. API names to be verified against the SDK before implementation.</li>
+  </ol>
+</section>
+
+</div>
