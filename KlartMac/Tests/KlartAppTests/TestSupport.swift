@@ -293,7 +293,26 @@ final class EditorFixture {
             scrollView frame \(r(scrollView.frame)) contentInsets top=\(scrollView.contentInsets.top) bottom=\(scrollView.contentInsets.bottom)
             clip bounds \(r(clip.bounds)) frame \(r(clip.frame))
             textView frame \(r(textView.frame)) inset=\(textView.textContainerInset)
-            reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion) os=\(ProcessInfo.processInfo.operatingSystemVersionString)
+            clip flipped=\(clip.isFlipped) documentView===textView \(clip.documentView === textView) subviews=\(clip.subviews.map { String(describing: type(of: $0)) })
+            textView superview=\(textView.superview.map { String(describing: type(of: $0)) } ?? "nil") hidden=\(textView.isHidden) hiddenOrHasHiddenAncestor=\(textView.isHiddenOrHasHiddenAncestor) visibleRect \(r(textView.visibleRect)) clip documentVisibleRect \(r(clip.documentVisibleRect))
+            """
+    }
+
+    /// Follows one point down the hit-test chain and reports each hop.
+    func hitChain(_ point: NSPoint) -> String {
+        guard let root = window.contentView else { return "no root" }
+        let clip = scrollView.contentView
+        let inHost = host.convert(point, from: root)
+        let inScroll = scrollView.convert(point, from: root)
+        let inClip = clip.convert(point, from: root)
+        let inText = textView.convert(point, from: root)
+        return """
+            root.hitTest → \(root.hitTest(point).map { String(describing: type(of: $0)) } ?? "nil")
+            host \(inHost) → \(host.hitTest(host.convert(point, from: root)).map { String(describing: type(of: $0)) } ?? "nil") (in bounds: \(host.bounds.contains(inHost)))
+            scroll \(inScroll) → \(scrollView.hitTest(scrollView.superview!.convert(point, from: root)).map { String(describing: type(of: $0)) } ?? "nil") (in bounds: \(scrollView.bounds.contains(inScroll)))
+            clip \(inClip) → \(clip.hitTest(clip.superview!.convert(point, from: root)).map { String(describing: type(of: $0)) } ?? "nil") (in bounds: \(clip.bounds.contains(inClip)))
+            text \(inText) → \(textView.hitTest(textView.superview!.convert(point, from: root)).map { String(describing: type(of: $0)) } ?? "nil") (in bounds: \(textView.bounds.contains(inText)), in frame: \(textView.frame.contains(clip.convert(point, from: root))))
             """
     }
     var scrollOffset: CGFloat { scrollView.contentView.bounds.origin.y }

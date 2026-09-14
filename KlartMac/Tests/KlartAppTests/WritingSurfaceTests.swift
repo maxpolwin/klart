@@ -79,7 +79,7 @@ final class WritingSurfaceTests: XCTestCase {
                 hit === editor.textView,
                 "a click at \(point) does not reach the editor — it reached "
                     + "\(hit.map { String(describing: type(of: $0)) } ?? "nothing")\n"
-                    + editor.geometryReport()
+                    + editor.geometryReport() + "\n" + editor.hitChain(point)
             )
         }
     }
