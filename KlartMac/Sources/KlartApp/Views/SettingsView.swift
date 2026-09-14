@@ -30,7 +30,7 @@ private struct InterfaceSettingsView: View {
                 Text(
                     "One centered, monochrome column and nothing else on screen. "
                     + "Your notes wait behind the left edge; the editor's suggestions "
-                    + "appear in the right margin when you summon them (⌘E or type /editor) "
+                    + "appear in the right margin when you summon them (⌘E or type //show) "
                     + "and fade away again while you keep writing. "
                     + "Turn off for the classic sidebar layout."
                 )
@@ -221,21 +221,28 @@ private struct CoachingSettingsView: View {
 
     var body: some View {
         Form {
-            Section("Live feedback") {
-                Toggle("Analyze automatically while I write", isOn: $state.settings.autoFeedback)
-                LabeledContent("Wait after typing") {
+            Section {
+                Toggle("Read a section when I finish it", isOn: $state.settings.autoFeedback)
+                LabeledContent("…or after a pause of") {
                     HStack {
-                        Slider(value: $state.settings.debounceSeconds, in: 1...10, step: 0.5)
-                        Text(String(format: "%.1fs", state.settings.debounceSeconds))
+                        Slider(value: $state.settings.debounceSeconds, in: 5...120, step: 5)
+                        Text(String(format: "%.0fs", state.settings.debounceSeconds))
                             .monospacedDigit()
                             .frame(width: 38)
                     }
                 }
+                .disabled(!state.settings.autoFeedback)
                 Stepper(
-                    "Tips per round: \(state.settings.tipStyle.maxTips)",
+                    "Notes per read: \(state.settings.tipStyle.maxTips)",
                     value: $state.settings.tipStyle.maxTips,
                     in: 1...6
                 )
+            } header: {
+                Text("When the editor reads")
+            } footer: {
+                Text("A section counts as finished when you move on from it — to another section, or by opening a new heading beneath it — or when you stop for the pause above. ⌘R or typing //editor reads the section under the cursor at once. The offline checks (uncited claims, hedging, undefined terms, thin sections, overlapping headings) run on every read, with or without a model.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Feedback types") {
@@ -362,12 +369,15 @@ private struct CoachingSettingsView: View {
 
     private func description(for kind: FeedbackKind) -> String {
         switch kind {
-        case .gap: return "Missing perspectives or considerations"
+        case .gap: return "What the argument needs and doesn't have"
         case .mece: return "Overlapping or incomplete categories"
-        case .source: return "Literature and data worth consulting"
-        case .structure: return "Clearer organization of the argument"
-        case .clarity: return "Vague or unsupported claims"
-        case .question: return "Socratic questions that push further"
+        case .structure: return "An order that hides the argument"
+        case .clarity: return "Sentences a careful reader can't pin down"
+        case .evidence: return "Claims stated as fact with nothing behind them"
+        case .assumption: return "Premises the argument rests on but never states"
+        case .warrant: return "Evidence present, but why it should convince is not"
+        case .counter: return "The strongest objection you haven't met"
+        case .question: return "One question you can't answer without thinking harder"
         case .other: return ""
         }
     }

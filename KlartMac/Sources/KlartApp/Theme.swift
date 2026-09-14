@@ -100,13 +100,27 @@ enum Theme {
     /// set also reads correctly for color-blind users in the classic UI.
     static func glyph(for kind: FeedbackKind) -> String {
         switch kind {
-        case .gap: return "◇"        // something missing — an unfilled shape
-        case .mece: return "⧉"       // two frames colliding — overlap
-        case .source: return "❝"     // a citation to add
-        case .structure: return "≡"  // stacked, level rules — order
-        case .clarity: return "◎"    // a mark resolving into focus
-        case .question: return "?"   // an open, Socratic ask
+        case .gap: return "◇"         // something missing — an unfilled shape
+        case .mece: return "⧉"        // two frames colliding — overlap
+        case .structure: return "≡"   // stacked, level rules — order
+        case .clarity: return "◎"     // a mark resolving into focus
+        case .evidence: return "❝"    // the citation that isn't there
+        case .assumption: return "⊢"  // the premise the argument rests on
+        case .warrant: return "⇒"     // the link from evidence to claim
+        case .counter: return "⇄"     // the other side
+        case .question: return "?"    // an open ask
         case .other: return "·"
+        }
+    }
+
+    /// The mark beside the kind for how much a note claims to matter — a
+    /// second glyph, never a colour, so it survives monochrome and
+    /// colour-blindness alike. Minor notes carry nothing.
+    static func severityMark(_ severity: FeedbackSeverity) -> String? {
+        switch severity {
+        case .minor: return nil
+        case .major: return "!"
+        case .critical: return "‼"
         }
     }
 
@@ -114,9 +128,12 @@ enum Theme {
         switch kind {
         case .gap: return dynamic(rgb(0.145, 0.376, 0.722), rgb(0.451, 0.678, 1.0))
         case .mece: return dynamic(rgb(0.424, 0.247, 0.659), rgb(0.761, 0.549, 0.988))
-        case .source: return dynamic(rgb(0.118, 0.478, 0.275), rgb(0.4, 0.831, 0.6))
         case .structure: return dynamic(rgb(0.604, 0.353, 0.09), rgb(0.961, 0.663, 0.361))
         case .clarity: return dynamic(rgb(0.059, 0.463, 0.475), rgb(0.361, 0.82, 0.831))
+        case .evidence: return dynamic(rgb(0.118, 0.478, 0.275), rgb(0.4, 0.831, 0.6))
+        case .assumption: return dynamic(rgb(0.36, 0.30, 0.10), rgb(0.85, 0.75, 0.42))
+        case .warrant: return dynamic(rgb(0.20, 0.36, 0.55), rgb(0.55, 0.72, 0.92))
+        case .counter: return dynamic(rgb(0.55, 0.25, 0.12), rgb(0.93, 0.58, 0.42))
         case .question: return dynamic(rgb(0.686, 0.227, 0.333), rgb(0.969, 0.549, 0.659))
         case .other: return textSecondary
         }
@@ -142,7 +159,7 @@ struct StatusDot: View {
 
     private var color: Color {
         switch status {
-        case .connected: return Theme.color(for: .source)
+        case .connected: return Theme.color(for: .evidence)
         case .failed: return Theme.color(for: .question)
         case .checking: return Theme.color(for: .structure)
         case .unknown: return Theme.textTertiary

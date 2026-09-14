@@ -11,13 +11,35 @@ public enum FeedbackParser {
 
     private struct RawItem: Decodable {
         let type: String?
+        let anchor: String?
         let text: String?
-        let suggestion: String?
+        let why: String?
+        let severity: LooseValue?
         let section: String?
     }
 
+    /// A field the model may emit as a number or a string.
+    private enum LooseValue: Decodable {
+        case number(Double)
+        case string(String)
+
+        init(from decoder: Decoder) throws {
+            let c = try decoder.singleValueContainer()
+            if let n = try? c.decode(Double.self) { self = .number(n); return }
+            self = .string(try c.decode(String.self))
+        }
+
+        var text: String {
+            switch self {
+            case .number(let n): return String(Int(n.rounded()))
+            case .string(let s): return s
+            }
+        }
+    }
+
     /// Parses model output into feedback items. Returns an empty array when
-    /// no usable JSON is found.
+    /// no usable JSON is found. Anchors are passed through as the model wrote
+    /// them; the engine verifies them against the text.
     public static func parse(_ raw: String) -> [FeedbackItem] {
         guard let jsonString = extractJSONObject(from: raw),
               let data = jsonString.data(using: .utf8) else {
@@ -37,14 +59,22 @@ public enum FeedbackParser {
             guard let text = item.text?.trimmingCharacters(in: .whitespacesAndNewlines), !text.isEmpty else {
                 return nil
             }
-            let suggestion = item.suggestion?.trimmingCharacters(in: .whitespacesAndNewlines)
             return FeedbackItem(
                 kind: FeedbackKind.fromModelString(item.type ?? ""),
+                anchor: blankToNil(item.anchor),
                 text: text,
-                suggestion: (suggestion?.isEmpty ?? true) ? nil : suggestion,
+                why: blankToNil(item.why),
+                severity: FeedbackSeverity.fromModelValue(item.severity?.text),
                 section: item.section
             )
         }
+    }
+
+    private static func blankToNil(_ value: String?) -> String? {
+        guard let trimmed = value?.trimmingCharacters(in: .whitespacesAndNewlines), !trimmed.isEmpty else {
+            return nil
+        }
+        return trimmed
     }
 
     /// Extracts the first balanced JSON object or array from arbitrary text,

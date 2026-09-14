@@ -22,8 +22,17 @@ struct EditorView: View {
         MarkdownEditor(
             text: $state.editorText,
             clearClipboardAfterCopy: state.settings.vault != nil,
+            onCommand: { command in
+                switch command {
+                case "show": state.showCoachPopover = true
+                case "editor": state.readCurrentSection()
+                default: break
+                }
+            },
+            pendingCaret: state.pendingCaretUTF16,
+            onCaretApplied: { state.pendingCaretUTF16 = nil },
             onTextChange: { state.editorTextChanged() },
-            onCursorChange: { state.cursorUTF16 = $0 }
+            onCursorChange: { state.cursorMoved(to: $0) }
         )
         .background(Theme.background)
         .id(state.selectedNoteID) // fresh editor (and undo stack) per note
@@ -733,9 +742,13 @@ struct MarkdownEditor: NSViewRepresentable {
     var contentInset = NSSize(width: 32, height: 28)
     /// When set, receives the text view for geometry queries (Teleprompter).
     var bridge: EditorBridge? = nil
-    /// Slash commands: called with the command name (e.g. "editor") after
-    /// the typed `/editor` has been removed from the text.
+    /// Typed commands: called with the command name ("show", "editor") after
+    /// the typed `//show` / `//editor` has been removed from the text.
     var onCommand: ((String) -> Void)? = nil
+    /// Where to put the caret after the next external text push (a response
+    /// block landing); reported back through `onCaretApplied` once used.
+    var pendingCaret: Int? = nil
+    var onCaretApplied: (() -> Void)? = nil
     var onTextChange: () -> Void
     var onCursorChange: (Int) -> Void
 
@@ -823,7 +836,16 @@ struct MarkdownEditor: NSViewRepresentable {
             textView.string = text
             EditorStyler.restyleAll(textView)
             let length = (text as NSString).length
-            textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+            if let caret = pendingCaret {
+                // A response block landed: the writer answers on the line
+                // under it, so that is where the caret goes — and into view.
+                let target = NSRange(location: min(max(0, caret), length), length: 0)
+                textView.setSelectedRange(target)
+                textView.scrollRangeToVisible(target)
+                onCaretApplied?()
+            } else {
+                textView.setSelectedRange(NSRange(location: min(selection.location, length), length: 0))
+            }
             context.coordinator.isPushingText = false
             context.coordinator.lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
             let cursor = textView.selectedRange().location
@@ -909,10 +931,10 @@ struct MarkdownEditor: NSViewRepresentable {
 
         func textDidChange(_ notification: Notification) {
             guard let textView = notification.object as? NSTextView else { return }
-            // A typed slash command ("/editor") is removed from the text and
+            // A typed command ("//editor") is removed from the text and
             // reported via onCommand. The removal re-enters textDidChange,
             // which does the full binding/styling pass — skip our own.
-            if handleSlashCommand(in: textView) { return }
+            if handleTypedCommand(in: textView) { return }
             isEditing = true
             parent.text = textView.string
             isEditing = false
@@ -928,18 +950,21 @@ struct MarkdownEditor: NSViewRepresentable {
             parent.bridge?.bump()
         }
 
-        /// Commands the user can type directly into the note.
-        private static let slashCommands = ["editor"]
+        /// Commands the user can type directly into the note, as `//name`.
+        /// Two slashes: a single one is too common in prose and paths.
+        /// `//show` summons the editor's notes; `//editor` reads the current
+        /// section now and shows them.
+        static let typedCommands = ["show", "editor"]
 
-        /// Detects a just-completed slash command immediately before the
+        /// Detects a just-completed typed command immediately before the
         /// cursor (at a word boundary), removes it, and fires onCommand.
-        private func handleSlashCommand(in textView: NSTextView) -> Bool {
+        private func handleTypedCommand(in textView: NSTextView) -> Bool {
             guard let onCommand = parent.onCommand else { return false }
             let ns = textView.string as NSString
             let cursor = textView.selectedRange().location
             guard cursor <= ns.length else { return false }
-            for name in Self.slashCommands {
-                let token = "/" + name
+            for name in Self.typedCommands {
+                let token = "//" + name
                 let length = (token as NSString).length
                 guard cursor >= length else { continue }
                 let start = cursor - length

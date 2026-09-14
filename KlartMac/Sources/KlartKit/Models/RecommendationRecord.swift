@@ -16,9 +16,13 @@ public enum StableHash {
 
 /// What the writer did with a coaching recommendation.
 public enum RecommendationOutcome: String, Codable, Sendable, CaseIterable {
-    /// Inserted into the note as an editor note (`> ✎` block).
+    /// The writer took the note into the text as a prompt (`> ✎` block) to
+    /// answer in their own words.
+    case responded
+    /// Legacy: a build before `responded` inserted the model's own suggestion.
+    /// Kept so older logs still decode; never written by this build.
     case inserted
-    /// Marked as good advice, without inserting it.
+    /// Marked as good advice, without responding to it in the text.
     case confirmed
     /// Marked as wrong — the coach missed.
     case rejected
@@ -45,6 +49,13 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
     /// Stable identity of the tip itself, so the same advice can be correlated
     /// across rounds and outcomes.
     public let fingerprint: String
+    /// How much the note claimed to matter — so acceptance can be read per
+    /// severity, not just per kind.
+    public let severity: FeedbackSeverity?
+    /// Model or local check.
+    public let source: FeedbackSource
+    /// For local checks, the heuristic that fired. A rule name, never text.
+    public let rule: String?
     public let model: String?
     public let provider: String?
     /// Identifies the system prompt that produced this tip, so confirm/reject
@@ -64,9 +75,12 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
     public let sectionTitle: String?
     /// The section body the advice was reacting to.
     public let contextParagraph: String?
+    /// The words the note was about (`FeedbackItem.anchor`).
+    public let anchor: String?
     /// The observation the model made (`FeedbackItem.text`).
     public let observation: String?
-    public let suggestion: String?
+    /// Why the model said it mattered (`FeedbackItem.why`).
+    public let why: String?
 
     /// Longest context paragraph kept. Enough to judge whether a tip was fair,
     /// short enough that the log stays small.
@@ -78,6 +92,9 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
         createdAt: Date = Date(),
         kind: FeedbackKind,
         fingerprint: String,
+        severity: FeedbackSeverity? = nil,
+        source: FeedbackSource = .model,
+        rule: String? = nil,
         model: String? = nil,
         provider: String? = nil,
         systemPromptHash: String,
@@ -88,14 +105,18 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
         documentTopic: String? = nil,
         sectionTitle: String? = nil,
         contextParagraph: String? = nil,
+        anchor: String? = nil,
         observation: String? = nil,
-        suggestion: String? = nil
+        why: String? = nil
     ) {
         self.id = id
         self.outcome = outcome
         self.createdAt = createdAt
         self.kind = kind
         self.fingerprint = fingerprint
+        self.severity = severity
+        self.source = source
+        self.rule = rule
         self.model = model
         self.provider = provider
         self.systemPromptHash = systemPromptHash
@@ -106,8 +127,9 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
         self.documentTopic = documentTopic
         self.sectionTitle = sectionTitle
         self.contextParagraph = contextParagraph
+        self.anchor = anchor
         self.observation = observation
-        self.suggestion = suggestion
+        self.why = why
     }
 
     /// Forgiving decode, like `Note`: a log written by an older build must
@@ -119,6 +141,9 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         kind = try c.decodeIfPresent(FeedbackKind.self, forKey: .kind) ?? .other
         fingerprint = try c.decodeIfPresent(String.self, forKey: .fingerprint) ?? ""
+        severity = try? c.decodeIfPresent(FeedbackSeverity.self, forKey: .severity)
+        source = (try? c.decodeIfPresent(FeedbackSource.self, forKey: .source)) ?? .model
+        rule = try c.decodeIfPresent(String.self, forKey: .rule)
         model = try c.decodeIfPresent(String.self, forKey: .model)
         provider = try c.decodeIfPresent(String.self, forKey: .provider)
         systemPromptHash = try c.decodeIfPresent(String.self, forKey: .systemPromptHash) ?? ""
@@ -129,14 +154,15 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
         documentTopic = try c.decodeIfPresent(String.self, forKey: .documentTopic)
         sectionTitle = try c.decodeIfPresent(String.self, forKey: .sectionTitle)
         contextParagraph = try c.decodeIfPresent(String.self, forKey: .contextParagraph)
+        anchor = try c.decodeIfPresent(String.self, forKey: .anchor)
         observation = try c.decodeIfPresent(String.self, forKey: .observation)
-        suggestion = try c.decodeIfPresent(String.self, forKey: .suggestion)
+        why = try c.decodeIfPresent(String.self, forKey: .why)
     }
 
     /// True when any content-tier field is present.
     public var carriesContent: Bool {
         noteTitle != nil || documentTopic != nil || sectionTitle != nil
-            || contextParagraph != nil || observation != nil || suggestion != nil
+            || contextParagraph != nil || anchor != nil || observation != nil || why != nil
     }
 
     /// A copy with every content-tier field stripped — what a signal-only
@@ -148,6 +174,9 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
             createdAt: createdAt,
             kind: kind,
             fingerprint: fingerprint,
+            severity: severity,
+            source: source,
+            rule: rule,
             model: model,
             provider: provider,
             systemPromptHash: systemPromptHash,
@@ -174,7 +203,7 @@ public struct RecommendationRecord: Identifiable, Codable, Equatable, Sendable {
 /// The envelope written by "Export recommendation log…" — self-describing, so
 /// a shared file explains its own shape and whether content was included.
 public struct RecommendationExport: Codable, Sendable {
-    public static let currentSchema = "klart.recommendations.v1"
+    public static let currentSchema = "klart.recommendations.v2"
 
     public let schema: String
     public let exportedAt: Date

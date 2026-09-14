@@ -236,13 +236,19 @@ struct TeleprompterView: View {
             contentInset: NSSize(width: 40, height: 64),
             bridge: bridge,
             onCommand: { command in
-                if command == "editor" { state.activateEditor() }
+                switch command {
+                case "show": state.activateEditor()
+                case "editor": state.readCurrentSection()
+                default: break
+                }
             },
+            pendingCaret: state.pendingCaretUTF16,
+            onCaretApplied: { state.pendingCaretUTF16 = nil },
             onTextChange: {
                 state.editorTextChanged()
                 writingResumed()
             },
-            onCursorChange: { state.cursorUTF16 = $0 }
+            onCursorChange: { state.cursorMoved(to: $0) }
         )
         .id(state.selectedNoteID) // fresh editor (and undo stack) per note
         .frame(maxWidth: Metrics.columnMaxWidth)
@@ -263,10 +269,17 @@ struct TeleprompterView: View {
     /// wrapping unnecessarily — clamped to `Metrics.railMinWidth...railMaxWidth`
     /// so a short note doesn't reserve as much margin as a long one, but a
     /// long one still wraps exactly as it did with the old fixed width.
+    ///
+    /// With no notes yet the width is fixed at the maximum. It used to follow
+    /// the empty card's message, and that message changes while the rail is
+    /// still arriving (a read starts, then finishes — for a short section,
+    /// within a frame): the width change ran the card's text swap inside an
+    /// animated transaction, and the old words slid from the middle of the
+    /// page into the card while the new ones were already there. See
+    /// `RailOpeningTests`.
     private var railWidth: CGFloat {
-        let widestText = state.feedbackItems.isEmpty
-            ? EditorRailMetrics.naturalWidth(for: EditorRailMetrics.emptyStateText(for: state.feedbackPhase))
-            : (state.feedbackItems.map { EditorRailMetrics.naturalWidth(for: $0.text) }.max() ?? 0)
+        guard !state.feedbackItems.isEmpty else { return Metrics.railMaxWidth }
+        let widestText = state.feedbackItems.map { EditorRailMetrics.naturalWidth(for: $0.text) }.max() ?? 0
         return min(max(widestText + EditorRailMetrics.cardHorizontalChrome, Metrics.railMinWidth), Metrics.railMaxWidth)
     }
 
@@ -581,7 +594,7 @@ struct TeleprompterView: View {
         }
         .help(state.editorRailVisible
               ? "Hide the editor's notes (⌘E)"
-              : "Show editor — margin notes on this text (⌘E or type /editor)")
+              : "Show editor — margin notes on this text (⌘E or type //show; //editor reads the section now)")
         .accessibilityLabel(state.editorRailVisible ? "Hide editor" : "Show editor")
     }
 
@@ -901,7 +914,8 @@ private enum EditorRailMetrics {
         case .analyzing: return "Going through your text now."
         case .error(let message): return message
         case .skipped(let reason): return reason
-        case .waiting, .idle: return "Nothing to note yet — keep writing, or ⌘R to ask again."
+        case .waiting: return "Reading this section when you finish it — or type //editor to make me read now."
+        case .idle: return "Nothing to note yet — finish a section, or ⌘R to ask again."
         }
     }
 
@@ -991,6 +1005,12 @@ private struct EditorRail: View {
                 .foregroundStyle(Theme.textPrimary)
                 .fixedSize(horizontal: false, vertical: true)
         }
+        // The words change on their own clock — the read's — never on the
+        // rail's. Inside the rail's arrival spring a changed word would
+        // otherwise keep the position animation it was mid-way through and
+        // ghost across the page (`RailOpeningTests`). The pulse below sets
+        // its own animation for its own opacity, so it is unaffected.
+        .transaction { $0.animation = nil }
         // Glyph and words dim together, on the caret's beat: the card is
         // plainly working on something rather than sitting there stalled.
         // The card's own frame holds steady underneath.
@@ -1082,11 +1102,13 @@ private struct RailCardHeightKey: PreferenceKey {
     }
 }
 
-/// One editor note: a monochrome glyph in place of the colored pill, the
-/// observation, then quiet actions — Insert when there is content to take,
-/// and a two-glyph verdict (confirm / reject) that teaches the coach without
-/// touching the writing. A card that is only read costs no decision; a card
-/// that has been judged stays put and retreats.
+/// One editor note: a monochrome glyph in place of the colored pill, a
+/// severity mark, the words it is about, the observation, why it matters,
+/// then quiet actions — Respond, which drops the note into the text as a
+/// prompt for the writer's own answer, and a two-glyph verdict (confirm /
+/// reject) that teaches the coach without touching the writing. A card that
+/// is only read costs no decision; a card that has been judged stays put and
+/// retreats.
 private struct RailCard: View {
     @EnvironmentObject var state: AppState
     let item: FeedbackItem
@@ -1104,13 +1126,37 @@ private struct RailCard: View {
                     .font(.system(size: 9.5, weight: .semibold))
                     .tracking(0.9)
                     .foregroundStyle(Theme.textSecondary)
-                if let section = item.section, !section.isEmpty {
+                if let mark = Theme.severityMark(item.severity) {
+                    Text(mark)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(Theme.textPrimary)
+                        .accessibilityHidden(true)
+                }
+                if item.source == .local, let rule = item.rule {
+                    // A local check names its rule, so the rule is learned.
+                    Text(rule)
+                        .font(.system(size: 9.5, design: .monospaced))
+                        .foregroundStyle(Theme.textSecondary)
+                        .lineLimit(1)
+                } else if let section = item.section, !section.isEmpty {
                     Text(section)
                         .font(.system(size: 10))
                         .foregroundStyle(Theme.textSecondary)
                         .lineLimit(1)
                 }
                 Spacer(minLength: 4)
+            }
+
+            // The words the note is about, so the writer's eye lands on them
+            // before the verdict on them.
+            if let anchor = item.anchor {
+                Text("“\(anchor)”")
+                    .font(.system(size: 11, weight: .regular).italic())
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(2)
+                    .lineLimit(2)
+                    .truncationMode(.tail)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
             // The observation itself is prose to be read, so it carries the
@@ -1124,27 +1170,35 @@ private struct RailCard: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .textSelection(.enabled)
 
+            if let why = item.why {
+                Text(why)
+                    .font(.system(size: 10.5))
+                    .foregroundStyle(Theme.textSecondary)
+                    .lineSpacing(2)
+                    .lineLimit(3)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+
             HStack(spacing: 10) {
-                if item.suggestion != nil {
-                    Button {
-                        state.accept(item)
-                    } label: {
-                        Text("Insert")
-                            .font(.system(size: 10.5, weight: .medium))
-                            .foregroundStyle(Theme.textSecondary)
-                            .underline(hovering && outcome == nil)
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(outcome != nil)
-                    .help("Insert the suggested content into that section")
+                Button {
+                    state.respond(to: item)
+                } label: {
+                    Text("Respond")
+                        .font(.system(size: 10.5, weight: .medium))
+                        .foregroundStyle(Theme.textSecondary)
+                        .underline(hovering && outcome == nil)
                 }
+                .buttonStyle(.plain)
+                .disabled(outcome != nil)
+                .help("Put this note into that section as a prompt, and answer it in your own words")
 
                 Spacer(minLength: 4)
 
                 // The verdict: two glyphs, no words. Confirming or rejecting
                 // teaches the coach; it does not touch the writing.
-                verdict(.confirmed, systemImage: "checkmark", help: "This helped — good note")
-                verdict(.rejected, systemImage: "xmark", help: "This missed the mark — the coach got it wrong")
+                verdict(.confirmed, systemImage: "checkmark", help: "Fair — the editor is right")
+                verdict(.rejected, systemImage: "xmark", help: "Wrong — never raise this here again")
             }
         }
         .padding(10)
@@ -1163,7 +1217,10 @@ private struct RailCard: View {
         .opacity(outcome == nil ? 1 : 0.5)
         .onHover { hovering = $0 }
         .accessibilityElement(children: .combine)
-        .accessibilityLabel("\(item.kind.label). \(item.section.map { "Section \($0). " } ?? "")\(item.text)")
+        .accessibilityLabel(
+            "\(item.kind.label). \(item.section.map { "Section \($0). " } ?? "")"
+            + "\(item.anchor.map { "On “\($0)”. " } ?? "")\(item.text)\(item.why.map { " \($0)" } ?? "")"
+        )
     }
 
     private var outcome: RecommendationOutcome? { state.outcome(for: item) }

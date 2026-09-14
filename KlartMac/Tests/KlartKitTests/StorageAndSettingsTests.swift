@@ -60,7 +60,7 @@ final class SettingsTests: XCTestCase {
         settings.activeProvider = .openrouter
         settings.setConfig(ProviderConfig(baseURL: "https://openrouter.ai/api/v1", model: "meta-llama/llama-3.3-70b-instruct"), for: .openrouter)
         settings.tipStyle.tone = .direct
-        settings.debounceSeconds = 4
+        settings.debounceSeconds = 40
         settings.enabledFeedbackKinds = [.gap, .question]
 
         let data = try JSONEncoder().encode(settings)
@@ -128,10 +128,18 @@ final class SettingsTests: XCTestCase {
     func testDecodingClampsOutOfRangeValues() throws {
         let json = #"{"debounceSeconds":9999,"temperature":-5,"maxTokens":1,"tipStyle":{"maxTips":50}}"#
         let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
-        XCTAssertEqual(decoded.debounceSeconds, 15)
+        XCTAssertEqual(decoded.debounceSeconds, 120)
         XCTAssertEqual(decoded.temperature, 0)
         XCTAssertEqual(decoded.maxTokens, 64)
         XCTAssertEqual(decoded.tipStyle.maxTips, 6)
+    }
+
+    func testAnOldKeystrokeDebounceIsLiftedToAPause() throws {
+        // 2.5 s was the old "typing paused" debounce; as a "section finished"
+        // pause it would read half-written sections all day.
+        let json = #"{"debounceSeconds":2.5}"#
+        let decoded = try JSONDecoder().decode(AppSettings.self, from: Data(json.utf8))
+        XCTAssertEqual(decoded.debounceSeconds, 5)
     }
 
     func testSettingsStorePersists() throws {

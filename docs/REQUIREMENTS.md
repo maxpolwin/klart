@@ -26,11 +26,12 @@
 
 ### 1.1 Purpose
 
-Klårt is a **thinking coach that lives in your notes** — a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on (in the context of the whole document) and coaches you: it points out gaps, overlapping categories, vague claims, and structural problems, and can ask Socratic questions instead of writing your notes for you.
+Klårt is a **thinking coach that lives in your notes** — a minimal, native macOS app for structuring your thinking in markdown. When you finish a section, a local or cloud LLM reads it against the whole document and tells you, plainly, where the thinking fails a demanding reader: gaps, unstated assumptions, claims with nothing behind them, evidence whose bearing on the claim is never said, the objection you haven't met, categories that overlap, an order that hides the argument. It never writes your text: you answer its notes in your own words.
 
 ### 1.2 Key Value Propositions
 
-- **Coaching, not ghostwriting** — the AI critiques and questions; it never edits the document without an explicit accept.
+- **Coaching, not ghostwriting** — the editor critiques and questions; it never puts its own prose in the document. The one thing it can add is its note, as a prompt block for the writer to answer. Feedback that the writer has to act on is what changes the writer, not just the text.
+- **Opinionated by design** — no praise, no hedging, no "consider". Each note says what is wrong, on which words, and what it costs the argument.
 - **Local-first & private** — notes are plain JSON-wrapped markdown files on your machine; API keys live in the macOS Keychain; no telemetry. Optional at-rest encryption with app lock.
 - **Any LLM** — Ollama, LM Studio, OpenRouter, or any OpenAI-compatible endpoint; model lists fetched live from the provider.
 - **Native & light** — ~5 MB app, no bundled browser; follows the system light/dark appearance.
@@ -115,27 +116,46 @@ The renderer/main-process split of the old Electron build is gone. `AppState` (a
 
 Notes are stored as markdown (not HTML). See §7 for the model.
 
-### 3.2 AI Feedback ("coaching")
+### 3.2 AI Feedback ("the editor")
 
-**Trigger:** after a configurable pause (default 2.5 s) when Auto is on, or on demand with `⌘R`. Analysis targets the section the cursor is in, with the document outline as context. A new keystroke cancels the in-flight request.
+**When it reads.** A section is read when the writer is *finished* with it, not on every pause in typing — gap, assumption and structure critique is higher-order feedback, which lands better delayed than immediate, and a note on a half-written section mostly flags what the writer was about to write next. `SectionCompletionTracker` (pure, tested) decides:
 
-**Feedback kinds** (`FeedbackKind`):
+- **Leaving an edited section** — the caret moves to a different section after typing in this one (moving on, or typing a new `##` heading beneath it) → read it now, pointed at the finished section, not the caret.
+- **A long pause** — `settings.debounceSeconds` (default 20 s, clamped 5…120) with no keystroke → read the section under the caret.
+- **On demand** — `⌘R`, the Analyze button (classic), or typing **`//editor`** → read the section under the caret and show the notes. `//show` only summons the rail.
+- A section whose body has not changed since it was last read is not read again. A keystroke *inside* the section being read cancels the read (its notes would be about text that no longer exists); a keystroke elsewhere lets it finish.
 
-| Kind | Label | On by default | Purpose |
-|------|-------|:---:|---------|
-| `gap` | Gap | ✅ | A missing perspective, consideration, or analysis |
-| `mece` | MECE | ✅ | Non-mutually-exclusive or non-exhaustive categories |
-| `structure` | Structure | ✅ | Organization / flow / ordering |
-| `clarity` | Clarity | ✅ | Vague or ambiguous claims |
-| `question` | Question | ✅ | A probing Socratic question |
-| `source` | Source | ⬜ | Missing citations / evidence |
-| `other` | Note | ⬜ | Uncategorized — never requested, but the parser's fallback for a `type` Klårt doesn't recognize |
+With `autoFeedback` off, only the on-demand paths run.
 
-Default enabled set is `[gap, mece, structure, clarity, question]`.
+**What it reads.** The finished section in full, plus the **whole document** for context (every `[no-ai]` section reduced to its heading and `(omitted)`; clipped head+tail to `PromptBuilder.documentBudget`). The model is told every note must be about the finished section.
 
-**Item actions:** **Insert** (adds the suggestion into the note as a `> ✎ <label>:` blockquote at the end of the section the cursor is in — `NoteEditing.insertSuggestion`, not necessarily the section the tip names), plus an icon-only verdict: **✓ Confirm** (good advice; a signal only, nothing is written to the note) and **✗ Reject** (the coach got it wrong; hidden permanently for that note). Rejections are remembered by a content **fingerprint** (FNV-1a over `kind + normalized text`), so regeneration doesn't resurface them. A judged item is *not* removed from the list: it stays in place at reduced opacity with its controls inert, so the round reads as a record of what has been dealt with.
+**Two passes per read** (`FeedbackEngine`):
 
-**Learning log:** every verdict — including `dismissed`, meaning the writer left the note unjudged — is appended to `RecommendationLog` (`recommendations.json`), so coaching quality and the system prompt can be improved over time. Records are two-tiered: the **signal** tier (outcome, kind, fingerprint, model, provider, `systemPromptHash`, `usesDefaultPrompt`, opaque note id) is always written; the **content** tier (note title, topic, section title, the section body the tip reacted to, and the tip's own prose) is written only when `AppSettings.logRecommendationContent` is on, and never for a note marked sensitive. The file is sealed under the vault master key with the rest of the library, and participates in enable / disable / rotate. Settings → Coaching can export it as JSON (with or without note text; sensitive notes are redacted either way) or clear it.
+1. **Local checks** (`LocalChecks`, offline, instant, no provider needed): uncited empirical claims (`uncited-claim` → `evidence`), hedge-word density (`hedge-density` → `clarity`), recurring undefined acronyms (`undefined-term` → `clarity`) on the finished section; thin sections (`thin-section` → `gap`) and overlapping heading words (`title-overlap` → `mece`) across the document. Each note names the rule that fired, so the rule is learnable. They appear at once and stay whatever the model does next.
+2. **The model**, given the local notes as "already flagged — do not repeat", so its budget goes to judgment.
+
+**Feedback kinds** (`FeedbackKind`) — a critical-thinking lens: Paul–Elder's intellectual standards crossed with Toulmin's anatomy of an argument. All on by default.
+
+| Kind | Label | Glyph | Names |
+|------|-------|:---:|-------|
+| `gap` | Gap | ◇ | A consideration or analysis the argument needs and does not have |
+| `mece` | MECE | ⧉ | Categories that overlap or leave something uncovered |
+| `structure` | Structure | ≡ | An order or grouping that hides the argument |
+| `clarity` | Clarity | ◎ | A sentence a careful reader cannot pin down — language only |
+| `evidence` | Evidence | ❝ | A claim stated as fact with nothing behind it (Toulmin: grounds) |
+| `assumption` | Assumption | ⊢ | A premise the argument rests on but never states |
+| `warrant` | Warrant | ⇒ | Claim and evidence present; why the evidence should convince is not |
+| `counter` | Counter | ⇄ | The strongest objection the author has not engaged ("consider the opposite") |
+| `question` | Question | ? | One question the author cannot answer without thinking harder |
+| `other` | Note | · | Never requested; the parser's fallback for a `type` Klårt doesn't recognize. `source` from older builds decodes as `evidence`. |
+
+**Shape of a note** (`FeedbackItem`): `kind`, **`anchor`** (the exact words it is about, verbatim from the section — verified by the engine; a quote not in the text is dropped, never shown), **`text`** (the observation, as a claim — never replacement prose), **`why`** (one sentence on what it costs the argument), **`severity`** (1 minor / 2 major / 3 critical — the rail orders by it and marks 2 as `!`, 3 as `‼`), `source` (`model` / `local`), `rule` (local only), `section`. There is no suggestion field: the prompt forbids drafting, and the parser drops a `suggestion` key if a model emits one anyway.
+
+**Item actions:** **Respond** (`NoteEditing.respond`) puts the note into the section it names as a `> ✎ <Kind> — “anchor”: observation` / `> why` block, adds an empty line beneath it, and moves the caret there — the writer answers in their own words; nothing the model wrote becomes the writer's text. Plus an icon-only verdict: **✓ Confirm** (the editor is right; a signal only) and **✗ Reject** (wrong; never raised here again). Rejections are remembered by **fingerprint** — FNV-1a over `kind + normalized anchor` when there is one (rejecting means "no note of this kind on these words", and the model rewords its observation every round), else `kind + text`; a local note without an anchor keys on `kind + rule + section`. A judged item stays in place at reduced opacity with its controls inert.
+
+**A read replaces only its section's notes.** Notes about other sections stay; notes the round re-raises elsewhere (a thin section, an overlapping title) replace their earlier selves by fingerprint, keeping the earlier card's identity and verdict. Whatever a read displaces unjudged is logged as `dismissed`.
+
+**Learning log:** every verdict — `responded`, `confirmed`, `rejected`, and `dismissed` (the writer moved on) — is appended to `RecommendationLog` (`recommendations.json`) so coaching quality and the system prompt can be improved over time. Records are two-tiered: the **signal** tier (outcome, kind, severity, source, rule, fingerprint, model, provider — "Local checks" for local notes — `systemPromptHash`, `usesDefaultPrompt`, opaque note id) is always written; the **content** tier (note title, topic, section title, the section body the note reacted to, the anchor, the observation, the why) only when `AppSettings.logRecommendationContent` is on, and never for a note marked sensitive. The file is sealed under the vault master key with the rest of the library, and participates in enable / disable / rotate. Settings → Editor can export it as JSON (schema `klart.recommendations.v2`; with or without note text; sensitive notes are redacted either way) or clear it. A log from the previous build (`source` kind, `inserted` outcome, `suggestion` field) still loads.
 
 ### 3.3 Coach actions
 
@@ -150,7 +170,7 @@ Four one-tap actions (`CoachAction`), also in the **Editor** menu, that stream a
 
 ### 3.4 Section control
 
-Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis. Any note can be marked **sensitive** (toolbar shield in the classic layout, the shield beside the pinned title in the Teleprompter; **File ▸ Mark Sensitive** in either layout); sensitive notes refuse all non-local AI requests in code (see §4.3).
+Any heading tagged `[no-ai]` (case-insensitive, e.g. `## Private notes [no-ai]`) excludes that section from analysis: it is never read, never checked locally, and its body is replaced by `(omitted)` in the document context sent with every other section's read. Any note can be marked **sensitive** (toolbar shield in the classic layout, the shield beside the pinned title in the Teleprompter; **File ▸ Mark Sensitive** in either layout); sensitive notes refuse all non-local AI requests in code (see §4.3).
 
 ### 3.5 Interface modes (`TeleprompterView.swift`, `ContentView.swift`)
 
@@ -159,14 +179,26 @@ Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`
 **Teleprompter (default).** One centered column (max 720 pt) of text in a chromeless window (hidden title bar, full-size content view); monochrome — no accent hue anywhere on the surface (see §6). Requirements:
 
 - **Left edge — notes.** Nothing visible while writing. Pointer at the left edge (≤ 26 pt) reveals a spine of dots, one per note (max 14, newest first; current note in full ink; click switches directly). Dwelling on the dots for **0.8 s** expands the panel: note title, last-modified date, shield mark when sensitive, search field (`⌘F` opens it directly), delete via context menu, New Note + Settings in the footer. Typing collapses dots and panel immediately.
-- **The editor (AI) is summoned, never ambient.** Analysis runs in the background as always, but its results appear only on demand: the **¶** button above the panel's search field ("Show editor" on hover, with a count when suggestions wait), `⌘E`, or typing **`/editor`** in the note (the command text is stripped before the note is saved — `MarkdownEditor.onCommand`).
-- **Right margin rail.** Each suggestion renders as a card vertically **anchored to the section it refers to** (heading line position via the AppKit layout manager through `EditorBridge`, live on scroll/edit, single downward collision pass so cards never overlap), in a rail as wide as its widest current note needs — `EditorRailMetrics` measures the text, clamped to 200–264 pt — so a short round of notes reserves less margin than a long one. Cards carry a monochrome kind glyph (§6) instead of a colored pill, the observation, **Insert** (when content exists) and a right-aligned two-glyph verdict, **✓** and **✗** (the latter permanent, fingerprint recorded) — and nothing else, so a card that is only read costs no decision. The verdict glyphs are quiet until the card is hovered. A judged card stays in the rail at half opacity with only its chosen glyph legible, rather than sliding out: the rail should show what has been attended to. A chevron at the rail's near edge, level with the pinned title, closes it — the one control on the rail itself, so putting the notes away doesn't mean reaching for `⌘E` or the panel at the far edge.
+- **The editor (AI) is summoned, never ambient.** Reading happens in the background as always, but its notes appear only on demand: the **¶** button above the panel's search field ("Show editor" on hover, with a count when notes wait), `⌘E`, or typing **`//show`** in the note; typing **`//editor`** reads the section under the caret at once and shows the notes. Typed commands are stripped before the note is saved (`MarkdownEditor.onCommand`) and only fire at a word boundary, so a URL never triggers one.
+- **Right margin rail.** Each suggestion renders as a card vertically **anchored to the section it refers to** (heading line position via the AppKit layout manager through `EditorBridge`, live on scroll/edit, single downward collision pass so cards never overlap), in a rail as wide as its widest current note needs — `EditorRailMetrics` measures the text, clamped to 200–264 pt — so a short round of notes reserves less margin than a long one. With no notes yet the rail is fixed at the maximum: the empty card's message changes while the rail is still arriving (a read starts and, for a short section, finishes within a frame), and a width that followed it ran the text swap inside the arrival spring — the old words slid across the page into the card (`RailOpeningTests` samples the presentation layer through the slide to keep it out). The empty card's content also sits under `.transaction { $0.animation = nil }` for the same reason. Cards carry a monochrome kind glyph (§6) instead of a colored pill, a severity mark (`!` / `‼`; minor notes carry none), the rule name for a local check, the anchored words in italic, the observation, the why in secondary ink, **Respond** and a right-aligned two-glyph verdict, **✓** and **✗** (the latter permanent, fingerprint recorded) — and nothing else, so a card that is only read costs no decision. The verdict glyphs are quiet until the card is hovered. A judged card stays in the rail at half opacity with only its chosen glyph legible, rather than sliding out: the rail should show what has been attended to. A chevron at the rail's near edge, level with the pinned title, closes it — the one control on the rail itself, so putting the notes away doesn't mean reaching for `⌘E` or the panel at the far edge.
 - **Reading pulse.** While the editor is actually working on the note (`AppState.editorIsReading` — analysing, or a coach action streaming), the ¶ summons glyph and the rail card's contents (glyph, "Reading…", message) breathe between full ink and 42% on `KlartPulse.period` — the same 1 s beat the caret blinks on, so the surface has one pulse rather than two clocks. No spinner and no new object on screen; the card's frame and the button's seat hold still underneath. Reduce Motion holds both at full ink.
 - **Fade-out.** If the user keeps typing, the rail fades after **5 minutes over 20 seconds** (Reduce Motion: near-instant at the same moment) and the surface returns to focus mode. Hovering the rail, or fresh suggestions, restores it and resets the countdown; an untouched rail with no typing stays.
 - **Pinned title.** The note's derived title stays visible at the top (under a background-fog gradient), with a shield beside it: outlined normally, filled when the note is sensitive, and clicking it toggles the mark — so it stays discoverable instead of appearing only once set.
 - **Word count (optional).** `settings.showWordCount` (default off) shows "N words · M min read" at the foot (`NoteMetrics`, §5 — markdown-aware, 200 wpm).
 
-**Classic.** The pre-Teleprompter layout: Constellation sidebar, unified toolbar (Analyze, shield, coach pill), coach popover. Unchanged behavior.
+**Classic.** The pre-Teleprompter layout: Constellation sidebar, unified toolbar (Analyze, shield, coach pill), coach popover. `//show` opens the popover, `//editor` reads and opens it. Otherwise unchanged.
+
+### 3.6 Item dialogue (planned — not yet built)
+
+The one thing a card cannot do today is be argued with. Feedback research is unambiguous that dialogic feedback — the learner can push back and get a refined answer — is taken up far more than one-shot feedback, and an editor who cannot be answered teaches only by assertion. Planned for the release after the note shape and trigger have settled, so the discussion is about notes that are already worth discussing.
+
+**Interaction.** A third quiet action on every card, **Discuss**. Teleprompter: the card expands in place into a thread — the note at the top, the writer's reply field beneath, the editor's replies streaming into the same card, the rail widening to `railMaxWidth` for the duration; the writing column stays where it is, so the thread sits beside the words it is about. Nothing else on screen moves. `Esc` or the card's chevron folds it back to a card that now carries a small count (`3 ↩`). Classic: the same thread opens as a sheet from the popover row. A thread never edits the note; the only way out of it into the text is the existing **Respond**, which then quotes the *conclusion* of the thread rather than the original observation.
+
+**Prompting.** A discussion turn sends the system prompt (coach template, with a new `{{DISCUSSION}}` instruction: "defend the note, concede when the author is right, and say so plainly"), the anchored section, the note, and the thread so far. The editor may end a turn with `[withdrawn]` — the note was wrong — which the app records as `rejected` with reason `argued`, or `[stands]`, recorded as `confirmed`.
+
+**Storage: the writer's knowledge base.** Threads are appended to `discussions.json` beside `recommendations.json`, sealed under the same vault key, one record per thread: opaque note id, note fingerprint, kind, section title, the turns (role, text, time), and the outcome. From it and the learning log the app derives a bounded **writer profile** (`WriterProfile`, ≤ 600 characters, regenerated locally and deterministically, never by a model): recurring kinds by acceptance rate ("assumption notes accepted 80%, counter notes rejected 70%"), stated standing preferences the writer gave in threads ("I hedge in introductions on purpose"), and the three most recent conceded points. The profile renders into the feedback prompt as `{{WRITER_PROFILE}}` — an optional placeholder, empty by default, so a user who never discusses sees no change — and lets the editor say "you conceded this in *Pricing* on 12 Aug" when the same weakness recurs, which is the memory a human editor has and a fresh prompt does not. Sensitive notes contribute threads with the content tier stripped, exactly as the learning log does; the profile is exportable and clearable from Settings → Editor beside the log.
+
+**Not in scope.** Spaced recall of the writer's own claims (the old Noschen SM-2 scheduler) stays out until the feedback itself is right; it would schedule prompts built from notes, so it inherits every flaw the notes still have.
 
 ---
 
@@ -190,10 +222,10 @@ Two layouts, switched in **Settings → Interface** (`settings.teleprompterMode`
 
 ### 4.2 Prompting & parsing
 
-- **`PromptBuilder`** — assembles the coaching prompt from the current section plus the outline; budgets: `sectionBudget = 8000`, `coachBudget = 12000` chars (over-budget text is head+tail clipped with `[…]`). The system prompt demands strict JSON: `{"feedback":[{"type":"gap","text":"…","suggestion":"…"}]}`.
+- **`PromptBuilder`** — assembles the editor's prompt from the finished section plus the whole redacted document; budgets: `sectionBudget = 8000`, `documentBudget = 16000`, `coachBudget = 12000` chars (over-budget text is head+tail clipped with `[…]`). The default system prompt is opinionated on purpose — "a sharp, opinionated reader whose only job is to make their thinking harder to fault… No praise. No padding. No hedging." — forbids drafting replacement prose, and demands strict JSON: `{"feedback":[{"type":"gap","anchor":"…","text":"…","why":"…","severity":2}]}`. Tone fragments (`FeedbackTone`, default `direct`) change register only; every tone stays opinionated, and `encouraging` credits method, never the author. Local notes are listed in the user turn as "already flagged — do not repeat".
 - **Editable system prompts** — both system prompts (live feedback and Quiet coach) are templates the user can rewrite in **Settings → Editor → System prompt**. The app owns a canonical default for each (`defaultFeedbackTemplate` / `defaultCoachTemplate`); `AppSettings.feedbackSystemPrompt` / `coachSystemPrompt` hold the override (`nil` = use the current default, so Revert clears the field and future default changes flow through). The per-request dynamic pieces stay as `{{TOKENS}}` — `{{FEEDBACK_TYPES}}`, `{{MAX_TIPS}}`, `{{STYLE}}`, `{{JSON_SHAPE}}` (feedback) and `{{ACTION_INSTRUCTION}}` (coach) — that `PromptBuilder.render` substitutes at build time, keeping a customised prompt in sync with the other settings. `{{JSON_SHAPE}}` is required; the editor warns (via `missingRequiredPlaceholders`) when it is removed, since `FeedbackParser` depends on it.
-- **`FeedbackParser`** — forgiving: strips code fences, extracts the first balanced JSON value (string/escape aware), and salvages complete items from a truncated array. Loose `type` strings are mapped onto `FeedbackKind` by substring.
-- **`FeedbackEngine`** — skips content under 80 chars (`SkipReason.tooShort`), excluded sections, or when no kinds are enabled; runs in JSON mode; caps results at `tipStyle.maxTips`; filters rejected fingerprints. `.other` is never among the kinds it asks the model for, though the parser still falls back to it when the model names a type Klårt doesn't recognize.
+- **`FeedbackParser`** — forgiving: strips code fences, extracts the first balanced JSON value (string/escape aware), and salvages complete items from a truncated array. Loose `type` strings are mapped onto `FeedbackKind` by substring; `severity` may arrive as a number or a word; a stray `suggestion` key is ignored.
+- **`FeedbackEngine`** — `localItems` runs `LocalChecks` (no provider). `analyze` skips content under 80 chars (`SkipReason.tooShort`), excluded sections, or when no kinds are enabled; runs in JSON mode; verifies every anchor against the section (whitespace/case/quote-insensitive) and drops the ones that are not there; stamps the section; filters rejected fingerprints; caps the model's notes at `tipStyle.maxTips`; merges the local notes in ahead (same instances, so their identity and any verdict survive) and orders the round by severity. `.other` is never among the kinds it asks the model for.
 
 ### 4.3 Transport security & sensitive-note enforcement
 
@@ -241,13 +273,16 @@ The editor (`Sources/KlartApp/Views/EditorView.swift`) is a plain-text `NSTextVi
 |------|-------|------------|
 | Gap | `◇` | something missing — an unfilled shape |
 | MECE | `⧉` | two frames colliding — overlap |
-| Source | `❝` | a citation to add |
 | Structure | `≡` | stacked, level rules — order |
 | Clarity | `◎` | a mark resolving into focus |
-| Question | `?` | an open, Socratic ask |
+| Evidence | `❝` | the citation that isn't there |
+| Assumption | `⊢` | the premise the argument rests on |
+| Warrant | `⇒` | the link from evidence to claim |
+| Counter | `⇄` | the other side |
+| Question | `?` | an open ask |
 | Other | `·` | — |
 
-(`Theme.glyph(for:)`; light/dark still adapts inside monochrome via the dynamic ink tokens.)
+Severity is a second glyph beside the kind, never a hue: `!` for a note that weakens the argument, `‼` for one the argument fails without; minor notes carry nothing (`Theme.severityMark(_:)`). (`Theme.glyph(for:)`; light/dark still adapts inside monochrome via the dynamic ink tokens.)
 
 **Core tokens** (light / dark):
 
@@ -294,19 +329,31 @@ public struct Note: Identifiable, Codable, Equatable, Sendable {
 
 ```swift
 public enum FeedbackKind: String, Codable, CaseIterable, Sendable, Identifiable {
-    case gap, mece, source, structure, clarity, question, other
-    // .label, .instruction (model guidance), .defaultEnabled, .fromModelString(_:)
+    case gap, mece, structure, clarity, evidence, assumption, warrant, counter, question, other
+    // .label, .instruction (model guidance), .defaultEnabled (all but .other), .fromModelString(_:)
+    // Lenient init(from:): "source" → .evidence, unknown → .other — an old settings file or log never fails to load.
 }
+
+public enum FeedbackSeverity: Int, Codable, Comparable { case minor = 1, major, critical }
+public enum FeedbackSource: String, Codable { case model, local }
 
 public struct FeedbackItem: Identifiable, Codable, Equatable, Sendable {
     public let id: UUID
     public let kind: FeedbackKind
-    public let text: String          // the observation
-    public let suggestion: String?   // optional insertable content
-    public let section: String?      // referenced section title
-    // .fingerprint — FNV-1a over kind + normalized text
+    public let anchor: String?         // the exact words it is about (verified; nil = the section as a whole)
+    public let text: String            // the observation, as a claim — never replacement prose
+    public let why: String?            // what it costs the argument
+    public let severity: FeedbackSeverity
+    public let source: FeedbackSource
+    public let rule: String?           // local checks: the heuristic that fired
+    public let section: String?        // referenced section title
+    // .fingerprint — FNV-1a over kind + normalized anchor (else text; local without anchor: rule + section)
 }
 ```
+
+`SectionCompletionTracker` (`Feedback/SectionCompletion.swift`) — pure value type behind the trigger in §3.2: `noteEdit(at:in:)`, `caretMoved(to:in:) -> Completed?`, `pauseElapsed(at:in:) -> Completed?`, `markRead(at:in:)`, `reset()`.
+
+`LocalChecks` (`Feedback/LocalChecks.swift`) — `run(text:cursorUTF16:) -> [FeedbackItem]`, capped at `maxFindings` (5); the rules in §3.2.
 
 ### 7.3 Settings (`Settings.swift`)
 
@@ -316,8 +363,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
     public var providers: [ProviderKind: ProviderConfig]
     public var enabledFeedbackKinds: [FeedbackKind]       // default FeedbackKind.defaultEnabled
     public var tipStyle: TipStyle
-    public var debounceSeconds: Double                    // default 2.5 (clamped 0.5…15)
-    public var autoFeedback: Bool                         // default true
+    public var debounceSeconds: Double                    // the pause trigger; default 20 (clamped 5…120 — an older build's keystroke debounce is lifted)
+    public var autoFeedback: Bool                         // default true: read a section when the writer finishes it
     public var temperature: Double                        // default 0.4 (clamped 0…2)
     public var maxTokens: Int                             // default 1024 (clamped 64…8192)
     public var vault: VaultConfig?                        // nil = encryption off
@@ -329,7 +376,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
 }
 
 public struct TipStyle: Codable, Equatable, Sendable {
-    public var tone: FeedbackTone        // neutral | academic | direct | encouraging
+    public var tone: FeedbackTone        // neutral | academic | direct (default) | encouraging — register only; every tone stays opinionated
     public var detail: FeedbackDetail    // brief | standard | detailed
     public var maxTips: Int              // default 3 (clamped 1…6)
     public var language: String          // "" = match the note's language
@@ -383,7 +430,7 @@ Settings UI (`Sources/KlartApp/Views/SettingsView.swift`) covers:
 
 1. **Interface** — Teleprompter mode on/off (§3.5), word count + estimated reading time on/off.
 2. **AI Provider** — active provider (Ollama / LM Studio / OpenRouter / Custom), endpoint, model (with live **Test Connection** model list), API key (stored in Keychain), temperature, max tokens.
-3. **Editor** — enabled feedback kinds, tip style (tone, detail, max tips, language, custom guidance), auto-analysis toggle and debounce.
+3. **Editor** — read-when-finished toggle and the pause length, notes per read, enabled feedback kinds, voice (tone, detail, language, custom guidance), system prompt editor, learning log (content opt-in, export, clear).
 4. **Security** — enable/disable the encrypted vault, Touch ID unlock, auto-lock timeout, lock-on-sleep, exclude-from-capture, change password, key rotation.
 
 Out-of-range values are clamped on decode (see §7.3).
@@ -411,9 +458,9 @@ bash Scripts/notarize-app.sh   # submit to Apple + staple
 
 ### 10.3 Tests
 
-`Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing (`FeedbackParserTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt/engine/insertion (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), end-to-end vault lifecycle (`VaultLifecycleTests`), the shared ATX heading rule (`MarkdownHeadingTests`), word count and reading time (`NoteMetricsTests`), and note titles and previews (`NoteTests`).
+`Tests/KlartKitTests/` (XCTest) covers: Argon2id KAT + vault KDF upgrades (`Argon2Tests`), forgiving JSON parsing, note identity and old kind names (`FeedbackParserTests`), the offline rules firing and staying quiet (`LocalChecksTests`), when a section counts as finished (`SectionCompletionTests`), v3 crypto / padding / rotation / audit chain / provider locality (`HardeningTests`), transport security (`LLMHTTPTests`), outline parsing incl. code fences and `[no-ai]` (`OutlineTests`), prompt assembly incl. `[no-ai]` redaction, anchor verification, local/model merge, and the response block (`PromptAndEngineTests`), storage & settings round-trips and clamps (`StorageAndSettingsTests`), vault crypto (`VaultCryptoTests`), end-to-end vault lifecycle (`VaultLifecycleTests`), the shared ATX heading rule (`MarkdownHeadingTests`), word count and reading time (`NoteMetricsTests`), and note titles and previews (`NoteTests`).
 
-`Tests/KlartAppTests/` (XCTest) covers the writing surface, which is geometry and therefore only measurable against the real thing: a real `NSWindow`, the real layout manager, real key events through the responder chain. `CaretGeometryTests` — the caret is the font's height rather than the line box's, scales with the font it stands in, and sits on the line it is actually on (including the empty one Enter opens at the end of a note). `WritingSurfaceTests` — the half-viewport margin lives in `textContainerInset` and not in `contentInsets`, the document view keeps filling the window so every click reaches the editor, the caret's line settles at the centre from a new note / the last line of a long one / a viewport that arrives late, re-centring does not rewrite the layout per keystroke, and the rail's anchors follow the same margin. `NewNoteTests` — the whole app: a new note holds the keyboard and typing lands in it, across note switches, without ever taking focus from a control that already has it. `ReadingPulseTests` — `editorIsReading` and the shared beat.
+`Tests/KlartAppTests/` (XCTest) covers the writing surface, which is geometry and therefore only measurable against the real thing: a real `NSWindow`, the real layout manager, real key events through the responder chain. `CaretGeometryTests` — the caret is the font's height rather than the line box's, scales with the font it stands in, and sits on the line it is actually on (including the empty one Enter opens at the end of a note). `WritingSurfaceTests` — the half-viewport margin lives in `textContainerInset` and not in `contentInsets`, the document view keeps filling the window so every click reaches the editor, the caret's line settles at the centre from a new note / the last line of a long one / a viewport that arrives late, re-centring does not rewrite the layout per keystroke, and the rail's anchors follow the same margin. `NewNoteTests` — the whole app: a new note holds the keyboard and typing lands in it, across note switches, without ever taking focus from a control that already has it. `RailOpeningTests` — opening the rail while a read starts and finishes leaves no ghost of the empty card's text on the page (real window, frames sampled from the layer tree's presentation copy, since `cacheDisplay` draws the model tree and never sees an animation). `FeedbackVerdictTests` — judging leaves the card in place, Respond writes the prompt block and lands the caret under it, leaving an edited section starts a read whose offline notes survive a model failure, a read replaces only its section's notes, and what the learning log records (signal always, content opt-in, never for a sensitive note, local notes attributed to their rule). `ReadingPulseTests` — `editorIsReading` and the shared beat.
 
 These need a window server. Without one (an SSH or daemon session) they skip rather than hang; `swift test` on a GitHub Actions runner has an Aqua session and runs them.
 

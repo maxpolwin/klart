@@ -37,8 +37,9 @@ final class RecommendationLogTests: XCTestCase {
             documentTopic: withContent ? "Pricing" : nil,
             sectionTitle: withContent ? "Who pays?" : nil,
             contextParagraph: withContent ? "Enterprise buyers care about seats." : nil,
+            anchor: withContent ? "Enterprise buyers" : nil,
             observation: withContent ? "No mention of churn." : nil,
-            suggestion: withContent ? "Add a churn assumption." : nil
+            why: withContent ? "Revenue depends on it." : nil
         )
     }
 
@@ -179,6 +180,22 @@ final class RecommendationLogTests: XCTestCase {
         XCTAssertEqual(record.kind, .clarity)
         XCTAssertTrue(record.usesDefaultPrompt)
         XCTAssertFalse(record.carriesContent)
+        XCTAssertEqual(record.source, .model)
+        XCTAssertNil(record.severity)
+    }
+
+    func testALogFromTheInsertingBuildStillLoads() throws {
+        // `source` was a kind and `inserted` an outcome before this build;
+        // neither may take a whole log down, or the next append would
+        // overwrite every record with one.
+        let json = Data(#"[{"outcome":"inserted","kind":"source","suggestion":"old prose"},{"outcome":"confirmed","kind":"gap"}]"#.utf8)
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let records = try decoder.decode([RecommendationRecord].self, from: json)
+        XCTAssertEqual(records.count, 2)
+        XCTAssertEqual(records[0].outcome, .inserted)
+        XCTAssertEqual(records[0].kind, .evidence)
+        XCTAssertFalse(records[0].carriesContent, "the old suggestion field is not carried forward")
     }
 
     func testRedactingContentKeepsTheSignalTier() {
