@@ -1,0 +1,1008 @@
+<title>Klårt Market Scoping</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Lora:ital,wght@0,500;0,600;1,500&display=swap">
+<style>
+:root{
+  color-scheme:light;
+  --bg:#F4F5F8; --bg-2:#FFFFFF;
+  --glass:rgba(255,255,255,0.72); --glass-2:rgba(255,255,255,0.86); --line:rgba(16,24,40,0.10); --line-2:rgba(16,24,40,0.18);
+  --ink:#141922; --ink-2:#4B5563; --ink-3:#7B8494;
+  --accent:#2F5FD0; --accent-ink:#2F5FD0; --accent-soft:rgba(47,95,208,0.10);
+  --s1:#2a78d6; --s2:#eb6834; --s3:#1baf7a; --s4:#eda100;
+  --good:#0E8F5A; --warn:#B7791F; --crit:#C43C3C;
+  --blob-a:#7C9CFF; --blob-b:#C9B6FF; --blob-c:#8EE0C8;
+  --shadow:0 8px 28px rgba(16,24,40,0.08);
+  --radius:20px; --radius-s:12px;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    color-scheme:dark;
+    --bg:#0A0E14; --bg-2:#111721;
+    --glass:rgba(255,255,255,0.055); --glass-2:rgba(255,255,255,0.09); --line:rgba(255,255,255,0.11); --line-2:rgba(255,255,255,0.20);
+    --ink:#F2F4F7; --ink-2:#B4BBC7; --ink-3:#7F8898;
+    --accent:#7C9CFF; --accent-ink:#9DB4FF; --accent-soft:rgba(124,156,255,0.14);
+    --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+    --good:#4ADE80; --warn:#FACC15; --crit:#F87171;
+    --blob-a:#3F5BD9; --blob-b:#7A4FD0; --blob-c:#1F8F7A;
+    --shadow:0 12px 40px rgba(0,0,0,0.35);
+  }
+}
+:root[data-theme="dark"]{
+  color-scheme:dark;
+  --bg:#0A0E14; --bg-2:#111721;
+  --glass:rgba(255,255,255,0.055); --glass-2:rgba(255,255,255,0.09); --line:rgba(255,255,255,0.11); --line-2:rgba(255,255,255,0.20);
+  --ink:#F2F4F7; --ink-2:#B4BBC7; --ink-3:#7F8898;
+  --accent:#7C9CFF; --accent-ink:#9DB4FF; --accent-soft:rgba(124,156,255,0.14);
+  --s1:#3987e5; --s2:#d95926; --s3:#199e70; --s4:#c98500;
+  --good:#4ADE80; --warn:#FACC15; --crit:#F87171;
+  --blob-a:#3F5BD9; --blob-b:#7A4FD0; --blob-c:#1F8F7A;
+  --shadow:0 12px 40px rgba(0,0,0,0.35);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:Inter,-apple-system,BlinkMacSystemFont,"SF Pro Text","Segoe UI",Roboto,sans-serif;font-feature-settings:'cv11','ss01';font-size:16px;line-height:1.6;padding-inline:20px;padding-block:0 96px;position:relative;overflow-x:hidden;-webkit-font-smoothing:antialiased}
+.sky{position:fixed;inset:0;z-index:0;pointer-events:none;overflow:hidden}
+.blob{position:absolute;width:56vw;height:56vw;max-width:760px;max-height:760px;filter:blur(80px);opacity:.42;border-radius:30% 70% 70% 30%/30% 30% 70% 70%;animation:blob-rotate 48s linear infinite}
+.blob.a{top:-18vw;left:-14vw;background-image:linear-gradient(var(--blob-a),var(--blob-b))}
+.blob.b{bottom:-22vw;right:-16vw;background-image:linear-gradient(var(--blob-c),var(--blob-a));animation-duration:64s;animation-direction:reverse;opacity:.32}
+@keyframes blob-rotate{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.blob{animation:none}}
+.page{position:relative;z-index:1;max-width:1120px;margin:0 auto}
+.prose{max-width:760px}
+h1,h2,h3{text-wrap:balance;margin:0}
+h1{font-family:Lora,Georgia,serif;font-weight:600;font-size:clamp(34px,5vw,52px);letter-spacing:-0.02em;line-height:1.1}
+h2{font-size:clamp(24px,3vw,32px);font-weight:700;letter-spacing:-0.02em;line-height:1.2}
+h3{font-size:19px;font-weight:600;letter-spacing:-0.01em;line-height:1.3}
+p{margin:0 0 14px}
+a{color:var(--accent-ink);text-decoration:none;border-bottom:1px solid transparent}
+a:hover,a:focus-visible{border-bottom-color:currentColor}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px;border-radius:4px}
+.eyebrow{font-size:12px;font-weight:600;letter-spacing:.12em;text-transform:uppercase;color:var(--ink-3)}
+.muted{color:var(--ink-2)}
+.small{font-size:14px}
+sup{font-size:.68em;line-height:0;vertical-align:baseline;position:relative;top:-.45em}
+sup a{color:var(--accent-ink);font-weight:600;border:0}
+header.hero{padding-block:72px 40px;display:grid;gap:18px}
+header.hero .lede{font-size:19px;color:var(--ink-2);max-width:720px}
+.meta{display:flex;flex-wrap:wrap;gap:10px 22px;font-size:13px;color:var(--ink-3)}
+.meta b{color:var(--ink-2);font-weight:600}
+nav.toc{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px}
+nav.toc a{font-size:13px;padding:6px 12px;border:1px solid var(--line);border-radius:999px;background:var(--glass);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);color:var(--ink-2)}
+nav.toc a:hover{border-color:var(--line-2);color:var(--ink)}
+section{padding-block:40px 8px}
+section>.head{display:grid;gap:8px;margin-bottom:22px;max-width:760px}
+.glass{background:var(--glass);backdrop-filter:blur(14px) saturate(120%);-webkit-backdrop-filter:blur(14px) saturate(120%);border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);background-image:linear-gradient(to top right,rgba(255,255,255,0.05),rgba(255,255,255,0))}
+.summary{padding:30px 32px;display:grid;gap:22px}
+.summary .verdict{font-family:Lora,Georgia,serif;font-size:clamp(20px,2.4vw,26px);font-weight:500;line-height:1.35;letter-spacing:-0.01em}
+.findings{display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px 26px;margin:0;padding:0;list-style:none;counter-reset:f}
+.findings li{counter-increment:f;display:grid;grid-template-columns:30px 1fr;gap:10px;font-size:15px;line-height:1.5}
+.findings li::before{content:counter(f);font-variant-numeric:tabular-nums;font-weight:700;color:var(--accent-ink);font-size:14px;padding-top:2px}
+.findings b{font-weight:600}
+.kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px}
+@media (max-width:820px){.kpis{grid-template-columns:repeat(2,1fr)}}
+@media (max-width:460px){.kpis{grid-template-columns:1fr}}
+.kpi{padding:14px 16px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass-2)}
+.kpi .n{font-size:26px;font-weight:700;letter-spacing:-0.02em;font-variant-numeric:tabular-nums;line-height:1.1}
+.kpi .l{font-size:12.5px;color:var(--ink-2);margin-top:4px}
+.grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:16px}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:16px}
+.card{padding:20px 22px;border:1px solid var(--line);border-radius:var(--radius);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.card h3{margin-bottom:8px}
+.card p:last-child{margin-bottom:0}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+table{border-collapse:collapse;width:100%;font-size:14px;min-width:640px}
+th,td{padding:11px 14px;text-align:left;vertical-align:top;border-bottom:1px solid var(--line)}
+th{font-size:12px;letter-spacing:.06em;text-transform:uppercase;color:var(--ink-3);font-weight:600;white-space:nowrap}
+tr:last-child td{border-bottom:0}
+td.num,th.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+td b{font-weight:600}
+.chip{display:inline-flex;align-items:center;gap:6px;padding:2px 9px;border-radius:999px;font-size:12px;font-weight:600;border:1px solid var(--line-2);white-space:nowrap;color:var(--ink-2)}
+.chip.good{color:var(--good);border-color:color-mix(in srgb,var(--good) 45%,transparent)}
+.chip.warn{color:var(--warn);border-color:color-mix(in srgb,var(--warn) 45%,transparent)}
+.chip.crit{color:var(--crit);border-color:color-mix(in srgb,var(--crit) 45%,transparent)}
+.chip.acc{color:var(--accent-ink);border-color:color-mix(in srgb,var(--accent) 45%,transparent);background:var(--accent-soft)}
+.score{display:inline-block;font-variant-numeric:tabular-nums;font-weight:600}
+.bar{display:inline-block;height:8px;border-radius:4px;background:var(--accent);vertical-align:middle;margin-right:8px}
+.note{display:grid;grid-template-columns:34px 1fr;gap:12px;padding:16px 18px;border:1px solid var(--line);border-radius:var(--radius-s);background:var(--glass)}
+.note .g{font-size:22px;line-height:1;color:var(--ink);padding-top:2px;text-align:center}
+.note .k{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-3);font-weight:600;display:flex;gap:8px;align-items:center}
+.note .k .sev{color:var(--crit);letter-spacing:0;font-size:13px}
+.note .anchor{font-style:italic;color:var(--ink-2);font-size:14px;margin:4px 0 6px}
+.note .why{color:var(--ink-2);font-size:14px;margin-top:6px}
+.notes{display:grid;gap:12px}
+ol.q,ul.plain{margin:0;padding-left:22px;display:grid;gap:8px}
+ol.q li::marker{font-weight:600;color:var(--accent-ink);font-variant-numeric:tabular-nums}
+.kill{border-left:3px solid var(--crit);padding-left:14px}
+.approach{display:grid;gap:14px}
+.approach .row{display:grid;grid-template-columns:150px 1fr;gap:12px;font-size:14.5px;border-top:1px solid var(--line);padding-top:10px}
+.approach .row .l{color:var(--ink-3);font-size:12px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;padding-top:3px}
+.approach .row:first-of-type{border-top:0;padding-top:0}
+figure{margin:0;padding:18px 20px 12px;border:1px solid var(--line);border-radius:var(--radius);background:var(--glass);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+figure figcaption{font-size:13px;color:var(--ink-2);margin-top:10px}
+figure .t{font-weight:600;font-size:15px;margin-bottom:4px}
+figure .st{font-size:13px;color:var(--ink-3);margin-bottom:10px}
+svg{max-width:100%;height:auto;display:block;font-family:inherit}
+svg text{fill:var(--ink-2);font-size:12px}
+svg .ax{stroke:var(--line-2);stroke-width:1}
+svg .grid{stroke:var(--line);stroke-width:1}
+svg .lab{fill:var(--ink);font-weight:600}
+svg .k{fill:var(--accent);}
+.legend{display:flex;flex-wrap:wrap;gap:8px 18px;font-size:13px;color:var(--ink-2);margin-top:8px}
+.legend span::before{content:"";display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:7px;vertical-align:-1px;background:var(--c)}
+.tip{position:fixed;z-index:5;pointer-events:none;padding:8px 10px;font-size:12.5px;border-radius:8px;background:var(--bg-2);color:var(--ink);border:1px solid var(--line-2);box-shadow:var(--shadow);opacity:0;transition:opacity .12s;max-width:260px}
+.tip.on{opacity:1}
+.sources{font-size:13.5px;color:var(--ink-2)}
+.sources ol{padding-left:26px;margin:0;display:grid;gap:5px}
+.sources li{padding-left:4px;word-break:break-word}
+.sources li:target{color:var(--ink);background:var(--accent-soft);border-radius:6px}
+.callout{padding:18px 20px;border-radius:var(--radius-s);border:1px solid color-mix(in srgb,var(--accent) 40%,transparent);background:var(--accent-soft)}
+.step{display:grid;grid-template-columns:64px 1fr;gap:14px;padding:12px 0;border-top:1px solid var(--line)}
+.step .w{font-size:12px;font-weight:700;letter-spacing:.06em;color:var(--accent-ink);text-transform:uppercase;padding-top:3px}
+.step:first-child{border-top:0}
+hr.sep{border:0;border-top:1px solid var(--line);margin:40px 0 0}
+@media (max-width:640px){
+  header.hero{padding-block:44px 28px}
+  .summary{padding:22px 20px}
+  .approach .row{grid-template-columns:1fr;gap:4px}
+  .step{grid-template-columns:1fr;gap:4px}
+}
+@media print{.sky{display:none}.glass,.card,figure,.tablewrap{box-shadow:none;background:transparent}}
+</style>
+<div class="sky" aria-hidden="true"><div class="blob a"></div><div class="blob b"></div></div>
+<div class="tip" id="tip" role="tooltip"></div>
+<div class="page">
+
+<header class="hero">
+  <div class="eyebrow">Market analysis and scoping · 14 September 2026</div>
+  <h1>Klårt Market Scoping</h1>
+  <p class="lede">A critical read of Klårt's current feature stack and vision: who would pay for a thinking coach that never writes, what the comparable market charges, which features change the business case, and five ways to build a different company on the same idea.</p>
+  <div class="meta">
+    <span><b>Basis</b> repository at commit 80930b8 (79 commits), PRD v2.0.0, KlartMac README<sup><a href="#s1">1</a></sup></span>
+    <span><b>Research</b> 100+ vendor, press and academic sources, cited inline</span>
+    <span><b>Currency</b> USD unless marked €; vendor prices as of September 2026</span>
+  </div>
+  <nav class="toc" aria-label="Sections">
+    <a href="#summary">Executive summary</a>
+    <a href="#stack">1 · Feature stack</a>
+    <a href="#market">2 · Market</a>
+    <a href="#targets">3 · Target groups</a>
+    <a href="#pricing">4 · Positioning &amp; pricing</a>
+    <a href="#critique">5 · Critical read</a>
+    <a href="#features">6 · Features</a>
+    <a href="#questions">7 · Business-case questions</a>
+    <a href="#alternatives">8 · Five alternatives</a>
+    <a href="#next">9 · Recommendation</a>
+    <a href="#sources">Sources</a>
+  </nav>
+</header>
+
+<section id="summary">
+  <div class="glass summary">
+    <div>
+      <div class="eyebrow">Executive summary</div>
+      <p class="verdict">Klårt sits in a quadrant nobody else occupies, a native, local-first editor whose AI only critiques. That position is real, evidence-backed and cheap to serve, but today it is a feature with no distribution. The business case turns on two things the current build does not yet have: a reason to return on day 30, and a way to reach writers where their documents already live.</p>
+    </div>
+    <div class="kpis">
+      <div class="kpi"><div class="n">0</div><div class="l">products found that combine native editor, local or BYO model and non-generative argument critique<sup><a href="#s2">2</a></sup></div></div>
+      <div class="kpi"><div class="n">$29–99</div><div class="l">one-time price band of every BYO-key Mac AI app with public revenue (TypingMind, BoltAI, MindMac, Kerlig, MacWhisper)<sup><a href="#s60">60</a>–<a href="#s66">66</a></sup></div></div>
+      <div class="kpi"><div class="n">g = 0.58</div><div class="l">pooled effect of AI feedback on writing performance across 43 studies<sup><a href="#s44">44</a></sup></div></div>
+      <div class="kpi"><div class="n">€0</div><div class="l">marginal model cost per user under BYO, on-device Foundation Models or Apple's free Private Cloud Compute tier<sup><a href="#s72">72</a>,<a href="#s73">73</a></sup></div></div>
+      <div class="kpi"><div class="n">8.9M</div><div class="l">monthly active Ollama developers, the addressable "already runs a local model" pool<sup><a href="#s67">67</a></sup></div></div>
+      <div class="kpi"><div class="n">~2%</div><div class="l">typical freemium conversion, the number the free tier must beat<sup><a href="#s69">69</a></sup></div></div>
+    </div>
+    <ol class="findings">
+      <li><span><b>The whitespace is real but thin.</b> No competitor combines Klårt's three traits, yet the critique itself is a prompt. Grammarly, Lex, ProWritingAid, Claude's learning style and ChatGPT Study Mode all critique on request<sup><a href="#s3">3</a>,<a href="#s5">5</a>,<a href="#s7">7</a>,<a href="#s37">37</a>,<a href="#s38">38</a></sup>. Defensibility has to come from the workflow (read on section completion, anchored notes, respond loop), from memory (the planned writer profile) and from rubric taste, not from the feature.</span></li>
+      <li><span><b>The "coaching, not ghostwriting" thesis is scientifically defensible.</b> A field RCT with about 1,000 students found unrestricted GPT lowered unassisted exam scores while a guard-railed tutor that withheld answers removed the harm<sup><a href="#s47">47</a></sup>. Knowledge workers who trust GenAI more report less critical thinking<sup><a href="#s45">45</a></sup>, heavier AI use correlates with cognitive offloading<sup><a href="#s78">78</a></sup>, and AI-assisted essays converge in structure<sup><a href="#s79">79</a></sup>. This is a marketing asset in education and advisory work, where AI generation is restricted but AI feedback is explicitly permitted<sup><a href="#s33">33</a>,<a href="#s34">34</a></sup>.</span></li>
+      <li><span><b>Pricing should follow the BYO-key Mac cohort, not the SaaS writing tools.</b> Zero marginal cost and a privacy audience point to a one-time license with twelve months of updates, the model that produced TypingMind's first $1M in twenty months and MacWhisper's roughly $2M cumulative<sup><a href="#s62">62</a>,<a href="#s65">65</a></sup>. Recommendation: free offline checks, €59 one-time, €29 yearly renewal, an optional €8 per month hosted-model tier for people who will never install Ollama, education at half price, team seats at €99 per year.</span></li>
+      <li><span><b>Beachhead: individual advisors and doctoral writers in the EU, privacy first.</b> Consultants already know MECE and the pyramid, buy their own tools, and handle client data they cannot paste into ChatGPT. BCG's internal Deckster ships a "review this" button precisely because juniors want critique against senior standards<sup><a href="#s41">41</a></sup>. Doctoral writers get scarce supervisor feedback and are covered by policies that allow feedback tools<sup><a href="#s33">33</a></sup>.</span></li>
+      <li><span><b>The biggest risk is not competition, it is the note silo.</b> Klårt asks writers to move their notes into its own store. Every comparable that grew without marketing (Obsidian, iA Writer, Typora) works on plain files the user already owns<sup><a href="#s17">17</a>,<a href="#s11">11</a>,<a href="#s52">52</a></sup>. Opening any folder of markdown is the single highest-leverage change in the backlog.</span></li>
+      <li><span><b>Three structural issues need a decision before launch.</b> The MIT license lets anyone ship the paid product. The default model (llama3.2, 3B parameters) cannot deliver the critique quality the pitch promises, so the first impression is the weakest one. Apple's on-device Foundation Models and free Private Cloud Compute tier on macOS 26/27 remove both setup friction and model cost, but only for an App Store build<sup><a href="#s72">72</a>,<a href="#s73">73</a></sup>.</span></li>
+      <li><span><b>Recommendation.</b> Do not choose between "indie one-time app" and the five alternatives in section 8 yet. Run the 90-day validation in section 7 with two segments, measure sections read per week, respond rate and day-30 retention, and let those numbers pick the path. The indie base case is a plausible €50–300k per year business; only the vertical and platform paths have a ceiling above that.</span></li>
+    </ol>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="head">
+    <div class="eyebrow">1 · What Klårt is today</div>
+    <h2>The stack is a finished editor and an unfinished product</h2>
+    <p class="muted">Audit of the shipped feature set against what each element is worth in the market. "Asset" means a buyer would pay for it or a competitor cannot copy it quickly; "liability" means it costs adoption or revenue as built.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Element</th><th>Status</th><th>Market meaning</th><th>Assessment</th></tr></thead>
+      <tbody>
+        <tr><td><b>Nine critique lenses</b> (Gap, MECE, Structure, Clarity, Evidence, Assumption, Warrant, Counter, Question), Paul–Elder crossed with Toulmin<sup><a href="#s1">1</a></sup></td><td>Shipped</td><td>The only structured argument rubric in an editor found in this research. ProWritingAid's critique reports and Lex's checks are prose-level; Thesify's review is manuscript-level and cloud only<sup><a href="#s7">7</a>,<a href="#s5">5</a>,<a href="#s27">27</a></sup></td><td><span class="chip good">✓ asset</span></td></tr>
+        <tr><td><b>Never writes</b>: notes quote the words, say what is wrong and what it costs; Respond inserts a prompt block, never model prose</td><td>Shipped</td><td>Matches the evidence on learning and the direction of university and firm policy. Also the reason a segment of writers (Ellipsus: 700k, iA Writer) chooses restraint<sup><a href="#s10">10</a>,<a href="#s11">11</a></sup></td><td><span class="chip good">✓ asset</span></td></tr>
+        <tr><td><b>Section-completion trigger</b>: reads when you leave a section or pause 20 s, cancels on edits, never re-reads unchanged text</td><td>Shipped, tested</td><td>Hard to copy in a chat window; this is the workflow moat. Nobody else times feedback to "finished thinking"</td><td><span class="chip good">✓ asset</span></td></tr>
+        <tr><td><b>Offline local checks</b>: uncited claims, hedge density, undefined terms, thin sections, overlapping headings</td><td>Shipped</td><td>Free tier material. Hemingway sold $19.99 desktop licences on rules alone<sup><a href="#s8">8</a></sup></td><td><span class="chip good">✓ asset</span></td></tr>
+        <tr><td><b>Teleprompter surface</b>: monochrome column, notes anchored to sections in a margin rail, verdict glyphs, fade-out</td><td>Shipped</td><td>Distinctive and demo-friendly. Design is a purchase driver in this category (iA Writer, Ulysses) but not a moat</td><td><span class="chip acc">◎ differentiator</span></td></tr>
+        <tr><td><b>Verdict log</b>: confirm, reject, respond, dismissed, with fingerprints and prompt hash</td><td>Shipped</td><td>Raw material for the writer profile and for proving the coach improves writers. Unused until the profile ships</td><td><span class="chip warn">▲ latent</span></td></tr>
+        <tr><td><b>Discuss thread and writer profile</b> (dialogic feedback, recurring weaknesses, conceded points)</td><td>Planned</td><td>The only element that compounds with use. Without it Klårt is a stateless critic and churns like one</td><td><span class="chip warn">▲ critical path</span></td></tr>
+        <tr><td><b>Any LLM</b>: Ollama, LM Studio, OpenRouter, OpenAI-compatible; live model lists; editable system prompts</td><td>Shipped</td><td>Zero marginal cost and a privacy story. Cost: setup friction, and default llama3.2 is too weak for the promised critique</td><td><span class="chip warn">▲ double-edged</span></td></tr>
+        <tr><td><b>Local-first security</b>: Keychain, AES-256-GCM vault, Argon2id, Touch ID, sensitive notes refuse cloud at request time</td><td>Shipped</td><td>Over-built for consumers, exactly right for advisors and regulated users. Sellable to firms as an on-prem story</td><td><span class="chip good">✓ asset (B2B)</span></td></tr>
+        <tr><td><b>Own note store</b>: JSON-wrapped markdown in Application Support, export and import as .md</td><td>Shipped</td><td>Creates a silo. Obsidian, iA Writer and Typora all work on the user's own folder; switching cost is the top adoption barrier<sup><a href="#s17">17</a>,<a href="#s52">52</a></sup></td><td><span class="chip crit">✕ liability</span></td></tr>
+        <tr><td><b>Coach actions</b>: ask questions, challenge, mirror, next steps (streamed text under 250 words)</td><td>Shipped</td><td>Generic; every chatbot does this. Fine as a convenience, not a selling point</td><td><span class="chip">neutral</span></td></tr>
+        <tr><td><b>MIT license</b>, full source public</td><td>Current</td><td>Anyone can build and ship the paid binary. Compatible with an open-core or plugin strategy, hostile to a pure licence business</td><td><span class="chip crit">✕ decide</span></td></tr>
+        <tr><td><b>Distribution</b>: TestFlight primary, DMG fallback; no website, no pricing, no telemetry</td><td>Current</td><td>No funnel, no usage data, no way to learn which segment converts</td><td><span class="chip crit">✕ liability</span></td></tr>
+        <tr><td><b>Mac only, no sync, no mobile, no collaboration</b></td><td>Current</td><td>Acceptable for a beachhead; blocks teams and institutions</td><td><span class="chip">neutral now</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin-top:10px">Net: roughly 60% of the engineering to date went into the writing surface and security, about 30% into the critique engine, and none into distribution or retention. That inversion is the product's main scoping problem.</p>
+</section>
+
+<section id="market">
+  <div class="head">
+    <div class="eyebrow">2 · Market context</div>
+    <h2>Everyone sells generation; the few who sell critique sell it as a cloud upload</h2>
+    <p class="muted">Two axes separate the field: how much the AI writes for you, and where the model runs. Klårt is alone in the "never writes, runs locally" corner. The corner is small, but everything adjacent to it is either free (iA Writer's restraint, Argdown, Hemingway classic) or a per-manuscript web service.</p>
+  </div>
+  <figure>
+    <div class="t">Positioning map of 23 comparable products</div>
+    <div class="st">Horizontal: how much the AI writes for you. Vertical: on-device or bring-your-own model versus cloud only. Placement is the analyst's judgment from vendor descriptions.</div>
+    <svg viewBox="0 0 760 500" role="img" aria-labelledby="pm-t" preserveAspectRatio="xMinYMin meet">
+<title id="pm-t">Positioning map: how much the AI writes for you versus where the model runs</title>
+<rect x="70" y="30" width="660" height="410" fill="var(--accent-soft)" opacity="0.35" rx="10"/>
+<line class="grid" x1="400.0" y1="30" x2="400.0" y2="440"/>
+<line class="grid" x1="70" y1="235.0" x2="730" y2="235.0"/>
+<line class="ax" x1="70" y1="440" x2="730" y2="440"/><line class="ax" x1="70" y1="30" x2="70" y2="440"/>
+<text x="70" y="462">AI writes or rewrites your text</text>
+<text x="730" y="462" text-anchor="end">AI never writes your text</text>
+<text x="60" y="34" text-anchor="end" transform="rotate(-90 60 34)" style="font-size:12px">On-device / bring your own model</text>
+<text x="60" y="440" text-anchor="end" transform="rotate(-90 60 440)" style="font-size:12px">Cloud only</text>
+<text x="419.8" y="46.39999999999998" class="lab" style="font-size:11px;opacity:.8">Unoccupied quadrant</text>
+<g data-tip="Grammarly">
+<circle cx="149.2" cy="382.6" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="159.2" y="386.6" text-anchor="start" style="font-size:11.5px">Grammarly</text>
+</g>
+<g data-tip="Notion AI">
+<circle cx="122.8" cy="407.2" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="132.8" y="411.2" text-anchor="start" style="font-size:11.5px">Notion AI</text>
+</g>
+<g data-tip="Wordtune">
+<circle cx="109.6" cy="349.8" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="119.6" y="353.8" text-anchor="start" style="font-size:11.5px">Wordtune</text>
+</g>
+<g data-tip="Sudowrite">
+<circle cx="96.4" cy="317.0" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="106.4" y="321.0" text-anchor="start" style="font-size:11.5px">Sudowrite</text>
+</g>
+<g data-tip="Writer.com">
+<circle cx="162.4" cy="423.6" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="172.4" y="427.6" text-anchor="start" style="font-size:11.5px">Writer.com</text>
+</g>
+<g data-tip="Lex">
+<circle cx="360.4" cy="366.2" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="370.4" y="370.2" text-anchor="start" style="font-size:11.5px">Lex</text>
+</g>
+<g data-tip="ProWritingAid">
+<circle cx="320.8" cy="325.2" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="330.8" y="329.2" text-anchor="start" style="font-size:11.5px">ProWritingAid</text>
+</g>
+<g data-tip="Hemingway Plus">
+<circle cx="400.0" cy="349.8" r="6" fill="var(--s1)" stroke="var(--bg)" stroke-width="2"/>
+<text x="410.0" y="353.8" text-anchor="start" style="font-size:11.5px">Hemingway Plus</text>
+</g>
+<g data-tip="Craft AI">
+<rect x="209.7" y="204.9" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="225.2" y="214.4" text-anchor="start" style="font-size:11.5px">Craft AI</text>
+</g>
+<g data-tip="Obsidian Copilot">
+<rect x="209.7" y="98.3" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="225.2" y="107.8" text-anchor="start" style="font-size:11.5px">Obsidian Copilot</text>
+</g>
+<g data-tip="BoltAI / TypingMind">
+<rect x="143.7" y="122.9" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="159.2" y="132.4" text-anchor="start" style="font-size:11.5px">BoltAI / TypingMind</text>
+</g>
+<g data-tip="Apple Writing Tools">
+<rect x="262.5" y="57.3" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="278.0" y="66.8" text-anchor="start" style="font-size:11.5px">Apple Writing Tools</text>
+</g>
+<g data-tip="iA Writer">
+<rect x="691.5" y="40.9" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="685.0" y="50.4" text-anchor="end" style="font-size:11.5px">iA Writer</text>
+</g>
+<g data-tip="Ellipsus">
+<rect x="704.7" y="278.7" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="698.2" y="288.2" text-anchor="end" style="font-size:11.5px">Ellipsus</text>
+</g>
+<g data-tip="Argdown">
+<rect x="632.1" y="73.7" width="11" height="11" fill="var(--s3)" stroke="var(--bg)" stroke-width="2"/>
+<text x="625.6" y="83.2" text-anchor="end" style="font-size:11.5px">Argdown</text>
+</g>
+<g data-tip="Thesify">
+<rect x="618.9" y="344.3" width="11" height="11" transform="rotate(45 624.4 349.8)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="612.4" y="353.8" text-anchor="end" style="font-size:11.5px">Thesify</text>
+</g>
+<g data-tip="Marlowe">
+<rect x="671.7" y="418.1" width="11" height="11" transform="rotate(45 677.2 423.6)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="665.2" y="427.6" text-anchor="end" style="font-size:11.5px">Marlowe</text>
+</g>
+<g data-tip="Esslo">
+<rect x="658.5" y="311.5" width="11" height="11" transform="rotate(45 664.0 317.0)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="652.0" y="321.0" text-anchor="end" style="font-size:11.5px">Esslo</text>
+</g>
+<g data-tip="Reviewer3">
+<rect x="645.3" y="385.3" width="11" height="11" transform="rotate(45 650.8 390.8)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="638.8" y="394.8" text-anchor="end" style="font-size:11.5px">Reviewer3</text>
+</g>
+<g data-tip="ChatGPT Study Mode">
+<rect x="447.3" y="401.7" width="11" height="11" transform="rotate(45 452.8 407.2)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="462.8" y="411.2" text-anchor="start" style="font-size:11.5px">ChatGPT Study Mode</text>
+</g>
+<g data-tip="Claude learning style">
+<rect x="447.3" y="368.9" width="11" height="11" transform="rotate(45 452.8 374.4)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="462.8" y="378.4" text-anchor="start" style="font-size:11.5px">Claude learning style</text>
+</g>
+<g data-tip="Hemingway classic">
+<rect x="473.7" y="114.7" width="11" height="11" transform="rotate(45 479.2 120.2)" fill="var(--s2)" stroke="var(--bg)" stroke-width="2"/>
+<text x="489.2" y="124.2" text-anchor="start" style="font-size:11.5px">Hemingway classic</text>
+</g>
+<g data-tip="Klårt">
+<circle cx="703.6" cy="112.0" r="9" fill="none" stroke="var(--accent)" stroke-width="3"/><circle cx="703.6" cy="112.0" r="3" fill="var(--accent)"/>
+<text x="691.6" y="116.0" text-anchor="end" class="lab" style="font-size:11.5px">Klårt</text>
+</g>
+</svg>
+    <div class="legend"><span style="--c:var(--s1)">● AI writing assistants</span><span style="--c:var(--s3)">■ Editors and note apps</span><span style="--c:var(--s2)">◆ Critique-only and Socratic tools</span><span style="--c:var(--accent)">◎ Klårt</span></div>
+    <figcaption>iA Writer and Argdown share Klårt's corner but have no AI at all<sup><a href="#s13">13</a>,<a href="#s81">81</a></sup>; Hemingway classic is rule-based. The critique-only AI tools (Thesify, Marlowe, Esslo, Reviewer3) are all cloud uploads of finished documents<sup><a href="#s27">27</a>,<a href="#s25">25</a>,<a href="#s26">26</a>,<a href="#s31">31</a></sup>.</figcaption>
+  </figure>
+
+  <h3 style="margin:28px 0 12px">2.1 Comparable companies</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Product</th><th>What it sells</th><th>Price</th><th>Model</th><th>Writes or critiques</th><th>Traction</th></tr></thead>
+      <tbody>
+        <tr><td><b>Grammarly</b> (Superhuman since Oct 2025)</td><td>Grammar, tone, rewrites, agent</td><td>Pro $12/mo annual, $30 monthly; Business $33<sup><a href="#s3">3</a></sup></td><td>Subscription</td><td>Both</td><td>40M+ daily users, about $700M revenue, growth slowed to ~12%<sup><a href="#s4">4</a></sup></td></tr>
+        <tr><td><b>Lex</b></td><td>AI word processor with checks and "find counter-arguments" prompts</td><td>Free 30 checks/mo; Pro $14.99/mo annual<sup><a href="#s5">5</a></sup></td><td>Subscription</td><td>Flags plus one-click apply</td><td>$2.75M seed 2023<sup><a href="#s6">6</a></sup></td></tr>
+        <tr><td><b>ProWritingAid</b></td><td>20+ reports incl. developmental "Critique" reports</td><td>$120/yr; lifetime $399<sup><a href="#s7">7</a></sup></td><td>Sub + lifetime</td><td>Both</td><td>n/a</td></tr>
+        <tr><td><b>Hemingway</b></td><td>Readability rules; Plus adds AI rewrites</td><td>Classic $19.99 one-time; Plus $100/yr<sup><a href="#s8">8</a>,<a href="#s9">9</a></sup></td><td>One-time + sub</td><td>Classic critiques only</td><td>n/a</td></tr>
+        <tr><td><b>Ellipsus</b></td><td>Collaborative drafting, "no generative AI, ever"</td><td>Plus $6/mo, own it after $144<sup><a href="#s10">10</a></sup></td><td>Subscribe-to-own</td><td>No AI</td><td>~700k writers<sup><a href="#s11">11</a></sup></td></tr>
+        <tr><td><b>iA Writer</b></td><td>Minimal markdown editor; Authorship marks pasted or AI text</td><td>$49.99 Mac one-time<sup><a href="#s12">12</a></sup></td><td>One-time</td><td>No generation</td><td>Undisclosed; design awards 2025–26<sup><a href="#s13">13</a></sup></td></tr>
+        <tr><td><b>Ulysses / Bear / Craft</b></td><td>Apple-native writing and notes</td><td>$39.99/yr; $29.99/yr; $8/mo<sup><a href="#s14">14</a>,<a href="#s15">15</a>,<a href="#s16">16</a></sup></td><td>Subscription</td><td>Apple Writing Tools or own AI rewrites</td><td>Craft $20.8M raised</td></tr>
+        <tr><td><b>Obsidian</b></td><td>Local-first markdown vault, plugins</td><td>Free incl. work; Sync $4/mo; Publish $8<sup><a href="#s17">17</a>,<a href="#s18">18</a></sup></td><td>Free + add-ons</td><td>AI via plugins</td><td>5–10M users, team of ~18<sup><a href="#s19">19</a></sup></td></tr>
+        <tr><td><b>Copilot for Obsidian</b></td><td>Chat and agents over the vault</td><td>Free BYO key; Plus $139.99/yr; Supporter $349.99 once<sup><a href="#s20">20</a></sup></td><td>BYO + sub + one-time</td><td>Generates</td><td>n/a</td></tr>
+        <tr><td><b>Notion AI</b></td><td>Workspace agent; add-on folded into Business tier May 2025</td><td>Business $20/seat/mo<sup><a href="#s21">21</a></sup></td><td>Subscription</td><td>Generates</td><td>~$600M ARR; over half from AI-enabled customers<sup><a href="#s22">22</a></sup></td></tr>
+        <tr><td><b>Thesify</b></td><td>Ethical academic feedback, pre-submission review, no rewriting</td><td>€75/yr<sup><a href="#s28">28</a></sup></td><td>Subscription</td><td>Critiques only</td><td>10k+ academics since Sept 2024<sup><a href="#s30">30</a></sup></td></tr>
+        <tr><td><b>Marlowe</b> (Authors.ai)</td><td>Analytical reports on fiction manuscripts</td><td>$29.95 per report; $159/yr<sup><a href="#s25">25</a></sup></td><td>Per report + sub</td><td>Critiques only</td><td>n/a</td></tr>
+        <tr><td><b>Esslo</b></td><td>College-essay feedback, never writes</td><td>$39–79/mo<sup><a href="#s26">26</a></sup></td><td>Subscription</td><td>Critiques only</td><td>80k+ users, 150k essays<sup><a href="#s32">32</a></sup></td></tr>
+        <tr><td><b>Reviewer3 / PeerReviewAI</b></td><td>AI peer-review report on a PDF</td><td>$19 per review or $29/mo; $2.99–49 per paper<sup><a href="#s31">31</a></sup></td><td>Per use</td><td>Critiques only</td><td>n/a</td></tr>
+        <tr><td><b>Paperpal / Writefull</b></td><td>Academic language editing, institutional licences</td><td>$139/yr; $150/yr<sup><a href="#s29">29</a></sup></td><td>Sub + site licence</td><td>Rewrites</td><td>3M users; 1,500+ institutions<sup><a href="#s29">29</a></sup></td></tr>
+        <tr><td><b>ChatGPT Study Mode, Claude learning style</b></td><td>Socratic modes inside general chatbots</td><td>Bundled in plans<sup><a href="#s37">37</a>,<a href="#s38">38</a></sup></td><td>Bundled</td><td>Withholds answers</td><td>Northeastern 50k seats, Cal State ~$24/seat/yr<sup><a href="#s36">36</a>,<a href="#s35">35</a></sup></td></tr>
+        <tr><td><b>BoltAI / TypingMind / MindMac / Kerlig</b></td><td>Mac front-ends for BYO-key and local models</td><td>$29–99 one-time, 12 months of updates<sup><a href="#s60">60</a>–<a href="#s64">64</a></sup></td><td>One-time + team sub</td><td>Chat</td><td>TypingMind $1M in 20 months, ~$150k/month by 2025<sup><a href="#s62">62</a>,<a href="#s63">63</a></sup></td></tr>
+        <tr><td><b>Ollama / LM Studio / Jan</b></td><td>Local model runtimes</td><td>Free; Ollama Cloud $20–100/mo<sup><a href="#s67">67</a>,<a href="#s68">68</a></sup></td><td>Free + cloud</td><td>Infrastructure</td><td>Ollama 8.9M monthly devs, $65M Series B July 2026<sup><a href="#s67">67</a></sup></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3 style="margin:28px 0 12px">2.2 Price ladder</h3>
+  <figure>
+    <div class="t">Year-one cost of comparable tools</div>
+    <div class="st">Hatched bars are one-time purchases, solid bars are subscriptions billed annually. Klårt's proposed price is shown in the accent colour. Euro prices are plotted at face value.</div>
+    <svg viewBox="0 0 760 574" role="img" aria-labelledby="pl-t" preserveAspectRatio="xMinYMin meet">
+<title id="pl-t">Year-one cost of comparable tools, USD equivalent</title>
+<defs><pattern id="hatch" patternUnits="userSpaceOnUse" width="6" height="6" patternTransform="rotate(45)"><rect width="6" height="6" fill="var(--s1)" opacity="0.25"/><line x1="0" y1="0" x2="0" y2="6" stroke="var(--s1)" stroke-width="2"/></pattern></defs>
+<line class="grid" x1="190.0" y1="22" x2="190.0" y2="534"/>
+<text x="190.0" y="552" text-anchor="middle">$0</text>
+<line class="grid" x1="275.0" y1="22" x2="275.0" y2="534"/>
+<text x="275.0" y="552" text-anchor="middle">$60</text>
+<line class="grid" x1="360.0" y1="22" x2="360.0" y2="534"/>
+<text x="360.0" y="552" text-anchor="middle">$120</text>
+<line class="grid" x1="445.0" y1="22" x2="445.0" y2="534"/>
+<text x="445.0" y="552" text-anchor="middle">$180</text>
+<line class="grid" x1="530.0" y1="22" x2="530.0" y2="534"/>
+<text x="530.0" y="552" text-anchor="middle">$240</text>
+<line class="grid" x1="615.0" y1="22" x2="615.0" y2="534"/>
+<text x="615.0" y="552" text-anchor="middle">$300</text>
+<line class="grid" x1="700.0" y1="22" x2="700.0" y2="534"/>
+<text x="700.0" y="552" text-anchor="middle">$360</text>
+<line class="ax" x1="190" y1="22" x2="190" y2="534"/>
+<g class="row" data-tip="Typora: $14.99 one-time">
+<rect x="0" y="30" width="760" height="24" fill="transparent"/>
+<text x="180" y="46" text-anchor="end" >Typora</text>
+<rect x="190" y="35" width="21.2" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="207.2" y="35" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="219.2" y="46" style="font-variant-numeric:tabular-nums">$15</text>
+</g>
+<g class="row" data-tip="Hemingway classic: $19.99 one-time, no AI">
+<rect x="0" y="54" width="760" height="24" fill="transparent"/>
+<text x="180" y="70" text-anchor="end" >Hemingway classic</text>
+<rect x="190" y="59" width="28.3" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="214.3" y="59" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="226.3" y="70" style="font-variant-numeric:tabular-nums">$20</text>
+</g>
+<g class="row" data-tip="Bear Pro: $29.99/yr">
+<rect x="0" y="78" width="760" height="24" fill="transparent"/>
+<text x="180" y="94" text-anchor="end" >Bear Pro</text>
+<rect x="190" y="83" width="42.5" height="14" rx="0" fill="var(--s1)"/>
+<rect x="228.5" y="83" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="240.5" y="94" style="font-variant-numeric:tabular-nums">$30</text>
+</g>
+<g class="row" data-tip="Ulysses: $39.99/yr">
+<rect x="0" y="102" width="760" height="24" fill="transparent"/>
+<text x="180" y="118" text-anchor="end" >Ulysses</text>
+<rect x="190" y="107" width="56.7" height="14" rx="0" fill="var(--s1)"/>
+<rect x="242.7" y="107" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="254.7" y="118" style="font-variant-numeric:tabular-nums">$40</text>
+</g>
+<g class="row" data-tip="Obsidian Sync: $4/mo annual">
+<rect x="0" y="126" width="760" height="24" fill="transparent"/>
+<text x="180" y="142" text-anchor="end" >Obsidian Sync</text>
+<rect x="190" y="131" width="68.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="254.0" y="131" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="266.0" y="142" style="font-variant-numeric:tabular-nums">$48</text>
+</g>
+<g class="row" data-tip="iA Writer: $49.99 one-time">
+<rect x="0" y="150" width="760" height="24" fill="transparent"/>
+<text x="180" y="166" text-anchor="end" >iA Writer</text>
+<rect x="190" y="155" width="70.8" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="256.8" y="155" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="268.8" y="166" style="font-variant-numeric:tabular-nums">$50</text>
+</g>
+<g class="row" data-tip="MacWhisper: €59 one-time (plotted at face value)">
+<rect x="0" y="174" width="760" height="24" fill="transparent"/>
+<text x="180" y="190" text-anchor="end" >MacWhisper</text>
+<rect x="190" y="179" width="83.6" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="269.6" y="179" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="281.6" y="190" style="font-variant-numeric:tabular-nums">€59</text>
+</g>
+<g class="row" data-tip="Klårt (proposed): €59 one-time, 12 months of updates">
+<rect x="0" y="198" width="760" height="24" fill="transparent"/>
+<text x="180" y="214" text-anchor="end" class="lab">Klårt (proposed)</text>
+<rect x="190" y="203" width="83.6" height="14" rx="0" fill="var(--accent)"/>
+<rect x="269.6" y="203" width="4" height="14" rx="2" fill="var(--accent)"/>
+<text x="281.6" y="214" style="font-variant-numeric:tabular-nums">€59</text>
+</g>
+<g class="row" data-tip="Scrivener 3: $59.99 one-time">
+<rect x="0" y="222" width="760" height="24" fill="transparent"/>
+<text x="180" y="238" text-anchor="end" >Scrivener 3</text>
+<rect x="190" y="227" width="85.0" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="271.0" y="227" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="283.0" y="238" style="font-variant-numeric:tabular-nums">$60</text>
+</g>
+<g class="row" data-tip="Thesify: €75/yr">
+<rect x="0" y="246" width="760" height="24" fill="transparent"/>
+<text x="180" y="262" text-anchor="end" >Thesify</text>
+<rect x="190" y="251" width="106.2" height="14" rx="0" fill="var(--s1)"/>
+<rect x="292.2" y="251" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="304.2" y="262" style="font-variant-numeric:tabular-nums">€75</text>
+</g>
+<g class="row" data-tip="TypingMind Extended: $79 one-time">
+<rect x="0" y="270" width="760" height="24" fill="transparent"/>
+<text x="180" y="286" text-anchor="end" >TypingMind Extended</text>
+<rect x="190" y="275" width="111.9" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="297.9" y="275" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="309.9" y="286" style="font-variant-numeric:tabular-nums">$79</text>
+</g>
+<g class="row" data-tip="Craft Plus: $8/mo annual">
+<rect x="0" y="294" width="760" height="24" fill="transparent"/>
+<text x="180" y="310" text-anchor="end" >Craft Plus</text>
+<rect x="190" y="299" width="136.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="322.0" y="299" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="334.0" y="310" style="font-variant-numeric:tabular-nums">$96</text>
+</g>
+<g class="row" data-tip="BoltAI Pro: $99 one-time, 12 months of updates">
+<rect x="0" y="318" width="760" height="24" fill="transparent"/>
+<text x="180" y="334" text-anchor="end" >BoltAI Pro</text>
+<rect x="190" y="323" width="140.2" height="14" rx="0" fill="url(#hatch)" stroke="var(--s1)" stroke-width="1"/>
+<rect x="326.2" y="323" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="338.2" y="334" style="font-variant-numeric:tabular-nums">$99</text>
+</g>
+<g class="row" data-tip="ProWritingAid Premium: $120/yr">
+<rect x="0" y="342" width="760" height="24" fill="transparent"/>
+<text x="180" y="358" text-anchor="end" >ProWritingAid Premium</text>
+<rect x="190" y="347" width="170.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="356.0" y="347" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="368.0" y="358" style="font-variant-numeric:tabular-nums">$120</text>
+</g>
+<g class="row" data-tip="Paperpal Prime: $139/yr">
+<rect x="0" y="366" width="760" height="24" fill="transparent"/>
+<text x="180" y="382" text-anchor="end" >Paperpal Prime</text>
+<rect x="190" y="371" width="196.9" height="14" rx="0" fill="var(--s1)"/>
+<rect x="382.9" y="371" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="394.9" y="382" style="font-variant-numeric:tabular-nums">$139</text>
+</g>
+<g class="row" data-tip="Copilot for Obsidian Plus: $139.99/yr">
+<rect x="0" y="390" width="760" height="24" fill="transparent"/>
+<text x="180" y="406" text-anchor="end" >Copilot for Obsidian Plus</text>
+<rect x="190" y="395" width="198.3" height="14" rx="0" fill="var(--s1)"/>
+<rect x="384.3" y="395" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="396.3" y="406" style="font-variant-numeric:tabular-nums">$140</text>
+</g>
+<g class="row" data-tip="Grammarly Pro: $12/mo annual">
+<rect x="0" y="414" width="760" height="24" fill="transparent"/>
+<text x="180" y="430" text-anchor="end" >Grammarly Pro</text>
+<rect x="190" y="419" width="204.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="390.0" y="419" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="402.0" y="430" style="font-variant-numeric:tabular-nums">$144</text>
+</g>
+<g class="row" data-tip="Marlowe Pro: $159/yr, 48 reports">
+<rect x="0" y="438" width="760" height="24" fill="transparent"/>
+<text x="180" y="454" text-anchor="end" >Marlowe Pro</text>
+<rect x="190" y="443" width="225.2" height="14" rx="0" fill="var(--s1)"/>
+<rect x="411.2" y="443" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="423.2" y="454" style="font-variant-numeric:tabular-nums">$159</text>
+</g>
+<g class="row" data-tip="Lex Pro: $14.99/mo annual">
+<rect x="0" y="462" width="760" height="24" fill="transparent"/>
+<text x="180" y="478" text-anchor="end" >Lex Pro</text>
+<rect x="190" y="467" width="255.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="441.0" y="467" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="453.0" y="478" style="font-variant-numeric:tabular-nums">$180</text>
+</g>
+<g class="row" data-tip="Notion Business: $20/seat/mo annual">
+<rect x="0" y="486" width="760" height="24" fill="transparent"/>
+<text x="180" y="502" text-anchor="end" >Notion Business</text>
+<rect x="190" y="491" width="340.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="526.0" y="491" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="538.0" y="502" style="font-variant-numeric:tabular-nums">$240</text>
+</g>
+<g class="row" data-tip="Writer.com Starter: $29/user/mo annual">
+<rect x="0" y="510" width="760" height="24" fill="transparent"/>
+<text x="180" y="526" text-anchor="end" >Writer.com Starter</text>
+<rect x="190" y="515" width="493.0" height="14" rx="0" fill="var(--s1)"/>
+<rect x="679.0" y="515" width="4" height="14" rx="2" fill="var(--s1)"/>
+<text x="691.0" y="526" style="font-variant-numeric:tabular-nums">$348</text>
+</g>
+</svg>
+    <div class="legend"><span style="--c:var(--s1)">Subscription, annual</span><span style="--c:var(--s1);opacity:.7">Hatched: one-time licence</span><span style="--c:var(--accent)">Klårt proposal</span></div>
+    <figcaption>Two clusters: editors and local-AI utilities at $15–99 one-time, and AI writing SaaS at $120–350 per year. Klårt's cost structure belongs to the first cluster, its value story to the second. Sources per row in section 2.1.</figcaption>
+  </figure>
+
+  <h3 style="margin:28px 0 12px">2.3 Demand and platform signals</h3>
+  <div class="grid2">
+    <div class="card"><h3>Firms are building critique internally</h3><p>BCG's Deckster, used weekly by about 40% of associates, has a "review this" button that grades a junior's slide against senior best practice<sup><a href="#s41">41</a></sup>. McKinsey's Lilli serves over 75% of 43,000 staff and includes a tone-of-voice checker<sup><a href="#s40">40</a></sup>. Amazon's six-page memo culture is being eroded by internal AI drafting tools, and employees report lost rigour<sup><a href="#s42">42</a></sup>. Demand for AI review of structured argument exists; it is currently met inside firms, not by products.</p></div>
+    <div class="card"><h3>Education permits feedback, restricts generation</h3><p>Liverpool lists "getting feedback on work prior to submission" as acceptable use; King's, Oxford and Toronto follow the same shape, with disclosure<sup><a href="#s33">33</a>,<a href="#s34">34</a></sup>. Grammarly for Education claims 3,000+ institutions<sup><a href="#s39">39</a></sup>. Anthropic and OpenAI shipped Socratic modes in 2025 and are signing campuses at roughly $24 per seat per year<sup><a href="#s36">36</a>,<a href="#s35">35</a></sup>. A tool that structurally cannot write is easier to approve than one that promises not to.</p></div>
+    <div class="card"><h3>Apple leaves the critique gap open</h3><p>Writing Tools on macOS 15–27 proofread, rewrite, summarise and compose in any text field, free, and offer no editorial feedback mode<sup><a href="#s71">71</a></sup>. The Foundation Models framework gives apps a free on-device 3B model; macOS 27 adds a LanguageModel protocol, a 32K-context Private Cloud Compute model at no API cost for Small Business Program apps under 2M downloads, and swappable Anthropic and Google packages<sup><a href="#s72">72</a>,<a href="#s73">73</a></sup>. Setup friction and model cost, Klårt's two adoption taxes, largely disappear for an App Store build.</p></div>
+    <div class="card"><h3>Local AI is now a mainstream developer habit</h3><p>Ollama reports 8.9M monthly active developers and raised $65M in July 2026; LM Studio is free for commercial use; Jan has over 5M downloads<sup><a href="#s67">67</a>,<a href="#s68">68</a></sup>. The pool of people who already run a model locally is large, technical, privacy-motivated and Mac-heavy. It is Klårt's cheapest first audience and its least representative one.</p></div>
+  </div>
+
+  <h3 style="margin:28px 0 12px">2.4 Sizing anchors</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Anchor</th><th class="num">Figure</th><th>Caveat</th></tr></thead>
+      <tbody>
+        <tr><td>AI writing-assistant software market, 2025</td><td class="num">$1.8–2.3B, 24% CAGR<sup><a href="#s55">55</a>,<a href="#s56">56</a></sup></td><td>Vendor estimates; other reports claim $90B with a different scope</td></tr>
+        <tr><td>Grammarly revenue and users</td><td class="num">~$700M, 40M DAU<sup><a href="#s4">4</a></sup></td><td>Shows the ceiling for horizontal writing tools; growth now ~12%</td></tr>
+        <tr><td>Researchers worldwide (FTE)</td><td class="num">8.9M<sup><a href="#s57">57</a></sup></td><td>UNESCO 2018 figure; likely an undercount</td></tr>
+        <tr><td>US research doctorates awarded, 2024</td><td class="num">58,131<sup><a href="#s58">58</a></sup></td><td>Global doctoral-student total not published; OECD says doctorate holders doubled in 20 years</td></tr>
+        <tr><td>Management consultants worldwide</td><td class="num">1.1–5.5M<sup><a href="#s59">59</a></sup></td><td>No authoritative count; Europe about 900k</td></tr>
+        <tr><td>Active Macs</td><td class="num">&gt;100M<sup><a href="#s70">70</a></sup></td><td>Apple's last Mac-specific figure is from 2018; the base has set records every quarter since</td></tr>
+        <tr><td>Freemium conversion, day 35</td><td class="num">~2.1%<sup><a href="#s69">69</a></sup></td><td>Mobile benchmark; no Mac-specific data exists publicly</td></tr>
+        <tr><td>Share of apps reaching $10k MRR</td><td class="num">4.6%<sup><a href="#s69">69</a></sup></td><td>81% never reach $1k per month within two years</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin-top:10px">Bottom-up is more useful than top-down here. If 1% of Europe's consultants and 0.5% of doctoral writers in Mac-heavy fields could be reached, the serviceable market is on the order of 20–40k licences, which at €59 is a €1–2M cumulative opportunity for the indie path before renewals or teams.</p>
+</section>
+<section id="targets">
+  <div class="head">
+    <div class="eyebrow">3 · Target groups</div>
+    <h2>Two beachheads score clearly ahead; the PRD's three audiences are three different markets</h2>
+    <p class="muted">Nine candidate segments scored 1–5 on need intensity, willingness to pay, reachability with an indie budget, fit with Mac plus markdown, and how much a local-first design is worth to them. Scores are analyst judgment informed by the evidence in section 2.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Segment</th><th class="num">Need</th><th class="num">Pay</th><th class="num">Reach</th><th class="num">Mac + md</th><th class="num">Privacy value</th><th class="num">Total / 25</th><th>Role</th></tr></thead>
+      <tbody>
+        <tr><td><b>Strategy consultants and analysts</b>, individual licence</td><td class="num">5</td><td class="num">4</td><td class="num">3</td><td class="num">4</td><td class="num">5</td><td class="num"><span class="bar" style="width:84px"></span>21</td><td><span class="chip acc">Beachhead A</span></td></tr>
+        <tr><td><b>Doctoral students and postdocs</b>, humanities and social sciences</td><td class="num">5</td><td class="num">2</td><td class="num">4</td><td class="num">4</td><td class="num">4</td><td class="num"><span class="bar" style="width:76px"></span>19</td><td><span class="chip acc">Beachhead B</span></td></tr>
+        <tr><td><b>Founders, product managers, staff engineers</b> writing memos, PRDs, RFCs</td><td class="num">4</td><td class="num">4</td><td class="num">3</td><td class="num">5</td><td class="num">3</td><td class="num"><span class="bar" style="width:76px"></span>19</td><td><span class="chip">Second wave</span></td></tr>
+        <tr><td><b>Non-fiction essayists, newsletter writers</b></td><td class="num">3</td><td class="num">3</td><td class="num">4</td><td class="num">4</td><td class="num">2</td><td class="num"><span class="bar" style="width:64px"></span>16</td><td><span class="chip">Second wave</span></td></tr>
+        <tr><td><b>Lawyers, policy analysts</b></td><td class="num">4</td><td class="num">5</td><td class="num">2</td><td class="num">1</td><td class="num">5</td><td class="num"><span class="bar" style="width:68px"></span>17</td><td><span class="chip">Needs Word</span></td></tr>
+        <tr><td><b>Grant and proposal writers</b></td><td class="num">4</td><td class="num">3</td><td class="num">2</td><td class="num">2</td><td class="num">3</td><td class="num"><span class="bar" style="width:56px"></span>14</td><td><span class="chip">Later</span></td></tr>
+        <tr><td><b>Undergraduates</b></td><td class="num">3</td><td class="num">1</td><td class="num">3</td><td class="num">3</td><td class="num">2</td><td class="num"><span class="bar" style="width:48px"></span>12</td><td><span class="chip">Only via institutions</span></td></tr>
+        <tr><td><b>Consulting and advisory firms</b>, B2B</td><td class="num">4</td><td class="num">5</td><td class="num">1</td><td class="num">2</td><td class="num">5</td><td class="num"><span class="bar" style="width:68px"></span>17</td><td><span class="chip">Alternative 2</span></td></tr>
+        <tr><td><b>Universities and writing centres</b>, B2B</td><td class="num">4</td><td class="num">3</td><td class="num">1</td><td class="num">2</td><td class="num">4</td><td class="num"><span class="bar" style="width:56px"></span>14</td><td><span class="chip">Alternative 3</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="grid3" style="margin-top:16px">
+    <div class="card">
+      <div class="eyebrow">Beachhead A</div>
+      <h3>The independent advisor</h3>
+      <p>Senior associate to partner, or solo consultant, DACH and EU. Writes recommendation memos and proposal narratives weekly, was trained on MECE and the pyramid, and cannot paste client material into a public chatbot. Buys their own tools when the firm's are slow.</p>
+      <p><b>Job to be done:</b> "Tell me where a partner will tear this apart before the partner does."<br><b>Buying trigger:</b> a review that hurt. <b>Channel:</b> LinkedIn, consulting newsletters, StrategyU-type communities that already sell pyramid-principle prompt packs<sup><a href="#s43">43</a></sup>.</p>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Beachhead B</div>
+      <h3>The doctoral writer</h3>
+      <p>Years two to four of a PhD in a text-heavy field. Gets supervisor feedback every few months, is explicitly allowed to use feedback tools but not generation, and already writes in markdown or would for a good editor. Price sensitive, time rich, and talks to peers.</p>
+      <p><b>Job to be done:</b> "Give me reviewer two before reviewer two." <b>Buying trigger:</b> a chapter due to the supervisor. <b>Channel:</b> university writing centres, PhD subreddits and Discords, Obsidian and Zotero communities; education pricing.</p>
+    </div>
+    <div class="card">
+      <div class="eyebrow">Second wave</div>
+      <h3>The memo-culture operator</h3>
+      <p>Founder, PM or staff engineer whose company runs on written narratives. Highest Mac and markdown fit of any segment and comfortable with local models. Privacy matters less than speed, so the hosted-model tier is for them.</p>
+      <p><b>Job to be done:</b> "Make my six-pager survive the meeting." <b>Buying trigger:</b> a strategy doc or RFC that got shredded. <b>Channel:</b> Hacker News, Product Hunt, engineering-management newsletters.</p>
+    </div>
+  </div>
+</section>
+
+<section id="pricing">
+  <div class="head">
+    <div class="eyebrow">4 · Positioning and pricing</div>
+    <h2>Position as the editor that never writes; price like a Mac utility, not a SaaS</h2>
+  </div>
+  <h3 style="margin-bottom:12px">4.1 Positioning options</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Option</th><th>One-line claim</th><th>Who it resonates with</th><th>Risk</th><th>Verdict</th></tr></thead>
+      <tbody>
+        <tr><td><b>A. The editor that never writes for you</b></td><td>"Every other AI writes. Klårt reads." Integrity and ownership: the text stays yours, the thinking gets harder</td><td>Academia, advisors, anyone who has read the cognitive-debt coverage<sup><a href="#s46">46</a>,<a href="#s45">45</a></sup>; iA Writer and Ellipsus buyers</td><td>Sounds like a limitation to people who want output</td><td><span class="chip good">✓ recommended</span></td></tr>
+        <tr><td><b>B. Private editorial review</b></td><td>"A demanding reader that runs on your Mac and sends nothing anywhere"</td><td>Regulated professionals, DACH privacy culture, local-AI enthusiasts</td><td>Privacy is a hygiene factor for most; sells the how, not the why</td><td><span class="chip">supporting message</span></td></tr>
+        <tr><td><b>C. The consultant's red pen</b></td><td>"MECE, pyramid and warrant checks on every section, as you write"</td><td>Beachhead A only</td><td>Narrow; alienates B; consulting vocabulary ages badly</td><td><span class="chip">use in vertical channel copy</span></td></tr>
+        <tr><td><b>D. A thinking coach in your notes</b> (current README)</td><td>"Structure your thinking in markdown"</td><td>Personal-knowledge crowd</td><td>Three category words at once (coach, notes, editor); "coach" is soft and collides with Socratic chatbot modes</td><td><span class="chip warn">▲ retire</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="callout" style="margin-top:14px">
+    <b>Category name to own:</b> the <i>argument editor</i>. Grammar checkers work on sentences, AI assistants write paragraphs, Klårt reviews arguments. The name says what it reads and implies what it will not do. The nine lenses become the public rubric, published and citable, so the product's opinion is visible before download.
+  </div>
+
+  <h3 style="margin:28px 0 12px">4.2 Pricing architecture</h3>
+  <p class="prose muted">Three facts decide the model. Klårt's marginal cost per user is zero. Its audience distrusts subscriptions for tools that run on their own hardware. And every BYO-key Mac AI app with public revenue anchored on a one-time licence, then added a team or hosted tier for upside<sup><a href="#s62">62</a>,<a href="#s63">63</a>,<a href="#s65">65</a>,<a href="#s66">66</a></sup>. Lifetime and one-time plan types are also growing as a share of app revenue, from 6.4% to 10.3% in two years, and 35% of apps now mix them with subscriptions<sup><a href="#s69">69</a></sup>.</p>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Tier</th><th class="num">Price</th><th>Includes</th><th>Rationale and comparables</th></tr></thead>
+      <tbody>
+        <tr><td><b>Klårt Free</b></td><td class="num">€0</td><td>Editor, offline local checks, one model read per note per day, export</td><td>Hemingway classic proves rules alone have value<sup><a href="#s8">8</a></sup>. The daily read is the taste that converts; 2% conversion is the floor to beat<sup><a href="#s69">69</a></sup></td></tr>
+        <tr><td><b>Klårt</b></td><td class="num">€59 one-time</td><td>Unlimited reads with your own model, all lenses, Discuss, writer profile, 12 months of updates; then keep the version you have</td><td>Middle of the $49–99 band: iA Writer $49.99, MacWhisper €59, BoltAI $79–99, TypingMind $79<sup><a href="#s12">12</a>,<a href="#s60">60</a>,<a href="#s61">61</a>,<a href="#s65">65</a></sup>. Sketch, Nova, CleanShot and Agenda run this "keep forever, renew updates" model<sup><a href="#s53">53</a>,<a href="#s54">54</a></sup></td></tr>
+        <tr><td><b>Update renewal</b></td><td class="num">€29 / year</td><td>Another year of updates, new lens packs</td><td>Nova renews at half list price; CleanShot at $19 on $29<sup><a href="#s54">54</a></sup>. Optional, never auto-billed</td></tr>
+        <tr><td><b>Klårt with model</b></td><td class="num">€8 / month or €79 / year</td><td>Licence plus a hosted, curated model for people who will not install Ollama; profile sync when iOS exists</td><td>Copilot for Obsidian and Raycast let BYO users stay free and charge the rest<sup><a href="#s20">20</a>,<a href="#s51">51</a></sup>. On macOS 27 the Apple free cloud tier may make this tier a margin line rather than a cost line<sup><a href="#s73">73</a></sup></td></tr>
+        <tr><td><b>Education</b></td><td class="num">€29 one-time</td><td>Same as Klårt, verified .edu or student card</td><td>Scrivener and Scite discount 30–50%<sup><a href="#s50">50</a></sup>; beachhead B cannot pay €59 and will refer peers</td></tr>
+        <tr><td><b>Team</b></td><td class="num">€99 / seat / year</td><td>Shared rubrics, admin-set model endpoint, licence management, on-prem model guidance</td><td>TypingMind's team tier became over half its revenue<sup><a href="#s63">63</a></sup>; Obsidian's optional $50 commercial licence shows firms will pay for a compliant story<sup><a href="#s17">17</a></sup></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <h3 style="margin:28px 0 12px">4.3 Channel and licence decisions</h3>
+  <div class="grid2">
+    <div class="card"><h3>Sell direct and on the App Store, in that order</h3><p>Direct via Paddle or Lemon Squeezy keeps 90%+ and allows the one-time-plus-renewal model cleanly. The App Store takes 15% under the Small Business Program<sup><a href="#s76">76</a></sup> but is the gate to Apple's free cloud model tier and to TestFlight, which the repo already targets<sup><a href="#s73">73</a>,<a href="#s1">1</a></sup>. iA Writer sells both ways<sup><a href="#s12">12</a></sup>. Setapp is a third channel later: 70% of a subscriber's fee is pooled by app usage, so a daily-use writing tool earns disproportionately<sup><a href="#s77">77</a></sup>.</p></div>
+    <div class="card"><h3>Decide the licence before the first sale</h3><p>MIT lets anyone rebuild and sell the binary. Three workable positions: keep MIT and sell convenience only (signed builds, hosted model, sync), like Jan and Obsidian's plugin economy; move the app to a source-available licence such as FSL or BUSL while keeping KlartKit's checks MIT; or close the app and open the rubric format. The recommendation is the middle path. It preserves the trust that a privacy product needs and still protects the paid surface.</p></div>
+  </div>
+  <h3 style="margin:28px 0 12px">4.4 Revenue scenarios for the indie base case</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Scenario</th><th class="num">Paid licences, year 1</th><th class="num">Licence revenue</th><th class="num">Hosted tier subscribers</th><th class="num">Hosted revenue / year</th><th class="num">Total year 1</th><th>What it takes</th></tr></thead>
+      <tbody>
+        <tr><td><b>Floor</b></td><td class="num">800</td><td class="num">€47k</td><td class="num">80</td><td class="num">€6k</td><td class="num">~€55k</td><td>Launch on Hacker News and Product Hunt, no paid acquisition; comparable to MacWhisper's first year<sup><a href="#s65">65</a></sup></td></tr>
+        <tr><td><b>Base</b></td><td class="num">3,000</td><td class="num">€177k</td><td class="num">400</td><td class="num">€32k</td><td class="num">~€210k</td><td>Two segments converting, education referrals, a published rubric that gets cited</td></tr>
+        <tr><td><b>Upside</b></td><td class="num">8,000</td><td class="num">€472k</td><td class="num">1,500</td><td class="num">€120k</td><td class="num">~€600k</td><td>Team tier live, one institutional pilot, Setapp listing; TypingMind's trajectory<sup><a href="#s62">62</a></sup></td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted" style="margin-top:10px">Assumptions: €59 average licence net of education discount, 15% blended platform fees excluded, no renewals in year one. All three scenarios are a lifestyle business, not a venture case. That is the honest ceiling of the current strategy, and the reason section 8 exists.</p>
+</section>
+
+<section id="critique">
+  <div class="head">
+    <div class="eyebrow">5 · Klårt read by its own editor</div>
+    <h2>The business case, put through the nine lenses</h2>
+    <p class="muted">Each note follows Klårt's own shape: the words it is about, the observation, and what it costs the argument. Severity marks as in the app: ‼ the case fails without this, ! it is weakened.</p>
+  </div>
+  <div class="notes">
+    <div class="note"><div class="g">◇</div><div><div class="k">Gap <span class="sev">‼</span></div><div class="anchor">"A thinking coach that lives in your notes"</div><div>Nothing in the product or the documents answers why a writer would move their notes into a new store to get the coach. The switching cost of a system of record is the highest in software, and the value on offer arrives only after the move.</div><div class="why">Costs the argument its funnel: every comparable that grew organically works on files the user already has.</div></div></div>
+    <div class="note"><div class="g">⊢</div><div><div class="k">Assumption <span class="sev">‼</span></div><div class="anchor">"Ollama (ollama pull llama3.2)"</div><div>The quick start assumes a 3B local model can find unstated warrants and the strongest unmet objection. It cannot, reliably. The pitch is written for a frontier-class critic; the default experience is a small one. First impressions are formed on the default.</div><div class="why">Costs the argument its proof: users judge the thesis by the weakest read they get.</div></div></div>
+    <div class="note"><div class="g">❝</div><div><div class="k">Evidence <span class="sev">!</span></div><div class="anchor">"Feedback that the writer has to act on is what changes the writer"</div><div>Stated as fact and true in the literature for students, where corrective feedback beats reformulation<sup><a href="#s47">47</a>,<a href="#s48">48</a>,<a href="#s49">49</a>,<a href="#s75">75</a></sup>. No evidence yet that it holds for Klårt's adult writers, and the app collects verdicts but has no users producing them.</div><div class="why">Without usage data the thesis stays borrowed; the learning log is the instrument and it is unplugged.</div></div></div>
+    <div class="note"><div class="g">⇄</div><div><div class="k">Counter <span class="sev">!</span></div><div class="anchor">"Coaching, not ghostwriting"</div><div>The strongest objection: most people want output, and the market prices it that way. Grammarly's $700M and Notion's AI-driven ARR are generation businesses<sup><a href="#s4">4</a>,<a href="#s22">22</a></sup>; critique-only tools top out around 10k to 80k users<sup><a href="#s30">30</a>,<a href="#s32">32</a></sup>. The case has not engaged this. The answer is that restraint is a niche, and niches are what indie tools win; the case should say so and size it.</div><div class="why">Unanswered, it lets a reader dismiss the whole strategy as principled but small.</div></div></div>
+    <div class="note"><div class="g">⧉</div><div><div class="k">MECE <span class="sev">!</span></div><div class="anchor">"Academic researchers… Consultants and analysts… Technical writers"</div><div>These are three markets with different channels, price points and policies, listed as one audience. Technical writers in particular have no privacy premium and strong tooling already.</div><div class="why">A launch aimed at all three reaches none; the scoring in section 3 orders them.</div></div></div>
+    <div class="note"><div class="g">≡</div><div><div class="k">Structure <span class="sev">!</span></div><div class="anchor">Commit history: 79 commits, 0 on distribution</div><div>The work is ordered inside-out: caret geometry, rail springs, vault encryption before a landing page or a price. The order hides the argument that this is a business rather than a craft object.</div><div class="why">Every month on the surface is a month without the conversion data that would settle sections 7 and 8.</div></div></div>
+    <div class="note"><div class="g">⇒</div><div><div class="k">Warrant <span class="sev">!</span></div><div class="anchor">"Local-first &amp; private"</div><div>The claim and the evidence (Keychain, AES-GCM, sensitive notes) are present. Why privacy should make someone pay is never said. For beachhead A it is a purchase condition; for the memo-culture operator it is indifferent.</div><div class="why">Without the link, privacy reads as engineering pride rather than a segment's requirement.</div></div></div>
+    <div class="note"><div class="g">◎</div><div><div class="k">Clarity</div><div class="anchor">"thinking coach", "editor", "notes app", "Teleprompter"</div><div>Four names for one product across README and PRD. A careful reader cannot say what category Klårt competes in, so cannot say what it replaces.</div><div class="why">A product without a category has no comparison set in the buyer's head and defaults to "free chatbot".</div></div></div>
+    <div class="note"><div class="g">?</div><div><div class="k">Question</div><div class="anchor">Day 30</div><div>What does a Klårt user do in week five that they could not do in week one? If the answer is "the same thing, with a critic that remembers nothing", retention will look like a utility's. The planned writer profile is the only feature that answers this, and it is not built.</div></div></div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="head">
+    <div class="eyebrow">6 · Features worth considering</div>
+    <h2>Build the things that create return visits and remove the reasons not to start</h2>
+    <p class="muted">Ranked by effect on the business case rather than on the writing experience. "Now" items precede any pricing test; "Next" items follow the first paying cohort.</p>
+  </div>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Feature</th><th>Why it matters commercially</th><th class="num">Effort</th><th class="num">Case impact</th><th>Priority</th></tr></thead>
+      <tbody>
+        <tr><td><b>Open any folder of markdown</b> (Obsidian vault, iA Writer library, a git repo) with the same anchored critique</td><td>Removes the silo, the top adoption barrier. Turns 5–10M Obsidian users into a reachable audience with zero migration<sup><a href="#s19">19</a></sup>. Sensitive-note and vault features become optional layers</td><td class="num">Medium</td><td class="num">Very high</td><td><span class="chip acc">Now</span></td></tr>
+        <tr><td><b>Apple Foundation Models provider</b> on macOS 26, plus the 32K Private Cloud Compute model on macOS 27 behind the LanguageModel protocol</td><td>Zero setup, zero cost, offline by default. Solves the weak-default problem for App Store users and makes the free tier free to serve<sup><a href="#s72">72</a>,<a href="#s73">73</a></sup></td><td class="num">Low</td><td class="num">High</td><td><span class="chip acc">Now</span></td></tr>
+        <tr><td><b>Writer profile and Discuss</b> (already specified in PRD §3.6)</td><td>The retention engine: recurring weaknesses, conceded points, "you hedged in Pricing on 12 Aug". The one feature a chatbot cannot replicate without the verdict history</td><td class="num">High</td><td class="num">Very high</td><td><span class="chip acc">Now</span></td></tr>
+        <tr><td><b>Whole-document read</b>: does the opening carry the conclusion, is the order top-down, does every section earn its place (pyramid and SCQA checks)</td><td>Consultants and thesis writers judge documents, not sections. Section reads alone miss the failure partners care about most</td><td class="num">Medium</td><td class="num">High</td><td><span class="chip acc">Now</span></td></tr>
+        <tr><td><b>Rubric packs</b>: consulting memo, thesis chapter, grant proposal, PRD or RFC, policy brief; user-authored and shareable as files</td><td>Turns positioning C into a menu without narrowing the product. Shareable rubrics are the community mechanic that grew Obsidian's plugin ecosystem, and a reason for renewals</td><td class="num">Medium</td><td class="num">High</td><td><span class="chip">Next</span></td></tr>
+        <tr><td><b>Progress report</b>: acceptance rate by lens over time, exportable</td><td>Makes the coaching claim visible and gives institutions the outcome metric they buy on. Uses data already logged</td><td class="num">Low</td><td class="num">Medium</td><td><span class="chip">Next</span></td></tr>
+        <tr><td><b>Drop-in review of .docx and .pdf</b> (read-only, notes in the rail, export as comments)</td><td>Reaches lawyers, policy analysts and Word-bound consultants without becoming a Word editor. Deckary shows Word add-ins are the vector firms accept<sup><a href="#s74">74</a></sup></td><td class="num">Medium</td><td class="num">Medium</td><td><span class="chip">Next</span></td></tr>
+        <tr><td><b>Evidence lens against the user's own references</b> (Zotero, BibTeX, a sources folder)</td><td>Converts "uncited claim" from a heuristic into a check that academics trust. Scite charges $144 per year for adjacent functionality<sup><a href="#s50">50</a></sup></td><td class="num">High</td><td class="num">Medium</td><td><span class="chip">Next</span></td></tr>
+        <tr><td><b>System-wide "Read this" service</b>: select text anywhere, get the rail as a floating panel</td><td>Growth surface: Klårt becomes usable in Mail, Pages and browsers without leaving them. Kerlig and Raycast monetise exactly this surface<sup><a href="#s64">64</a>,<a href="#s51">51</a></sup></td><td class="num">Medium</td><td class="num">Medium</td><td><span class="chip">Next</span></td></tr>
+        <tr><td><b>Team rubrics and supervisor mode</b>: a partner or supervisor sets the rubric; the writer gets pre-feedback against it</td><td>Unlocks the team tier and both B2B alternatives</td><td class="num">High</td><td class="num">High (B2B)</td><td><span class="chip">Later</span></td></tr>
+        <tr><td><b>iOS reader</b> with Respond, profile sync</td><td>Needed for the hosted tier's value and for education; not needed for the first cohort</td><td class="num">High</td><td class="num">Low now</td><td><span class="chip">Later</span></td></tr>
+        <tr><td><b>Explicitly not</b>: generation, templates, chat-in-document, spaced recall</td><td>Each one dilutes positioning A and re-enters a market Grammarly and Notion own. The PRD already parks spaced recall for the right reason</td><td class="num">—</td><td class="num">Negative</td><td><span class="chip crit">✕ never</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+<section id="questions">
+  <div class="head">
+    <div class="eyebrow">7 · Questions that decide the business case</div>
+    <h2>Twenty-two questions, four kill criteria, one 90-day plan</h2>
+    <p class="muted">Ordered so that the cheapest questions come first. Most can be answered with a landing page, a TestFlight cohort of fifty and the verdict log that already exists.</p>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>Demand</h3>
+      <ol class="q">
+        <li>When a writer in beachhead A or B finishes a section today, what do they do to check it, and what does that cost them in time or embarrassment?</li>
+        <li>How many sections per week does a target user actually finish? Below roughly five, a per-section critic is used too rarely to be remembered.</li>
+        <li>Which lens produces notes users act on? Respond and Confirm rates by kind, from the log, over the first 30 days.</li>
+        <li>What share of notes are rejected, and are rejections "wrong" or "true but unwelcome"? The second is the product working.</li>
+        <li>Do users prefer critique on a finished section or on the whole document? The answer sets the roadmap in section 6.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Willingness to pay</h3>
+      <ol class="q" start="6">
+        <li>At €59 one-time, what share of a 1,000-visitor landing page pre-orders? Below 1% the indie path is a hobby.</li>
+        <li>Does a hosted-model tier at €8 per month convert people who never installed Ollama? If not, the audience is only local-AI enthusiasts.</li>
+        <li>Will an advisory firm pay €99 per seat for shared rubrics and a compliant endpoint, or does its own tool (Lilli, Deckster) make the question moot<sup><a href="#s40">40</a>,<a href="#s41">41</a></sup>?</li>
+        <li>Will a writing centre or graduate school pay per seat for feedback-only AI, given it already pays Grammarly, Paperpal or OpenAI at $13–24 per seat<sup><a href="#s35">35</a>,<a href="#s39">39</a></sup>?</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Differentiation and defensibility</h3>
+      <ol class="q" start="10">
+        <li>Blind test: Klårt's nine-lens read versus a one-paragraph prompt in Claude or ChatGPT on the same section. If users cannot tell them apart, the product is the workflow only.</li>
+        <li>Does the writer profile change acceptance rates after 20 reads? This is the compounding claim; it must be measured, not asserted.</li>
+        <li>Which local model is the minimum for a read users accept, and does it run on an 8 GB Mac? This sets the real addressable base.</li>
+        <li>What happens to the rejection rate when the same rubric is run by Apple's on-device model versus a frontier model? Quality difference sets the hosted tier's value.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Distribution</h3>
+      <ol class="q" start="14">
+        <li>Will Obsidian users adopt Klårt as a second app on the same folder, or only as a plugin inside Obsidian?</li>
+        <li>Which channel produces the first 100 paying users at under €20 acquisition cost: Hacker News, a PhD community, a consulting newsletter, or the Ollama ecosystem?</li>
+        <li>Is App Store distribution worth 15% for TestFlight, Apple's free cloud model tier and discoverability, versus direct only<sup><a href="#s76">76</a>,<a href="#s73">73</a></sup>?</li>
+        <li>Does publishing the nine-lens rubric as a standalone document get cited or shared? A rubric with reach is a marketing asset the app can ride.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Economics and structure</h3>
+      <ol class="q" start="18">
+        <li>What is the support cost per user of BYO-model setup? Provider and model debugging is the hidden cost of "any LLM".</li>
+        <li>Which licence: stay MIT and sell convenience, or source-available for the app and MIT for KlartKit?</li>
+        <li>Solo founder time: is 12 months of updates a promise that can be kept alongside a consulting practice?</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>Risk</h3>
+      <ol class="q" start="21">
+        <li>If Apple adds an editorial-feedback mode to Writing Tools in macOS 28, what remains? Rubric depth, anchoring, memory and the profile are the only durable answers.</li>
+        <li>If Grammarly or Lex ship a "critique only" toggle, does Klårt's local-first stance still justify a separate app? Only for the segments that score privacy at 5 in section 3.</li>
+      </ol>
+    </div>
+  </div>
+  <div class="grid2" style="margin-top:16px">
+    <div class="card">
+      <h3>Kill criteria</h3>
+      <ul class="plain">
+        <li class="kill">Fewer than 5 finished sections per user per week after 30 days: usage too sparse for a per-section critic.</li>
+        <li class="kill">Respond plus Confirm below 30% of notes: the rubric is not landing, whatever the model.</li>
+        <li class="kill">Pre-order conversion below 1% on qualified traffic at €59: reprice, or leave the indie path.</li>
+        <li class="kill">Blind test shows no preference for Klårt's read over a plain chatbot prompt: the value is the editor, so price the editor and give the AI away.</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>90-day validation plan</h3>
+      <div class="step"><div class="w">Weeks 1–2</div><div>Landing page with positioning A, the published rubric, and a €59 pre-order button. Two ad-free channels per segment. Add opt-in, local-only usage counters to the app (sections read, verdicts), exported by the user, never sent automatically.</div></div>
+      <div class="step"><div class="w">Weeks 3–6</div><div>TestFlight cohort of 50: 25 advisors, 25 doctoral writers. Ship open-folder mode and the Apple on-device provider first so the cohort starts without Ollama. Weekly export of verdict logs; ten interviews.</div></div>
+      <div class="step"><div class="w">Weeks 7–10</div><div>Blind test (question 10) with 20 participants. Ship a minimal writer profile to half the cohort and compare acceptance rates.</div></div>
+      <div class="step"><div class="w">Weeks 11–13</div><div>Price test: €59 versus €79 one-time, and the €8 hosted tier. Decide the path in section 8 against the kill criteria. Licence decision made and documented before the first charge.</div></div>
+    </div>
+  </div>
+</section>
+
+<section id="alternatives">
+  <div class="head">
+    <div class="eyebrow">8 · Five alternative approaches</div>
+    <h2>Same conviction, five different companies</h2>
+    <p class="muted">The base case is the current path: a native Mac app sold as a one-time licence, ceiling in the low hundreds of thousands per year. Each alternative keeps the thesis that AI should critique and never write, and changes what is sold, to whom, and how it reaches them.</p>
+  </div>
+  <div class="grid2">
+    <div class="card approach">
+      <div><div class="eyebrow">Alternative 1</div><h3>Be a layer, not a destination</h3><p>Klårt stops being a notes app and becomes the critique engine that lives wherever the writing already is: an Obsidian plugin, a VS Code extension for markdown and docs, a Word and Google Docs add-in, a macOS system-wide panel.</p></div>
+      <div class="row"><div class="l">Target</div><div>Obsidian's 5–10M users, engineers writing RFCs in repos, Word-bound advisors<sup><a href="#s19">19</a></sup></div></div>
+      <div class="row"><div class="l">Revenue</div><div>Free with your own key; Pro €5 per month for rubric packs, profile sync and the hosted model; Copilot for Obsidian's exact shape; Smart Connections charges $99 per year per Pro plugin on over 1M downloads<sup><a href="#s20">20</a>,<a href="#s23">23</a></sup></div></div>
+      <div class="row"><div class="l">What changes</div><div>KlartKit becomes the product; the Swift editor becomes one host among four. Anchoring and section detection must be re-implemented per host</div></div>
+      <div class="row"><div class="l">Gives up</div><div>The Teleprompter surface and most of the security layer as selling points</div></div>
+      <div class="row"><div class="l">Key risk</div><div>Platform dependence; Obsidian or Microsoft can ship the feature. Plugin users expect free</div></div>
+      <div class="row"><div class="l">Fit with current code</div><div><span class="chip warn">▲ medium</span> engine reusable, UI not</div></div>
+      <div class="row"><div class="l">Ceiling</div><div>Higher reach, lower price; €0.3–1M per year at plugin-economy conversion rates</div></div>
+    </div>
+    <div class="card approach">
+      <div><div class="eyebrow">Alternative 2</div><h3>The review desk for advisory firms</h3><p>A vertical B2B product: partners encode the firm's standards as rubrics, associates get pre-review against them, quality lead sees which weaknesses recur across the firm. Runs on the firm's own model endpoint or on-prem.</p></div>
+      <div class="row"><div class="l">Target</div><div>Boutique strategy, economic and ESG advisory firms of 10–500 people, first in DACH, that lack a Lilli or Deckster<sup><a href="#s40">40</a>,<a href="#s41">41</a></sup></div></div>
+      <div class="row"><div class="l">Revenue</div><div>€600–1,200 per seat per year, annual contracts, a pilot per firm. Ten firms of 50 seats is €300–600k ARR</div></div>
+      <div class="row"><div class="l">What changes</div><div>Admin console, shared rubric repository, Word and PowerPoint intake, audit logs, SSO. Sales motion replaces launch marketing</div></div>
+      <div class="row"><div class="l">Gives up</div><div>Individual buyers, the indie pace, most of the design identity</div></div>
+      <div class="row"><div class="l">Key risk</div><div>Long sales cycles; firms' own AI teams; the founder becomes a salesperson</div></div>
+      <div class="row"><div class="l">Fit with current code</div><div><span class="chip good">✓ high</span> security model and BYO endpoint are already enterprise-shaped</div></div>
+      <div class="row"><div class="l">Ceiling</div><div>The only path with a venture-scale ceiling; also the only one where the founder's consulting background is the distribution</div></div>
+    </div>
+    <div class="card approach">
+      <div><div class="eyebrow">Alternative 3</div><h3>Formative feedback for universities</h3><p>An integrity-safe feedback tool licensed to graduate schools and writing centres. Students get the nine-lens read on chapters and papers; instructors set rubrics and see anonymised weakness patterns; nothing is ever generated, which is the compliance story.</p></div>
+      <div class="row"><div class="l">Target</div><div>Graduate schools, doctoral programmes and writing centres already buying Grammarly, Paperpal, Writefull or OpenAI seats<sup><a href="#s39">39</a>,<a href="#s29">29</a>,<a href="#s35">35</a></sup></div></div>
+      <div class="row"><div class="l">Revenue</div><div>€15–30 per seat per year, campus licences; Thesify and Esslo show the willingness, Cal State's $24 per seat the benchmark<sup><a href="#s28">28</a>,<a href="#s26">26</a>,<a href="#s35">35</a></sup></div></div>
+      <div class="row"><div class="l">What changes</div><div>Web or cross-platform client, LMS integration, instructor dashboard, accessibility certification, data-processing agreements. The evidence base in section 2.3 becomes the sales deck<sup><a href="#s47">47</a>,<a href="#s44">44</a></sup></div></div>
+      <div class="row"><div class="l">Gives up</div><div>Mac-native, local-first as the primary story; the app becomes a service</div></div>
+      <div class="row"><div class="l">Key risk</div><div>Procurement cycles of 12–18 months; OpenAI and Anthropic bundling Socratic modes into campus deals at near-zero marginal price<sup><a href="#s36">36</a>,<a href="#s37">37</a></sup></div></div>
+      <div class="row"><div class="l">Fit with current code</div><div><span class="chip crit">✕ low</span> rubric and parser reusable, everything else rebuilt</div></div>
+      <div class="row"><div class="l">Ceiling</div><div>Mid; sticky once in, but slow and grant-dependent</div></div>
+    </div>
+    <div class="card approach">
+      <div><div class="eyebrow">Alternative 4</div><h3>Open core with a hosted service</h3><p>Keep the app free and MIT, exactly as it is, and build the business around it: Klårt Cloud provides a curated critic model, profile sync, an iOS reader and a community library of rubrics. The Obsidian model: free tool, paid convenience.</p></div>
+      <div class="row"><div class="l">Target</div><div>Local-AI and open-source communities first, then everyone who will not run Ollama</div></div>
+      <div class="row"><div class="l">Revenue</div><div>€6–8 per month for cloud; a Catalyst-style supporter tier; Obsidian earns from Sync at $4–8 with an 18-person team on 5–10M users; Reflect is profitable at $10 per month with a team of four<sup><a href="#s18">18</a>,<a href="#s19">19</a>,<a href="#s24">24</a></sup></div></div>
+      <div class="row"><div class="l">What changes</div><div>Backend, accounts, billing, model hosting and its cost; community management; rubric marketplace format</div></div>
+      <div class="row"><div class="l">Gives up</div><div>Zero infrastructure and the one-time licence simplicity; the local-first purity for paying users</div></div>
+      <div class="row"><div class="l">Key risk</div><div>Requires a large free base before cloud converts; Apple's free cloud tier undercuts the hosted model's value on macOS 27<sup><a href="#s73">73</a></sup></div></div>
+      <div class="row"><div class="l">Fit with current code</div><div><span class="chip good">✓ high</span> nothing is thrown away</div></div>
+      <div class="row"><div class="l">Ceiling</div><div>Depends entirely on reaching hundreds of thousands of free users; realistic only with alternative 1's reach</div></div>
+    </div>
+    <div class="card approach" style="grid-column:1/-1">
+      <div><div class="eyebrow">Alternative 5</div><h3>The thinking gym</h3><p>A consumer learning product rather than a tool. Daily short argument exercises, the user's own drafts read against the nine lenses, a visible profile of recurring weaknesses, streaks and progress. The writer profile is the product; the editor is a feature. Mobile-first, subscription, aimed at the audience that Study Mode and learning styles have primed<sup><a href="#s37">37</a>,<a href="#s38">38</a></sup>.</p></div>
+      <div class="grid2">
+        <div>
+          <div class="row"><div class="l">Target</div><div>Early-career professionals and students who want to think and write better, the audience Khanmigo, Socra and Duolingo-style products reach at $4–20 per month<sup><a href="#s80">80</a>,<a href="#s82">82</a></sup></div></div>
+          <div class="row"><div class="l">Revenue</div><div>€8–12 per month subscription; consumer retention economics, so the profile and progress loop must be excellent</div></div>
+          <div class="row"><div class="l">What changes</div><div>Content and exercise design, iOS app, accounts, hosted models, gamification restrained enough not to embarrass the brand</div></div>
+        </div>
+        <div>
+          <div class="row"><div class="l">Gives up</div><div>Local-first, the Mac editor as the centre, the advisor segment</div></div>
+          <div class="row"><div class="l">Key risk</div><div>Consumer churn; OpenAI and Anthropic own the "learning mode" narrative and price it at zero inside their plans</div></div>
+          <div class="row"><div class="l">Fit with current code</div><div><span class="chip crit">✕ low</span> the rubric and the profile logic survive; nothing else</div></div>
+          <div class="row"><div class="l">Ceiling</div><div>Highest variance: consumer scale or nothing</div></div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <h3 style="margin:28px 0 12px">Side by side</h3>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Path</th><th>Buyer</th><th>Revenue model</th><th class="num">Time to first revenue</th><th class="num">Capital need</th><th>Moat</th><th>Reuse of current build</th><th>Ceiling</th></tr></thead>
+      <tbody>
+        <tr><td><b>Base case</b>: indie Mac app</td><td>Individual</td><td>€59 one-time + renewals + hosted tier</td><td class="num">1–3 months</td><td class="num">None</td><td>Workflow, design, profile</td><td>Full</td><td>€0.1–0.6M / yr</td></tr>
+        <tr><td><b>1</b> Layer, not destination</td><td>Individual, via platforms</td><td>Freemium plugin, €5/mo Pro</td><td class="num">3–6 months</td><td class="num">Low</td><td>Rubric quality, profile</td><td>Engine only</td><td>€0.3–1M / yr</td></tr>
+        <tr><td><b>2</b> Review desk for firms</td><td>Advisory firm</td><td>€600–1,200 / seat / yr</td><td class="num">6–12 months</td><td class="num">Medium, or founder time</td><td>Firm rubrics, data residency, switching cost</td><td>High</td><td>€1–10M ARR</td></tr>
+        <tr><td><b>3</b> University feedback</td><td>Institution</td><td>€15–30 / seat / yr</td><td class="num">12–18 months</td><td class="num">Medium to high</td><td>Compliance, integrations, evidence</td><td>Low</td><td>€0.5–5M ARR, slow</td></tr>
+        <tr><td><b>4</b> Open core + cloud</td><td>Individual</td><td>€6–8/mo cloud</td><td class="num">6–9 months</td><td class="num">Medium (hosting)</td><td>Community, rubric library</td><td>Full</td><td>Tied to free-user scale</td></tr>
+        <tr><td><b>5</b> Thinking gym</td><td>Consumer</td><td>€8–12/mo subscription</td><td class="num">9–12 months</td><td class="num">High</td><td>Content, habit, profile</td><td>Low</td><td>Consumer scale or nothing</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<section id="next">
+  <div class="head">
+    <div class="eyebrow">9 · Recommendation</div>
+    <h2>Validate the indie case for 90 days, but build it so alternatives 1 and 2 stay open</h2>
+  </div>
+  <div class="grid2">
+    <div class="card">
+      <h3>What to do now</h3>
+      <ol class="q">
+        <li>Rename the category: argument editor, positioning A. Publish the nine-lens rubric as a document with its own URL.</li>
+        <li>Ship open-folder mode and the Apple on-device provider before any pricing test. Both remove reasons not to start.</li>
+        <li>Build the writer profile as the retention feature; measure it against a control half of the cohort.</li>
+        <li>Price at €59 one-time with 12 months of updates, €29 education, €8 hosted tier. Sell direct first, App Store second.</li>
+        <li>Move the app to a source-available licence and keep KlartKit's local checks MIT, before the first sale.</li>
+        <li>Run the 90-day plan with 25 advisors and 25 doctoral writers, and decide against the kill criteria.</li>
+      </ol>
+    </div>
+    <div class="card">
+      <h3>What the decision looks like in December</h3>
+      <p><b>If advisors convert and ask for shared rubrics</b>, alternative 2 is the company: the founder's consulting network is the sales channel and the security model is already built.</p>
+      <p><b>If doctoral writers love it and cannot pay</b>, alternative 1 is the route to reach, with alternative 3 as a later institutional layer.</p>
+      <p><b>If both segments use it weekly and pay €59</b>, the indie base case is a sound business, and alternative 4 is the upgrade path once the free base is large.</p>
+      <p><b>If neither segment finishes five sections a week</b>, the value is the editor rather than the critic. Sell a beautiful Mac markdown editor with a free editorial rail, and stop calling it a coach.</p>
+    </div>
+  </div>
+</section>
+
+<hr class="sep">
+<section id="sources" class="sources">
+  <div class="head"><div class="eyebrow">Sources</div><h2 style="font-size:22px">References</h2><p class="muted">Vendor prices as displayed in September 2026; third-party aggregators are used where vendor pages could not be fetched and are marked as such in the research notes. Market-size figures are vendor estimates.</p></div>
+  <ol>
+    <li id="s1">Klårt repository: README.md, docs/REQUIREMENTS.md v2.0.0, KlartMac/README.md, commit 80930b8, github.com/maxpolwin/klart</li>
+    <li id="s2">This analysis: comparison of the 40+ products in section 2.1, plus searches for "AI writing critic app", "Socratic AI editor", "AI feedback not rewrite", "local LLM markdown editor" (September 2026). Nearest technical neighbours found: Allein, TextEnhanceAI (Ollama-backed markdown editors that rewrite), allein.app</li>
+    <li id="s3">Grammarly pricing and Superhuman rebrand: eesel.ai/blog/grammarly-pricing; techcrunch.com/2025/10/29/grammarly-rebrands-to-superhuman-launches-a-new-ai-assistant</li>
+    <li id="s4">Grammarly users and revenue: sacra.com/c/grammarly/; sqmagazine.co.uk/grammarly-ai-statistics/</li>
+    <li id="s5">Lex features and pricing: aiwritingcompare.com/tool/lex/; agent-finder.co/reviews/lex</li>
+    <li id="s6">Lex seed round: techcrunch.com/2023/08/23/lex-ai-writing-tool-seed-round/</li>
+    <li id="s7">ProWritingAid features and pricing: prowritingaid.com/features; aistackpicks.com/reviews/prowritingaid-pricing-2026/</li>
+    <li id="s8">Hemingway Editor desktop: hemingwayapp.com/desktop</li>
+    <li id="s9">Hemingway Editor Plus pricing: saasworthy.com/product/hemingway-editor-plus</li>
+    <li id="s10">Ellipsus and Ellipsus Plus: ellipsus.com; ellipsus.com/blog/introducing-ellipsus-plus</li>
+    <li id="s11">Ellipsus traction: einpresswire.com/article/852095063/ellipsus-launches-new-collaborative-writing-tool-to-protect-and-empower-writers</li>
+    <li id="s12">iA Writer pricing and direct sales: ia.net/writer/pricing; thurrott.com/mobile/mac-and-macos/336779/ia-writer-now-offers-direct-purchasing-on-mac-and-windows</li>
+    <li id="s13">iA Writer Authorship and awards: rywalker.com/research/ia-writer</li>
+    <li id="s14">Ulysses pricing: apps.apple.com/us/app/ulysses-writing-app/id1225570693; blog.ulysses.app/ulysses-switches-to-subscription/</li>
+    <li id="s15">Bear pricing: blog.bear.app/2023/04/bear-2-will-have-a-new-price-only-for-new-customers/</li>
+    <li id="s16">Craft pricing and funding: aiproductivity.ai/pricing/craft/; craft.do/blog/craft-raises-12m-series-b-round</li>
+    <li id="s17">Obsidian free for work: obsidian.md/blog/free-for-work/</li>
+    <li id="s18">Obsidian Sync and Publish pricing: eesel.ai/blog/obsidian-pricing; obsidian.md/blog/standard-plan/</li>
+    <li id="s19">Obsidian user estimate and team size: taskade.com/blog/obsidian-history</li>
+    <li id="s20">Copilot for Obsidian pricing: obsidiancopilot.com/en/pricing</li>
+    <li id="s21">Notion AI pricing change, May 2025: usecarly.com/blog/notion-ai-pricing-change/</li>
+    <li id="s22">Notion statistics: sqmagazine.co.uk/notion-statistics/; super.so/blog/notion-stats</li>
+    <li id="s23">Smart Connections pricing: smartconnections.app/pro-plugins/</li>
+    <li id="s24">Reflect profitability: reflect.app/blog/reflect-is-profitable</li>
+    <li id="s25">Marlowe by Authors.ai: authors.ai/marlowe/; authors.ai/pricing/</li>
+    <li id="s26">Esslo pricing: esslo.org/pricing</li>
+    <li id="s27">Thesify pre-submission review: thesify.ai/features/pre-submission-review</li>
+    <li id="s28">Thesify pricing: thesify.ai/pricing; softwarefinder.com/artificial-intelligence/thesify-ai</li>
+    <li id="s29">Paperpal 3M users and pricing; Writefull institutions: prnewswire.com (Paperpal crosses 3 million users, Nov 2025); paperpal.com/blog/product/paperpal-monthly-prime-plan; writefull.com/for-institutions</li>
+    <li id="s30">Thesify user count: softwarefinder.com/artificial-intelligence/thesify-ai</li>
+    <li id="s31">Reviewer3 and PeerReviewAI pricing: reviewer3.com/pricing; peerreviewai.org/pricing; manusights.com/blog/best-ai-pre-submission-tools-2026</li>
+    <li id="s32">Esslo traction: insidehighered.com, "Stanford students train AI to help with college essays" (4 Sept 2024); esslo.org</li>
+    <li id="s33">University of Liverpool, Guidance on the use of generative AI (Centre for Innovation in Education), liverpool.ac.uk</li>
+    <li id="s34">University AI policies 2025–26 (King's, Oxford): thesify.ai/blog/generative-ai-policies-top-universities-2026; University of Toronto SGS guidance: sgs.utoronto.ca/about/guidance-on-the-use-of-generative-artificial-intelligence/</li>
+    <li id="s35">Cal State and OpenAI contract renewal: calmatters.org/education/2026/05/california-state-university-open-ai-chatgpt-contract/; edsource.org/2026/cal-state-renews-controversial-system-wide-contract-with-openai/758919</li>
+    <li id="s36">Claude for Education: anthropic.com/news/introducing-claude-for-education; bacsich.org/2026/05/14/global-higher-education-llm-landscape-anthropics-claude-for-education/</li>
+    <li id="s37">ChatGPT Study Mode: openai.com/index/chatgpt-study-mode/</li>
+    <li id="s38">Claude learning style for all users: engadget.com/ai/anthropic-brings-claudes-learning-mode-to-regular-users-and-devs-170018471.html</li>
+    <li id="s39">Grammarly for Education: grammarly.com/edu</li>
+    <li id="s40">McKinsey Lilli usage: fortune.com/2025/06/02/mckinsey-ai-consulting-powerpoints-proposal-technology/</li>
+    <li id="s41">BCG Deckster and "review this": computerworld.com/article/3491334/bcg-execs-ai-across-the-company-increased-productivity-employee-joy.html; yourstory.com/2025/06/consulting-firms-ai-tools-mckinsey-bcg-deloitte-2025</li>
+    <li id="s42">Amazon six-pager and AI: the-ken.com/story/amazons-six-page-memo-survived-bezos-exit-then-it-ran-into-ai/</li>
+    <li id="s43">Pyramid-principle prompt packs and skills: strategyu.co/strategy-consulting-aiskills/; github.com/ProfEullerBarros/minto-pyramid-principle</li>
+    <li id="s44">Meta-analysis of AI feedback on writing performance, 43 studies, g = 0.58: Cogent Education (April 2026), tandfonline.com/doi/full/10.1080/2331186X.2026.2665494</li>
+    <li id="s45">Lee et al., "The Impact of Generative AI on Critical Thinking", Microsoft Research and CMU, CHI 2025, N = 319 knowledge workers: microsoft.com/en-us/research/publication/the-impact-of-generative-ai-on-critical-thinking-self-reported-reductions-in-cognitive-effort-and-confidence-effects-from-a-survey-of-knowledge-workers/</li>
+    <li id="s46">Kosmyna et al., "Your Brain on ChatGPT", MIT Media Lab, arXiv 2506.08872 (June 2025), N = 54</li>
+    <li id="s47">Bastani et al., "Generative AI without guardrails can harm learning", PNAS 122(26), 2025, field RCT with about 1,000 students: pnas.org/doi/10.1073/pnas.2422633122</li>
+    <li id="s48">FeedbackWriter RCT, University of Michigan, N = 354 students, d = 0.50: arxiv.org/pdf/2602.16820; news.umich.edu/ai-helps-instructors-give-better-feedback-but-cant-replace-them/</li>
+    <li id="s49">Fujisawa and Shintani (2025), System: direct corrective feedback versus AI reformulation, sciencedirect.com/science/article/abs/pii/S0346251X25001757</li>
+    <li id="s50">Scite pricing and academic discounts: costbench.com/software/ai-research-tools/scite/; Scrivener store: literatureandlatte.com/store/scrivener</li>
+    <li id="s51">Raycast AI pricing: raycast.com/blog/changing-how-raycast-ai-is-priced; manual.raycast.com/billing</li>
+    <li id="s52">Typora pricing: store.typora.io</li>
+    <li id="s53">Agenda's pay-once model: agenda.community/t/price-for-premium-or-for-subscription/33302; Sketch licence: costbench.com/software/design/sketch/</li>
+    <li id="s54">CleanShot X update model: cleanshot.com/why-updates-expire; Nova renewals: help.nova.app/faqs/purchasing/</li>
+    <li id="s55">AI writing assistant software market outlook 2025–2030: businesswire.com/news/home/20260108081428/en/ (ResearchAndMarkets)</li>
+    <li id="s56">Mordor Intelligence, AI writing assistant software market: mordorintelligence.com/industry-reports/artificial-intelligence-writing-assistant-software-market</li>
+    <li id="s57">Researchers worldwide, UNESCO Science Report 2021: sciencebusiness.net/news/number-scientists-worldwide-reaches-88m-global-research-spending-grows-faster-economy</li>
+    <li id="s58">NSF Survey of Earned Doctorates 2024: ncses.nsf.gov/pubs/nsf26315; OECD Education at a Glance 2025</li>
+    <li id="s59">Management consultants worldwide: ibisworld.com/global/market-size/global-management-consultants/1950/; runn.io/blog/consulting-statistics</li>
+    <li id="s60">BoltAI pricing and licence: boltai.com/pricing; boltai.com/license</li>
+    <li id="s61">TypingMind pricing: typingmind.com/buy</li>
+    <li id="s62">TypingMind revenue milestones: news.tonydinh.com/p/500k-milestone-my-reflections-after; startupfounderstories.com/stories/tony-dinh-typingmind-22k-7-days</li>
+    <li id="s63">TypingMind 2025 revenue and B2B share: x.com/tdinh_me/status/1908345028327727335; starterstory.com/typingmind-breakdown</li>
+    <li id="s64">Kerlig and MindMac pricing: kerlig.com; mindmac.app</li>
+    <li id="s65">MacWhisper revenue estimates: profitable.app/gumroad; startupsemail.substack.com/p/100000-revenue-with-a-simple-mac</li>
+    <li id="s66">Superwhisper revenue and team: theglobeandmail.com/business/article-toronto-ai-startup-superwhisper-dictation-app/</li>
+    <li id="s67">Ollama Series B and users: techcrunch.com/2026/07/09/popular-open-source-ai-developer-tool-ollama-raises-65m-grows-to-nearly-9m-users/</li>
+    <li id="s68">Ollama Cloud pricing; LM Studio free for work; Jan downloads: devtoolhub.com/ollama-cloud-free-vs-pro-limits-pricing-2026/; lmstudio.ai/blog/free-for-work; github.com/janhq/jan</li>
+    <li id="s69">RevenueCat State of Subscription Apps 2026 (conversion, share of apps at $1k and $10k MRR): revenuecat.com/blog/growth/subscription-app-trends-benchmarks-2026; lifetime plan share: apple.gadgethacks.com/news/app-subscriptions-hit-96-of-mobile-revenue-in-2025/</li>
+    <li id="s70">Active Macs: appleinsider.com/articles/18/10/30/apple-passes-100m-active-mac-milestone-thanks-to-high-numbers-of-new-users; macrumors.com/2026/01/29/apple-2-5-billion-active-devices/</li>
+    <li id="s71">Apple Writing Tools: support.apple.com/en-us/121582; apple.com/newsroom/2025/06/macos-tahoe-26-makes-the-mac-more-capable-productive-and-intelligent-than-ever/</li>
+    <li id="s72">Foundation Models framework: apple.com/newsroom/2025/09/apples-foundation-models-framework-unlocks-new-intelligent-app-experiences/; machinelearning.apple.com/research/apple-foundation-models-2025-updates</li>
+    <li id="s73">WWDC 2026: LanguageModel protocol, Private Cloud Compute developer tier and eligibility: developer.apple.com/videos/play/wwdc2026/241/; developer.apple.com/videos/play/wwdc2026/319/; developer.apple.com/wwdc26/guides/macos/</li>
+    <li id="s74">Deckary, agentic Word add-in for consultants: deckary.com/blog/ai-writing-assistant-for-word</li>
+    <li id="s75">Hattie and Timperley (2007), "The Power of Feedback", Review of Educational Research 77(1), d ≈ 0.73: journals.sagepub.com/doi/abs/10.3102/003465430298487</li>
+    <li id="s76">Apple App Store Small Business Program: developer.apple.com/app-store/small-business-program/</li>
+    <li id="s77">Setapp revenue distribution to developers: docs.setapp.com/docs/distributing-revenue; setapp.com/app-reviews/setapp-pricing-explained</li>
+    <li id="s78">Gerlich (2025), "AI Tools in Society: Impacts on Cognitive Offloading and the Future of Critical Thinking", Societies 15(1):6, N = 666: mdpi.com/2075-4698/15/1/6</li>
+    <li id="s79">"Does AI Homogenize Student Thinking?", arXiv 2603.21228 (March 2026)</li>
+    <li id="s80">Khanmigo pricing: khanmigo.ai/pricing; Kialo Edu free model: kialo-edu.com/pricing-why-kialo-is-free</li>
+    <li id="s81">Argdown: argdown.org; github.com/argdown/argdown</li>
+    <li id="s82">Socra and SocraDraft: hisocra.com/socradraft; Devil's Advocates skill: oneoracledeveloper.com/2026/05/i-built-devils-advocates-skill.html</li>
+  </ol>
+</section>
+
+</div>
+<script>
+(function(){
+  var tip=document.getElementById('tip');
+  function show(e){var t=e.currentTarget.getAttribute('data-tip');if(!t)return;tip.textContent=t;tip.classList.add('on');move(e);}
+  function move(e){var x=e.clientX+14,y=e.clientY+14;var r=tip.getBoundingClientRect();if(x+r.width>window.innerWidth-8)x=e.clientX-r.width-14;if(y+r.height>window.innerHeight-8)y=e.clientY-r.height-14;tip.style.left=x+'px';tip.style.top=y+'px';}
+  function hide(){tip.classList.remove('on');}
+  document.querySelectorAll('[data-tip]').forEach(function(el){el.addEventListener('mouseenter',show);el.addEventListener('mousemove',move);el.addEventListener('mouseleave',hide);el.setAttribute('tabindex','0');el.addEventListener('focus',function(ev){tip.textContent=el.getAttribute('data-tip');tip.classList.add('on');var b=el.getBoundingClientRect();tip.style.left=(b.left+8)+'px';tip.style.top=(b.bottom+6)+'px';});el.addEventListener('blur',hide);});
+})();
+</script>
