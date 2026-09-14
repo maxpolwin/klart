@@ -79,6 +79,22 @@ final class KlartTextView: NSTextView {
 
     override var isFlipped: Bool { true }
 
+    /// The whole page is the editor. With `drawsBackground` off, NSTextView
+    /// on macOS 15 answers `hitTest` with nil for a point above its text
+    /// container — the top half-viewport of typewriter margin — so a click
+    /// there fell through to the clip view and placed no caret. (Below the
+    /// last line it still hit: the container runs on to the bottom of the
+    /// view.) macOS 26 no longer does this, which is why the test guarding
+    /// it, `WritingSurfaceTests.testTheWholePageUnderTheCursorIsClickable`,
+    /// passed locally and failed on CI for two months. Any point inside the
+    /// frame is ours; `mouseDown` then puts the caret at the nearest
+    /// character, exactly as a click in the bottom margin always has.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        if let hit = super.hitTest(point) { return hit }
+        guard !isHiddenOrHasHiddenAncestor, let superview else { return nil }
+        return bounds.contains(convert(point, from: superview)) ? self : nil
+    }
+
     /// Suppresses AppKit's own caret; ours is drawn in `draw(_:)`.
     override func drawInsertionPoint(in rect: NSRect, color: NSColor, turnedOn flag: Bool) {
         // Intentionally empty.
