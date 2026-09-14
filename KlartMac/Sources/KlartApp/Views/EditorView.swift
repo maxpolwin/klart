@@ -44,6 +44,10 @@ struct EditorView: View {
 /// content from lingering in clipboard history indefinitely.
 final class KlartTextView: NSTextView {
     var clearsClipboardAfterCopy = false
+    /// The geometry bridge attached to this editor, when the Teleprompter is
+    /// the one showing it. The bridge is otherwise reachable only from the
+    /// SwiftUI view that owns it; the text view is what a test can find.
+    weak var bridge: EditorBridge?
     static let clipboardLifetime: TimeInterval = 45
 
     // MARK: Springing caret
@@ -614,6 +618,12 @@ final class EditorBridge: ObservableObject {
     /// Only ever written by `publishPendingBump()`, a turn of the run loop
     /// after whatever moved — see `scheduleBump(unconditional:)` for why.
     @Published private(set) var layoutTick = 0
+    /// Where the rail last drew each of its cards, in the hosting view's
+    /// coordinates. Plain rather than published because nothing on screen
+    /// reads it: it exists so a test can measure the rail the way a reader
+    /// sees it. SwiftUI's own elements are invisible to AppKit's view tree
+    /// and to its accessibility tree alike, so the cards report themselves.
+    var railCardFrames: [UUID: CGRect] = [:]
     private var boundsObserver: NSObjectProtocol?
 
     /// A publish is already booked for the next turn of the run loop.
@@ -644,6 +654,7 @@ final class EditorBridge: ObservableObject {
 
     func attach(textView: NSTextView, scrollView: NSScrollView) {
         self.textView = textView
+        (textView as? KlartTextView)?.bridge = self
         scrollView.contentView.postsBoundsChangedNotifications = true
         if let boundsObserver {
             NotificationCenter.default.removeObserver(boundsObserver)
@@ -809,6 +820,15 @@ struct MarkdownEditor: NSViewRepresentable {
         context.coordinator.isPushingText = true
         textView.string = text
         EditorStyler.restyleAll(textView)
+        if let caret = pendingCaret {
+            // A note opened at a chosen place (the welcome tour's sample,
+            // at the section the editor is reading): the opening centring
+            // then puts that line, not the document's end, at writing
+            // height. Reported applied a turn later, like the cursor.
+            let length = (text as NSString).length
+            textView.setSelectedRange(NSRange(location: min(max(0, caret), length), length: 0))
+            DispatchQueue.main.async { [onCaretApplied] in onCaretApplied?() }
+        }
         context.coordinator.isPushingText = false
         context.coordinator.lastActiveParagraphStart = EditorStyler.activeParagraphRange(textView).location
         bridge?.attach(textView: textView, scrollView: scrollView)

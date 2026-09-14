@@ -94,6 +94,12 @@ final class AppState: ObservableObject {
         }
     }
     @Published var connection: ConnectionStatus = .unknown
+
+    // MARK: Welcome tour
+
+    /// The first-launch tour is on screen. Seeded from settings so a fresh
+    /// install sees it once; the Help menu can bring it back.
+    @Published var welcomeVisible: Bool
     @Published var availableModels: [String] = []
 
     // MARK: Vault / app lock
@@ -159,6 +165,7 @@ final class AppState: ObservableObject {
         self.recommendationLog = recommendationLog
         let loadedSettings = settingsStore.load()
         self.settings = loadedSettings
+        self.welcomeVisible = !loadedSettings.welcomeSeen
         // didSet doesn't fire during init; seed the monochrome flag here so
         // the very first editor styles under the right palette.
         Theme.monochrome = loadedSettings.teleprompterMode
@@ -294,6 +301,40 @@ final class AppState: ObservableObject {
         notes.insert(note, at: 0)
         selectedNoteID = note.id
         persist(note)
+    }
+
+    // MARK: Welcome tour
+
+    func showWelcome() {
+        welcomeVisible = true
+    }
+
+    /// Skipped or finished: remembered, so it never shows itself again.
+    func finishWelcome() {
+        welcomeVisible = false
+        if !settings.welcomeSeen { settings.welcomeSeen = true }
+    }
+
+    /// The tour's last page: a note with real problems, opened with the
+    /// editor already reading it. The read is aimed at the section whose
+    /// flaws the offline checks can see on their own, so the margin has
+    /// notes in it before any provider is set up.
+    func openSampleNote() {
+        guard !isLocked else { return }
+        finishWelcome()
+        saveNow()
+        let note = Note(content: SampleNote.english)
+        notes.insert(note, at: 0)
+        selectedNoteID = note.id
+        persist(note)
+        cursorUTF16 = SampleNote.readCursorUTF16
+        pendingCaretUTF16 = SampleNote.readCursorUTF16
+        if settings.teleprompterMode {
+            editorRailVisible = true
+        } else {
+            showCoachPopover = true
+        }
+        requestFeedback(manual: true)
     }
 
     /// Asks whichever surface is on screen to reveal and focus its search

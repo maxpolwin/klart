@@ -183,6 +183,9 @@ public struct AppSettings: Codable, Equatable, Sendable {
     /// signal tier — outcome, kind, model, system-prompt hash — is always
     /// recorded, but note content is opt-in. See `RecommendationRecord`.
     public var logRecommendationContent: Bool
+    /// The welcome tour has been seen (or skipped) once. It can be replayed
+    /// from the Help menu; it never shows itself twice.
+    public var welcomeSeen: Bool
 
     public init(
         activeProvider: ProviderKind = .ollama,
@@ -201,7 +204,8 @@ public struct AppSettings: Codable, Equatable, Sendable {
         showWordCount: Bool = false,
         feedbackSystemPrompt: String? = nil,
         coachSystemPrompt: String? = nil,
-        logRecommendationContent: Bool = false
+        logRecommendationContent: Bool = false,
+        welcomeSeen: Bool = false
     ) {
         self.activeProvider = activeProvider
         self.providers = providers
@@ -220,6 +224,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         self.feedbackSystemPrompt = feedbackSystemPrompt
         self.coachSystemPrompt = coachSystemPrompt
         self.logRecommendationContent = logRecommendationContent
+        self.welcomeSeen = welcomeSeen
     }
 
     public init(from decoder: Decoder) throws {
@@ -244,6 +249,7 @@ public struct AppSettings: Codable, Equatable, Sendable {
         feedbackSystemPrompt = try c.decodeIfPresent(String.self, forKey: .feedbackSystemPrompt)
         coachSystemPrompt = try c.decodeIfPresent(String.self, forKey: .coachSystemPrompt)
         logRecommendationContent = try c.decodeIfPresent(Bool.self, forKey: .logRecommendationContent) ?? defaults.logRecommendationContent
+        welcomeSeen = try c.decodeIfPresent(Bool.self, forKey: .welcomeSeen) ?? defaults.welcomeSeen
     }
 
     /// The live-feedback system prompt actually sent to the model: the user's

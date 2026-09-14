@@ -313,9 +313,11 @@ final class AppFixture {
     let state: AppState
     let window: NSWindow
 
-    private let directory: URL
+    let directory: URL
 
-    init() {
+    /// - Parameter size: the window's content size. The default is a normal
+    ///   working window; a shorter one models the rail running out of room.
+    init(size: CGSize = CGSize(width: 1200, height: 800)) {
         bootstrapApp()
         directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("klart-tests-\(UUID().uuidString)", isDirectory: true)
@@ -338,7 +340,6 @@ final class AppFixture {
         // feedback debounce, which would otherwise fire a request mid-test.
         state.settings.autoFeedback = false
 
-        let size = CGSize(width: 1200, height: 800)
         window = NSWindow(
             contentRect: NSRect(origin: .zero, size: size),
             styleMask: [.borderless],

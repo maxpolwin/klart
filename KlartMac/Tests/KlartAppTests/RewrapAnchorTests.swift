@@ -22,7 +22,7 @@ import KlartKit
 // This is also what made the rail's cards appear to stair-step: `lineY` was
 // tracking a moving target faithfully. Smoothing the cards (commit 01dd67e,
 // since reverted) treated the symptom and introduced a worse one — opaque cards
-// lapping over each other, because `placements(in:)` enforces its 12 pt
+// lapping over each other, because `EditorRail.layout(in:)` enforces its 12 pt
 // non-overlap on *target* y only.
 //
 // Why it is not fixed here: the width change is detected in

@@ -955,30 +955,44 @@ private struct EditorRail: View {
 
     var body: some View {
         GeometryReader { geo in
-            ZStack(alignment: .topLeading) {
-                if state.feedbackItems.isEmpty {
-                    emptyCard
-                        .padding(.top, topInset)
-                } else {
-                    let placed = placements(in: geo.size.height)
-                    ForEach(placed, id: \.item.id) { placement in
-                        RailCard(item: placement.item)
-                            .background(heightReader(for: placement.item.id))
-                            .offset(y: placement.y)
-                            // A handled note leaves toward the margin it came
-                            // from, so the eye follows it out instead of
-                            // noticing a gap appear mid-rail.
-                            .transition(.asymmetric(
-                                insertion: .opacity,
-                                removal: .move(edge: .trailing).combined(with: .opacity)
-                            ))
+            let layout = layout(in: geo.size.height)
+            // Always a scroll view, even when there is nothing to scroll: a
+            // stack that grows past the window on the next read would
+            // otherwise swap containers under the cards, and every card
+            // would re-enter through its insertion transition.
+            ScrollView(.vertical) {
+                ZStack(alignment: .topLeading) {
+                    if state.feedbackItems.isEmpty {
+                        emptyCard
+                            .padding(.top, topInset)
+                    } else {
+                        ForEach(layout.placements, id: \.item.id) { placement in
+                            RailCard(item: placement.item)
+                                .background(cardReader(for: placement.item.id))
+                                .offset(y: placement.y)
+                                // A handled note leaves toward the margin it
+                                // came from, so the eye follows it out instead
+                                // of noticing a gap appear mid-rail.
+                                .transition(.asymmetric(
+                                    insertion: .opacity,
+                                    removal: .move(edge: .trailing).combined(with: .opacity)
+                                ))
+                        }
                     }
                 }
+                // Offsets do not size their container, so the content is
+                // given its height by hand: the viewport's while the stack
+                // fits (nothing to scroll to, exactly as before), the stack's
+                // own extent once it does not.
+                .frame(width: geo.size.width, height: layout.contentHeight, alignment: .topLeading)
             }
-            .frame(maxWidth: .infinity, alignment: .topLeading)
+            // A rail that fits behaves as it always has: a wheel over it
+            // moves nothing, and there is no elastic bounce to discover.
+            .scrollDisabled(!layout.overflows)
         }
         .padding(.trailing, 14)
         .onPreferenceChange(RailCardHeightKey.self) { cardHeights = $0 }
+        .onPreferenceChange(RailCardFrameKey.self) { bridge.railCardFrames = $0 }
         .animation(
             reduceMotion ? nil : .spring(duration: TeleprompterMotion.duration, bounce: TeleprompterMotion.bounce),
             value: state.feedbackItems
@@ -1034,12 +1048,28 @@ private struct EditorRail: View {
         let y: CGFloat
     }
 
+    private struct RailLayout {
+        let placements: [Placement]
+        /// What the scroll view's content measures: the viewport when the
+        /// stack fits, the stack's own extent when it does not.
+        let contentHeight: CGFloat
+        /// The stack is taller than the window even packed tight, so the
+        /// rail scrolls to the rest rather than folding cards over each other.
+        let overflows: Bool
+    }
+
     /// Desired y for every suggestion (its section heading's line, or the top
-    /// for unanchored ones), then a downward pass so cards never overlap and
-    /// a bottom-up pass so the tail stays on screen without dragging the
-    /// anchored cards off their headings with it.
+    /// for unanchored ones), then a downward pass so cards never overlap and,
+    /// when the stack fits, a bottom-up pass so the tail stays on screen
+    /// without dragging the anchored cards off their headings with it. When
+    /// it does not fit, the cards keep their anchors and the rail scrolls.
     /// `bridge.layoutTick` is read so scrolling and edits recompute.
-    private func placements(in height: CGFloat) -> [Placement] {
+    private func layout(in height: CGFloat) -> RailLayout {
+        // The empty card has nothing to anchor; skip the outline parse that
+        // every scroll tick would otherwise pay for it.
+        guard !state.feedbackItems.isEmpty else {
+            return RailLayout(placements: [], contentHeight: height, overflows: false)
+        }
         _ = bridge.layoutTick
         let outline = DocumentOutline.parse(state.editorText)
 
@@ -1050,10 +1080,28 @@ private struct EditorRail: View {
 
         var placed: [Placement] = []
         var nextFree = topInset
+        var packedHeight = topInset + bottomInset - Self.cardGap
         for entry in desired {
             let y = max(entry.y, nextFree)
             placed.append(Placement(item: entry.item, y: y))
-            nextFree = y + (cardHeights[entry.item.id] ?? Self.fallbackHeight) + Self.cardGap
+            let cardHeight = cardHeights[entry.item.id] ?? Self.fallbackHeight
+            nextFree = y + cardHeight + Self.cardGap
+            packedHeight += cardHeight + Self.cardGap
+        }
+
+        // When the cards would not fit even stacked edge to edge, there is no
+        // bottom to compress towards: the old pass clamped every card that
+        // ran out of room to `topInset`, and six notes on a normal window
+        // sat printed over each other at the top of the rail. Leave them on
+        // their anchors instead — a card whose heading is on screen still
+        // sits beside it — and let the rail scroll to the ones below.
+        if let last = placed.last, packedHeight > height {
+            let lastHeight = cardHeights[last.item.id] ?? Self.fallbackHeight
+            return RailLayout(
+                placements: placed,
+                contentHeight: max(height, last.y + lastHeight + bottomInset),
+                overflows: true
+            )
         }
 
         // Keep the stack on screen. This used to subtract the last card's
@@ -1072,7 +1120,7 @@ private struct EditorRail: View {
             placed[index] = Placement(item: placed[index].item, y: y)
             ceiling = y - Self.cardGap
         }
-        return placed
+        return RailLayout(placements: placed, contentHeight: height, overflows: false)
     }
 
     private func anchorY(for item: FeedbackItem, outline: DocumentOutline) -> CGFloat? {
@@ -1088,9 +1136,13 @@ private struct EditorRail: View {
         return max(topInset, y)
     }
 
-    private func heightReader(for id: UUID) -> some View {
+    /// One reader per card, reporting both what the layout needs (the
+    /// height) and what a test needs (where the card actually landed).
+    private func cardReader(for id: UUID) -> some View {
         GeometryReader { geo in
-            Color.clear.preference(key: RailCardHeightKey.self, value: [id: geo.size.height])
+            Color.clear
+                .preference(key: RailCardHeightKey.self, value: [id: geo.size.height])
+                .preference(key: RailCardFrameKey.self, value: [id: geo.frame(in: .global)])
         }
     }
 }
@@ -1098,6 +1150,13 @@ private struct EditorRail: View {
 private struct RailCardHeightKey: PreferenceKey {
     static var defaultValue: [UUID: CGFloat] = [:]
     static func reduce(value: inout [UUID: CGFloat], nextValue: () -> [UUID: CGFloat]) {
+        value.merge(nextValue()) { _, new in new }
+    }
+}
+
+private struct RailCardFrameKey: PreferenceKey {
+    static var defaultValue: [UUID: CGRect] = [:]
+    static func reduce(value: inout [UUID: CGRect], nextValue: () -> [UUID: CGRect]) {
         value.merge(nextValue()) { _, new in new }
     }
 }
