@@ -64,10 +64,22 @@ final class WritingSurfaceTests: XCTestCase {
         )
 
         let root = try XCTUnwrap(editor.window.contentView)
-        for point in [NSPoint(x: 450, y: 60), NSPoint(x: 450, y: 384), NSPoint(x: 450, y: 700)] {
+        // Near the top, the middle, near the bottom — of the page as it
+        // actually is, not as the fixture asked for it: the window server
+        // may hand back a shorter window than requested (a small screen
+        // constrains it), and a point above the page proves nothing.
+        let bounds = root.bounds
+        for point in [
+            NSPoint(x: bounds.midX, y: bounds.minY + 60),
+            NSPoint(x: bounds.midX, y: bounds.midY),
+            NSPoint(x: bounds.midX, y: bounds.maxY - 60),
+        ] {
+            let hit = root.hitTest(point)
             XCTAssertTrue(
-                root.hitTest(point) === editor.textView,
-                "a click at \(point) does not reach the editor"
+                hit === editor.textView,
+                "a click at \(point) does not reach the editor — it reached "
+                    + "\(hit.map { String(describing: type(of: $0)) } ?? "nothing")\n"
+                    + editor.geometryReport()
             )
         }
     }

@@ -276,6 +276,26 @@ final class EditorFixture {
 
     var text: String { box.text }
     var viewportHeight: CGFloat { scrollView.frame.height }
+
+    /// Every frame between the window and the text, for a failure message
+    /// that can be read off a CI log without a debugger.
+    func geometryReport() -> String {
+        func r(_ rect: NSRect) -> String {
+            "(\(Int(rect.origin.x)),\(Int(rect.origin.y)) \(Int(rect.width))×\(Int(rect.height)))"
+        }
+        let clip = scrollView.contentView
+        let screen = window.screen ?? NSScreen.main
+        return """
+            window frame \(r(window.frame)) visible=\(window.isVisible) key=\(window.isKeyWindow) scale=\(window.backingScaleFactor)
+            screen frame \(screen.map { r($0.frame) } ?? "none") visibleFrame \(screen.map { r($0.visibleFrame) } ?? "none")
+            root bounds \(r(window.contentView?.bounds ?? .zero)) flipped=\(window.contentView?.isFlipped ?? false)
+            host frame \(r(host.frame)) flipped=\(host.isFlipped)
+            scrollView frame \(r(scrollView.frame)) contentInsets top=\(scrollView.contentInsets.top) bottom=\(scrollView.contentInsets.bottom)
+            clip bounds \(r(clip.bounds)) frame \(r(clip.frame))
+            textView frame \(r(textView.frame)) inset=\(textView.textContainerInset)
+            reduceMotion=\(NSWorkspace.shared.accessibilityDisplayShouldReduceMotion)
+            """
+    }
     var scrollOffset: CGFloat { scrollView.contentView.bounds.origin.y }
 
     /// Where the caret's line sits on screen, measured from the top of the
