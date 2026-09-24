@@ -1,0 +1,123 @@
+name: TestFlight
+
+# Uploads a signed Mac App Store build of main to TestFlight. Run it by hand:
+# Actions → TestFlight → Run workflow (branch: main). Sharing with testers is
+# a deliberate act, so nothing uploads on push.
+#
+# Needs an App Store Connect API key (see KlartMac/README.md → "TestFlight").
+# Xcode signs with Apple Distribution through that key (cloud-managed
+# certificates), so no certificate or provisioning profile lives in secrets.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: testflight
+  cancel-in-progress: false
+
+jobs:
+  upload:
+    name: Test, archive and upload to TestFlight
+    # Only main is ever shared.
+    if: github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: KlartMac
+    env:
+      HAVE_ASC: ${{ secrets.ASC_KEY_P8 != '' && secrets.ASC_KEY_ID != '' && secrets.ASC_ISSUER_ID != '' && secrets.APPLE_TEAM_ID != '' }}
+    steps:
+      - name: Require App Store Connect credentials
+        if: env.HAVE_ASC != 'true'
+        working-directory: .
+        run: |
+          echo "::error::Add ASC_KEY_P8, ASC_KEY_ID, ASC_ISSUER_ID and APPLE_TEAM_ID as repository secrets (KlartMac/README.md → TestFlight)."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - name: Run unit tests
+        run: swift test
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate Xcode project
+        run: NO_OPEN=1 bash Scripts/generate-xcodeproj.sh
+
+      # App Store Connect refuses a build number it has already seen for this
+      # version. The run number only grows; the offset keeps clear of builds
+      # uploaded by hand from Xcode.
+      - name: Stamp build number
+        run: |
+          BUILD=$((1000 + GITHUB_RUN_NUMBER))
+          /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD" Sources/KlartApp/Resources/Info.plist
+          echo "BUILD_NUMBER=$BUILD" >> "$GITHUB_ENV"
+          echo "Version $(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Sources/KlartApp/Resources/Info.plist) build $BUILD"
+
+      - name: Write API key
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          umask 077
+          KEY_PATH="$RUNNER_TEMP/AuthKey_${ASC_KEY_ID}.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$KEY_PATH"
+          echo "ASC_KEY_PATH=$KEY_PATH" >> "$GITHUB_ENV"
+
+      - name: Archive
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project Klart.xcodeproj \
+            -scheme Klart \
+            -configuration Release \
+            -destination 'generic/platform=macOS' \
+            -archivePath "$RUNNER_TEMP/Klart.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER"
+
+      - name: Sign for the App Store and upload
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/ExportOptions.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>destination</key><string>upload</string>
+            <key>teamID</key><string>${APPLE_TEAM_ID}</string>
+            <key>signingStyle</key><string>automatic</string>
+            <key>manageAppVersionAndBuildNumber</key><false/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Klart.xcarchive" \
+            -exportOptionsPlist "$RUNNER_TEMP/ExportOptions.plist" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+          echo "### Uploaded build $BUILD_NUMBER to App Store Connect" >> "$GITHUB_STEP_SUMMARY"
+          echo "Processing takes a few minutes to an hour; then enable it for testers under App Store Connect → TestFlight." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove API key
+        if: always()
+        run: rm -f "$RUNNER_TEMP"/AuthKey_*.p8

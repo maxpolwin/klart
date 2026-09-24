@@ -105,13 +105,24 @@ Only signed code is shared. Developer ID signing runs on `main` and on manual ru
 
 ## TestFlight (primary distribution)
 
-Klårt's primary distribution channel is **TestFlight**, via the Mac App Store — the DMG above is the ad-hoc fallback for people who'd rather not go through App Store Connect. TestFlight uploads happen manually from Xcode; nothing in CI does this (it needs an interactive Apple ID sign-in). The app is already TestFlight-ready as-is: `project.yml` sets `CODE_SIGN_STYLE: Automatic` and `Scripts/Klart.entitlements` only requests sandbox-safe entitlements (App Sandbox, outgoing network, user-selected file access), so no project changes are needed to submit — just the one-time App Store Connect setup below.
+Klårt's primary distribution channel is **TestFlight**, via the Mac App Store — the DMG above is the ad-hoc fallback for people who'd rather not go through App Store Connect. Builds reach TestFlight either from CI (the **TestFlight** workflow, below) or by hand from Xcode. The app is already TestFlight-ready as-is: `project.yml` sets `CODE_SIGN_STYLE: Automatic` and `Scripts/Klart.entitlements` only requests sandbox-safe entitlements (App Sandbox, outgoing network, user-selected file access), so no project changes are needed to submit — just the one-time App Store Connect setup below.
 
 **One-time setup (developer.apple.com / appstoreconnect.apple.com):**
 
 1. Confirm the `com.klart.mac` App ID is registered under **Certificates, Identifiers & Profiles** — Xcode registers it automatically the first time you archive with your Team selected, so you can usually skip this.
 2. In **App Store Connect → Apps → +**, create a new app: platform **macOS**, bundle ID `com.klart.mac`, a name, primary language, and SKU (the SKU is internal-only, e.g. `klart-mac`).
 3. When you first upload a build, App Store Connect asks for **export compliance**. Klårt only uses standard HTTPS/TLS for cloud providers plus the vendored Argon2id/AES-256-GCM for local-only note encryption (never transmitted) — most apps in this shape qualify for the standard exemption, but confirm the exact answer yourself since it's a legal attestation, not something this repo can decide for you.
+
+**From CI (recommended):** the `TestFlight` workflow runs the unit tests, archives `main`, signs it for the Mac App Store and uploads it. It only runs when started by hand (Actions → TestFlight → Run workflow, branch `main`), so nothing reaches testers by accident. It authenticates with an App Store Connect API key, and Xcode's cloud-managed signing supplies the Apple Distribution certificate, so no certificate or provisioning profile is stored in the repository or its secrets. Add these repository secrets once:
+
+| Secret | Value |
+|---|---|
+| `ASC_KEY_P8` | The full contents of the `.p8` key file from App Store Connect → Users and Access → Integrations → App Store Connect API → **Team Keys**. Use the **Admin** role: cloud-managed signing needs it to create the distribution certificate. The file can be downloaded only once. |
+| `ASC_KEY_ID` | That key's Key ID |
+| `ASC_ISSUER_ID` | The Issuer ID shown above the key list |
+| `APPLE_TEAM_ID` | Your team ID, from developer.apple.com → Membership |
+
+Each run stamps build number 1000 + the workflow run number, so builds never collide with each other or with earlier manual uploads. Bump `CFBundleShortVersionString` in `Sources/KlartApp/Resources/Info.plist` (and `MARKETING_VERSION` in `project.yml`) for a new version. Export compliance is still answered per build in App Store Connect until you decide the answer and record it yourself.
 
 **Every release, from Xcode:**
 
