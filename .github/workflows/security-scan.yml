@@ -22,7 +22,11 @@ jobs:
         uses: actions/checkout@v4
       
       - name: Run Trivy vulnerability scanner
-        uses: aquasecurity/trivy-action@master
+        # Third-party actions are pinned to a full commit, never a moving
+        # tag or branch: this job holds LINEAR_API_KEY and write scopes, and
+        # Trivy's own release tags were hijacked in 2026. v0.36.0, checked to
+        # be on aquasecurity/trivy-action master.
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -32,7 +36,7 @@ jobs:
         continue-on-error: true
       
       - name: Also generate SARIF for GitHub Security tab
-        uses: aquasecurity/trivy-action@master
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
         with:
           scan-type: 'fs'
           scan-ref: '.'
@@ -49,13 +53,13 @@ jobs:
           sarif_file: 'trivy-results.sarif'
       
       - name: Gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         continue-on-error: true
       
       - name: Semgrep security scan
-        uses: returntocorp/semgrep-action@v1
+        uses: returntocorp/semgrep-action@713efdd345f3035192eaa63f56867b88e63e4e5d # v1
         with:
           config: >-
             p/security-audit
@@ -79,13 +83,6 @@ jobs:
           GITHUB_SHA: ${{ github.sha }}
           GITHUB_REF: ${{ github.ref }}
         run: node .github/scripts/create-linear-tickets.js
-      
-      - name: Auto-close resolved vulnerabilities
-        if: always()
-        env:
-          LINEAR_API_KEY: ${{ secrets.LINEAR_API_KEY }}
-          LINEAR_TEAM_ID: ${{ secrets.LINEAR_TEAM_ID }}
-        run: node .github/scripts/auto-close-fixed.js
       
       - name: Generate summary
         if: always()

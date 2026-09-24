@@ -21,11 +21,13 @@ jobs:
       run:
         working-directory: KlartMac
     env:
-      # Developer ID signing/notarization activates automatically once the
-      # secrets exist (see KlartMac/README.md → "Distributing to testers").
-      # Without them the workflow ad-hoc signs, which is fine for CI checks
-      # but NOT for handing builds to other people.
-      HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' }}
+      # Developer ID signing/notarization activates once the secrets exist
+      # (see KlartMac/README.md → "Distributing to testers"), and only for
+      # main or a deliberate manual run: a push to any other branch never
+      # gets the certificate. Everything else is ad-hoc signed, which is fine
+      # for CI checks — and only signed builds are ever shared: the artifact
+      # uploads and the release below are skipped for ad-hoc builds.
+      HAVE_SIGNING: ${{ secrets.MACOS_CERT_P12 != '' && (github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch') }}
       HAVE_NOTARY: ${{ secrets.NOTARY_APPLE_ID != '' }}
     steps:
       - uses: actions/checkout@v4
@@ -81,9 +83,11 @@ jobs:
           spctl --assess --type open --context context:primary-signature -v dist/Klart.dmg
 
       - name: Zip app bundle
+        if: env.HAVE_SIGNING == 'true'
         run: ditto -c -k --keepParent dist/Klart.app Klart.app.zip
 
       - name: Upload app artifact
+        if: env.HAVE_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Klart.app
@@ -91,6 +95,7 @@ jobs:
           if-no-files-found: error
 
       - name: Upload DMG artifact
+        if: env.HAVE_SIGNING == 'true'
         uses: actions/upload-artifact@v4
         with:
           name: Klart.dmg
@@ -101,17 +106,15 @@ jobs:
       # expiry, no zip wrapper) instead of digging through Actions artifacts:
       # https://github.com/<owner>/<repo>/releases/latest/download/Klart.dmg
       - name: Publish latest release
-        if: github.ref == 'refs/heads/main'
+        if: github.ref == 'refs/heads/main' && env.HAVE_SIGNING == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
         run: |
-          if [ "$HAVE_SIGNING" = "true" ] && [ "$HAVE_NOTARY" = "true" ]; then
+          if [ "$HAVE_NOTARY" = "true" ]; then
             STATUS="✅ Signed with a Developer ID and notarized by Apple — installs with no Gatekeeper warning."
-          elif [ "$HAVE_SIGNING" = "true" ]; then
-            STATUS="⚠️ Signed with a Developer ID but not notarized (notarization secrets are missing) — first launch shows one Gatekeeper prompt."
           else
-            STATUS="⚠️ Ad-hoc signed only (no Developer ID configured) — Gatekeeper will block it as from an unidentified developer until the signing secrets are added. See KlartMac/README.md → \"Distributing to testers\"."
+            STATUS="⚠️ Signed with a Developer ID but not notarized (notarization secrets are missing) — first launch shows one Gatekeeper prompt."
           fi
           NOTES=$(printf '%s\n\nBuilt from commit %s on %s.' "$STATUS" "${GITHUB_SHA::7}" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
           if gh release view latest >/dev/null 2>&1; then
