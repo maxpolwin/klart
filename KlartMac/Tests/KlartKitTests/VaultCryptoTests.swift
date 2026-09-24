@@ -139,6 +139,37 @@ final class VaultCryptoTests: XCTestCase {
         XCTAssertEqual(try VaultCrypto.open(v1, masterKey: key, aad: Data("any".utf8)), plaintext)
     }
 
+    // MARK: Key check
+
+    func testKeyCheckRecognizesOnlyTheCurrentMasterKey() throws {
+        let (masterKey, config) = try VaultCrypto.createVault(password: "correct horse battery", biometricUnlock: false)
+        XCTAssertNotNil(config.keyCheck)
+        XCTAssertTrue(VaultCrypto.keyMatches(config: config, masterKey: masterKey))
+        XCTAssertFalse(VaultCrypto.keyMatches(config: config, masterKey: VaultCrypto.generateMasterKey()))
+
+        // A new password keeps the key, and the check with it.
+        let rewrapped = try VaultCrypto.rewrap(config: config, masterKey: masterKey, newPassword: "new horse")
+        XCTAssertTrue(VaultCrypto.keyMatches(config: rewrapped, masterKey: masterKey))
+
+        // A rotation moves the check to the new key: a Touch ID copy of the
+        // old key no longer passes.
+        let (oldKey, newKey, pending) = try VaultCrypto.beginRotation(config: rewrapped, password: "new horse")
+        let rotated = VaultCrypto.completeRotation(pending)
+        XCTAssertTrue(VaultCrypto.keyMatches(config: rotated, masterKey: newKey))
+        XCTAssertFalse(VaultCrypto.keyMatches(config: rotated, masterKey: oldKey))
+    }
+
+    func testLegacyConfigWithoutKeyCheckStillDecodesAndAcceptsItsKey() throws {
+        let (masterKey, created) = try VaultCrypto.createVault(password: "pw", biometricUnlock: true)
+        var config = created
+        config.keyCheck = nil
+        let json = try JSONEncoder().encode(config)
+        XCTAssertFalse(String(decoding: json, as: UTF8.self).contains("keyCheck"))
+        let decoded = try JSONDecoder().decode(VaultConfig.self, from: json)
+        XCTAssertNil(decoded.keyCheck)
+        XCTAssertTrue(VaultCrypto.keyMatches(config: decoded, masterKey: masterKey))
+    }
+
     func testNoteStoreRejectsTransplantedCiphertext() async throws {
         let dir = FileManager.default.temporaryDirectory
             .appendingPathComponent("klart-vault-test-\(UUID().uuidString)")

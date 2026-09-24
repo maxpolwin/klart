@@ -168,15 +168,10 @@ struct FeedbackPanelView: View {
         }
     }
 
+    /// Model text, so rendered without clickable links (see `CoachText`).
     private var coachOutputText: AttributedString {
         let raw = state.coachOutput.isEmpty && state.coachRunning ? "Thinking…" : state.coachOutput
-        if let parsed = try? AttributedString(
-            markdown: raw,
-            options: .init(interpretedSyntax: .inlineOnlyPreservingWhitespace)
-        ) {
-            return parsed
-        }
-        return AttributedString(raw)
+        return CoachText.render(raw)
     }
 }
 

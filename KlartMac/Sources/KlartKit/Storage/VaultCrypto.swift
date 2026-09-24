@@ -25,6 +25,11 @@ public struct VaultConfig: Codable, Equatable, Sendable {
     /// Present only while a key rotation is in flight: the *old* master key,
     /// wrapped under the same KEK, so a crash mid-rotation is resumable.
     public var previousWrappedMasterKey: Data?
+    /// HMAC-SHA256 of a fixed label under the current master key. Lets a key
+    /// that did not come from the password (the Touch ID copy) be checked
+    /// before any note is sealed with it. Nil for vaults created before the
+    /// check existed; the next password unlock adds it.
+    public var keyCheck: Data?
 
     public init(
         salt: Data,
@@ -36,7 +41,8 @@ public struct VaultConfig: Codable, Equatable, Sendable {
         kdfMemoryKiB: Int? = nil,
         kdfTimeCost: Int? = nil,
         kdfParallelism: Int? = nil,
-        previousWrappedMasterKey: Data? = nil
+        previousWrappedMasterKey: Data? = nil,
+        keyCheck: Data? = nil
     ) {
         self.salt = salt
         self.wrappedMasterKey = wrappedMasterKey
@@ -48,15 +54,21 @@ public struct VaultConfig: Codable, Equatable, Sendable {
         self.kdfTimeCost = kdfTimeCost
         self.kdfParallelism = kdfParallelism
         self.previousWrappedMasterKey = previousWrappedMasterKey
+        self.keyCheck = keyCheck
     }
 }
 
-public enum VaultError: LocalizedError {
+public enum VaultError: LocalizedError, Equatable {
     case wrongPassword
     case corruptData
     case locked
     case kdfFailure
     case unsupportedPlatform
+    /// Too many wrong passwords: every password check is refused until the
+    /// lockout ends.
+    case throttled(seconds: Int)
+    /// Protection is on, but some note files could not be sealed yet.
+    case migrationIncomplete(remaining: Int)
 
     public var errorDescription: String? {
         switch self {
@@ -65,6 +77,9 @@ public enum VaultError: LocalizedError {
         case .locked: return "Notes are locked."
         case .kdfFailure: return "Key derivation failed — is the system low on memory?"
         case .unsupportedPlatform: return "Note encryption requires macOS."
+        case .throttled(let seconds): return "Too many attempts — try again in \(seconds)s."
+        case .migrationIncomplete(let remaining):
+            return "Protection is on, but \(remaining) note file\(remaining == 1 ? "" : "s") could not be encrypted yet. Klårt retries every time you unlock."
         }
     }
 }
@@ -76,8 +91,10 @@ public enum VaultError: LocalizedError {
 ///   note's identity as both derivation context and AAD
 /// - plaintext is length-prefixed and zero-padded to 4 KiB buckets so file
 ///   sizes don't reveal note sizes
-/// - the random 256-bit master key is wrapped by a key derived from the
-///   user's password (PBKDF2-HMAC-SHA256, 600k iterations, NFC-normalized)
+/// - the random 256-bit master key is wrapped with AES-256-GCM by a key
+///   derived from the user's password (Argon2id, 128 MiB, 3 passes, 4 lanes,
+///   NFC-normalized); legacy PBKDF2-HMAC-SHA256 (600k) wraps upgrade on the
+///   next password unlock
 /// - v1 (ChaChaPoly, no AAD) and v2 (ChaChaPoly + AAD) files stay readable
 ///   and upgrade to v3 on their next save
 /// Only Apple primitives are composed here; nothing is hand-rolled.
@@ -297,7 +314,23 @@ public enum VaultCrypto {
             kdfParallelism: argon2Parallelism
         )
         config.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek(for: config, password: password), algo: .aesgcm)
+        config.keyCheck = keyCheck(for: masterKey)
         return (masterKey, config)
+    }
+
+    // MARK: Key check
+
+    private static let keyCheckLabel = Data("klart.vault.keycheck.v1".utf8)
+
+    public static func keyCheck(for masterKey: Data) -> Data {
+        Data(HMAC<SHA256>.authenticationCode(for: keyCheckLabel, using: SymmetricKey(data: masterKey)))
+    }
+
+    /// Whether `masterKey` is this vault's current key. Legacy configs
+    /// without a check accept any key, as before.
+    public static func keyMatches(config: VaultConfig, masterKey: Data) -> Bool {
+        guard let expected = config.keyCheck else { return true }
+        return keyCheck(for: masterKey) == expected
     }
 
     static func wrapAlgo(of config: VaultConfig) -> WrapAlgo {
@@ -337,6 +370,7 @@ public enum VaultCrypto {
         updated.kdfTimeCost = argon2TimeCost
         updated.kdfParallelism = argon2Parallelism
         updated.wrappedMasterKey = try wrap(masterKey: masterKey, with: kek(for: updated, password: newPassword), algo: .aesgcm)
+        updated.keyCheck = keyCheck(for: masterKey)
         return updated
     }
 
@@ -351,6 +385,7 @@ public enum VaultCrypto {
         pending.wrapAlgo = WrapAlgo.aesgcm.rawValue
         pending.wrappedMasterKey = try wrap(masterKey: newKey, with: kekKey, algo: .aesgcm)
         pending.previousWrappedMasterKey = try wrap(masterKey: oldKey, with: kekKey, algo: .aesgcm)
+        pending.keyCheck = keyCheck(for: newKey)
         return (oldKey, newKey, pending)
     }
 

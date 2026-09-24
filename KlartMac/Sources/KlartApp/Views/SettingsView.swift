@@ -530,7 +530,7 @@ private struct SecuritySettingsView: View {
                         Image(systemName: "checkmark.shield.fill")
                             .foregroundStyle(.green)
                     }
-                    Text("Every note file is sealed with ChaCha20-Poly1305. The key is derived from your password and never stored in plain form. Lock any time with ⌘L; the app starts locked.")
+                    Text("Every note file is sealed with AES-256-GCM. The key is derived from your password with Argon2id and never stored in plain form. Lock any time with ⌘L; the app starts locked.")
                         .font(.caption)
                         .foregroundStyle(.secondary)
 

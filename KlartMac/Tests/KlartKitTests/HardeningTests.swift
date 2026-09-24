@@ -179,22 +179,130 @@ final class HardeningTests: XCTestCase {
 
     func testAuditLogChainsAndDetectsTampering() async throws {
         let url = dir.appendingPathComponent("audit.log")
-        let log = AuditLog(fileURL: url)
+        let secrets = InMemorySecretStore()
+        let log = AuditLog(fileURL: url, secrets: secrets)
         await log.record(.vaultEnabled)
         await log.record(.unlockFailure)
         await log.record(.unlockSuccess)
-        XCTAssertEqual(AuditLog.verifyChain(at: url), 3)
+        let count = await log.verify()
+        XCTAssertEqual(count, 3)
 
         // A resumed log continues the same chain.
-        let resumed = AuditLog(fileURL: url)
+        let resumed = AuditLog(fileURL: url, secrets: secrets)
         await resumed.record(.locked)
-        XCTAssertEqual(AuditLog.verifyChain(at: url), 4)
+        let resumedCount = await resumed.verify()
+        XCTAssertEqual(resumedCount, 4)
 
         // Tampering with any line breaks verification.
         var text = try String(contentsOf: url, encoding: .utf8)
         text = text.replacingOccurrences(of: "unlock_failure", with: "unlock_success")
         try text.write(to: url, atomically: true, encoding: .utf8)
-        XCTAssertNil(AuditLog.verifyChain(at: url))
+        let tampered = await resumed.verify()
+        XCTAssertNil(tampered)
+    }
+
+    /// Someone who can write the file but not read the Keychain rebuilds a
+    /// clean-looking unkeyed chain with an event removed. It must not verify.
+    func testAuditLogRejectsARegeneratedChain() async throws {
+        let url = dir.appendingPathComponent("audit.log")
+        let log = AuditLog(fileURL: url, secrets: InMemorySecretStore())
+        await log.record(.unlockFailure)
+        await log.record(.unlockFailure)
+        await log.record(.unlockSuccess)
+
+        var prev = "klart-audit-genesis"
+        var lines: [String] = []
+        for event in ["unlock_success", "locked", "unlock_success"] {
+            let ts = "2026-01-01T00:00:00Z"
+            let hash = SHA256.hash(data: Data("\(prev)|\(ts)|\(event)".utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            lines.append(#"{"ts":"\#(ts)","event":"\#(event)","prev":"\#(prev)","hash":"\#(hash)"}"#)
+            prev = hash
+        }
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+
+        let count = await log.verify()
+        XCTAssertNil(count)
+    }
+
+    func testAuditLogDetectsTruncationAndDeletion() async throws {
+        let url = dir.appendingPathComponent("audit.log")
+        let secrets = InMemorySecretStore()
+        let log = AuditLog(fileURL: url, secrets: secrets)
+        await log.record(.unlockFailure)
+        await log.record(.unlockFailure)
+        await log.record(.unlockSuccess)
+
+        let full = try String(contentsOf: url, encoding: .utf8)
+        let truncated = full.split(separator: "\n").dropLast().joined(separator: "\n") + "\n"
+        try truncated.write(to: url, atomically: true, encoding: .utf8)
+        let afterTruncation = await log.verify()
+        XCTAssertNil(afterTruncation)
+
+        try FileManager.default.removeItem(at: url)
+        let afterDeletion = await log.verify()
+        XCTAssertNil(afterDeletion)
+
+        // The next launch notices, and the notice itself stays in the chain.
+        let relaunched = AuditLog(fileURL: url, secrets: secrets)
+        await relaunched.record(.locked)
+        let recorded = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(recorded.contains("tamper_detected"))
+        let afterRelaunch = await relaunched.verify()
+        XCTAssertNil(afterRelaunch, "a log that records tampering never verifies clean")
+    }
+
+    func testAuditLogToleratesAStopBetweenAppendAndAnchor() async throws {
+        let url = dir.appendingPathComponent("audit.log")
+        let secrets = InMemorySecretStore()
+        let log = AuditLog(fileURL: url, secrets: secrets)
+        await log.record(.unlockSuccess)
+        let anchorAfterFirst = secrets.secret(for: AuditLog.anchorAccount)
+        await log.record(.locked)
+        // Roll the anchor back one write, as if the app stopped in between.
+        secrets.setSecret(anchorAfterFirst, for: AuditLog.anchorAccount)
+
+        let count = await log.verify()
+        XCTAssertEqual(count, 2)
+        let relaunched = AuditLog(fileURL: url, secrets: secrets)
+        await relaunched.record(.unlockSuccess)
+        let text = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertFalse(text.contains("tamper_detected"))
+    }
+
+    func testAuditLogContinuesALegacyChain() async throws {
+        let url = dir.appendingPathComponent("audit.log")
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        var prev = "klart-audit-genesis"
+        var lines: [String] = []
+        for event in ["vault_enabled", "locked"] {
+            let ts = "2025-06-01T00:00:00Z"
+            let hash = SHA256.hash(data: Data("\(prev)|\(ts)|\(event)".utf8))
+                .map { String(format: "%02x", $0) }.joined()
+            lines.append(#"{"ts":"\#(ts)","event":"\#(event)","prev":"\#(prev)","hash":"\#(hash)"}"#)
+            prev = hash
+        }
+        try (lines.joined(separator: "\n") + "\n").write(to: url, atomically: true, encoding: .utf8)
+
+        let log = AuditLog(fileURL: url, secrets: InMemorySecretStore())
+        await log.record(.unlockSuccess)
+        let count = await log.verify()
+        XCTAssertEqual(count, 3)
+    }
+
+    func testAuditLogWhoseKeyIsGoneIsArchivedAndRestarted() async throws {
+        let url = dir.appendingPathComponent("audit.log")
+        let first = AuditLog(fileURL: url, secrets: InMemorySecretStore())
+        await first.record(.vaultEnabled)
+
+        // Same file, empty Keychain: a restored backup on a new Mac.
+        let second = AuditLog(fileURL: url, secrets: InMemorySecretStore())
+        await second.record(.unlockSuccess)
+        let count = await second.verify()
+        XCTAssertEqual(count, 1)
+        let archived = try FileManager.default.contentsOfDirectory(atPath: dir.path)
+            .filter { $0.hasPrefix("audit-unverifiable-") }
+        XCTAssertEqual(archived.count, 1)
     }
 
     // MARK: Sensitive notes / provider locality

@@ -2,6 +2,32 @@ import XCTest
 @testable import KlartKit
 
 final class LLMHTTPTests: XCTestCase {
+    // MARK: Host locality
+
+    func testNumericShorthandAndLookAlikeNamesAreNotLocal() {
+        // Resolvers read these as public addresses (134744072 and 0x08080808
+        // are 8.8.8.8; 010 can be octal), or they are public names that only
+        // start with a private address.
+        let hosts = [
+            "134744072", "0x08080808", "010.8.8.8", "0x7f.0.0.1", "127.1",
+            "192.168.1.1.attacker.example", "10.0.0.1.nip.io",
+        ]
+        for host in hosts {
+            XCTAssertFalse(LLMHTTP.isLocalHost(host), host)
+            XCTAssertThrowsError(try LLMHTTP.normalizeBaseURL("http://\(host)/v1", allowInsecure: true), host)
+        }
+    }
+
+    func testSingleLabelAndMDNSHostsStayLocalBehindAllowInsecure() throws {
+        // A bare machine name is a common Ollama setup and must keep working.
+        XCTAssertNoThrow(try LLMHTTP.normalizeBaseURL("http://mymac:11434", allowInsecure: true))
+        XCTAssertNoThrow(try LLMHTTP.normalizeBaseURL("http://studio.local:1234/v1", allowInsecure: true))
+        XCTAssertThrowsError(try LLMHTTP.normalizeBaseURL("http://mymac:11434", allowInsecure: false))
+        XCTAssertTrue(LLMHTTP.isLocalHost("192.168.1.20"))
+        XCTAssertTrue(LLMHTTP.isLocalHost("10.0.0.1."))
+        XCTAssertFalse(LLMHTTP.isLocalHost("0.0.0.0"))
+    }
+
     // MARK: normalizeBaseURL
 
     func testHTTPSAlwaysAccepted() throws {

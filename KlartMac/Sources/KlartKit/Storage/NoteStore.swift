@@ -78,18 +78,27 @@ public actor NoteStore {
 
     /// Loads every note, newest first. Unreadable files are skipped rather
     /// than taking the whole library down.
+    ///
+    /// A note's identity is its filename. A file named for one note that
+    /// claims to be another is ignored, and when two files claim the same
+    /// note, the one named for it wins — so a stray or planted copy can't
+    /// shadow the real note, whatever `updatedAt` it carries.
     public func loadAll() throws -> [Note] {
         try ensureDirectory()
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension.lowercased() == "json" }
-        var notes: [Note] = []
+        var byID: [UUID: (note: Note, namedForIt: Bool)] = [:]
         for file in files {
+            let fileID = Self.idFromFilename(file)
             guard let raw = try? Data(contentsOf: file),
-                  let data = try? decrypt(raw, noteID: Self.idFromFilename(file)),
+                  let data = try? decrypt(raw, noteID: fileID),
                   let note = try? decoder.decode(Note.self, from: data) else { continue }
-            notes.append(note)
+            if let fileID, fileID != note.id { continue }
+            let namedForIt = fileID == note.id
+            if let current = byID[note.id], current.namedForIt || !namedForIt { continue }
+            byID[note.id] = (note, namedForIt)
         }
-        return notes.sorted { $0.updatedAt > $1.updatedAt }
+        return byID.values.map { $0.note }.sorted { $0.updatedAt > $1.updatedAt }
     }
 
     public func save(_ note: Note) throws {
@@ -137,18 +146,33 @@ public actor NoteStore {
 
     /// One-time migrations when protection is turned on or off. Both rewrite
     /// every note file atomically with the target representation.
-    public func encryptAllOnDisk(masterKey: Data) throws {
+    ///
+    /// Sealing is idempotent and keeps going past a file it cannot read or
+    /// write, so it doubles as the unlock-time sweep that finishes a
+    /// migration a crash or an I/O error interrupted. Returns how many files
+    /// are still plaintext (0 = the whole library is sealed).
+    @discardableResult
+    public func encryptAllOnDisk(masterKey: Data) throws -> Int {
         #if canImport(CryptoKit)
         try ensureDirectory()
         let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
             .filter { $0.pathExtension.lowercased() == "json" }
+        var remaining = 0
         for file in files {
-            let raw = try Data(contentsOf: file)
+            guard let raw = try? Data(contentsOf: file) else {
+                remaining += 1
+                continue
+            }
             guard !VaultCrypto.isSealed(raw) else { continue }
             let aad = Self.idFromFilename(file).map(Self.aad(for:))
-            try VaultCrypto.seal(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
+            do {
+                try VaultCrypto.seal(raw, masterKey: masterKey, aad: aad).write(to: file, options: .atomic)
+            } catch {
+                remaining += 1
+            }
         }
         setEncryptionKey(SecureBytes(masterKey))
+        return remaining
         #else
         throw VaultError.unsupportedPlatform
         #endif

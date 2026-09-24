@@ -94,13 +94,24 @@ enum LLMHTTP {
     /// True for hosts that stay on this machine or the local network:
     /// loopback, RFC 1918 / link-local / CGNAT IPv4, loopback / link-local /
     /// unique-local IPv6, single-label hostnames, and mDNS-style suffixes.
+    ///
+    /// Only canonical dotted-quad IPv4 counts as an address. Shorthand that
+    /// resolvers still accept (`134744072`, `0x08080808`, `010.8.8.8`) and
+    /// names that merely start with a private address
+    /// (`192.168.1.1.example.com`) are public until proven otherwise.
     static func isLocalHost(_ rawHost: String) -> Bool {
-        let host = rawHost.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        var host = rawHost.lowercased().trimmingCharacters(in: CharacterSet(charactersIn: "[]"))
+        if host.hasSuffix(".") { host.removeLast() }
         if host == "localhost" || host == "127.0.0.1" || host == "::1" { return true }
 
         // IPv4 private / loopback / link-local / CGNAT ranges.
-        let parts = host.split(separator: ".").compactMap { UInt8($0) }
-        if parts.count == 4 {
+        let labels = host.split(separator: ".", omittingEmptySubsequences: false)
+        if labels.allSatisfy(isNumericLabel) {
+            guard labels.count == 4 else { return false }
+            let parts = labels.compactMap { UInt8($0) }
+            guard parts.count == 4, zip(parts, labels).allSatisfy({ String($0) == $1 }) else {
+                return false
+            }
             switch (parts[0], parts[1]) {
             case (127, _), (10, _), (192, 168), (169, 254): return true
             case (172, 16...31): return true
@@ -114,12 +125,24 @@ enum LLMHTTP {
             return host.hasPrefix("fe80:") || host.hasPrefix("fd") || host.hasPrefix("fc")
         }
 
-        // Single-label hostnames ("mymac") and local-only DNS suffixes.
+        // Single-label hostnames ("mymac", a common Ollama setup) and
+        // local-only DNS suffixes. Plain HTTP to them still needs the
+        // provider's allowInsecure opt-in.
         if !host.contains(".") { return true }
         for suffix in [".local", ".lan", ".internal", ".home.arpa"] where host.hasSuffix(suffix) {
             return true
         }
         return false
+    }
+
+    /// A label an IPv4 parser could read as a number: decimal digits, or a
+    /// `0x` hex literal.
+    private static func isNumericLabel(_ label: Substring) -> Bool {
+        guard !label.isEmpty else { return false }
+        if label.hasPrefix("0x") {
+            return label.dropFirst(2).allSatisfy(\.isHexDigit)
+        }
+        return label.allSatisfy { $0.isASCII && $0.isNumber }
     }
 
     static func session(timeout: TimeInterval) -> URLSession {

@@ -116,7 +116,8 @@ final class AppState: ObservableObject {
     /// The vault master key while unlocked, in mlocked zeroized-on-release
     /// memory; nil when locked or unprotected.
     private var vaultKey: SecureBytes?
-    /// Tamper-evident local log of security events (never content).
+    /// Tamper-evident local log of security events (never content), keyed
+    /// and anchored in the Keychain.
     let auditLog: AuditLog
     private var idleLockTask: Task<Void, Never>?
     private var activityMonitor: Any?
@@ -170,7 +171,8 @@ final class AppState: ObservableObject {
         // the very first editor styles under the right palette.
         Theme.monochrome = loadedSettings.teleprompterMode
         self.auditLog = AuditLog(
-            fileURL: settingsStore.fileURL.deletingLastPathComponent().appendingPathComponent("audit.log")
+            fileURL: settingsStore.fileURL.deletingLastPathComponent().appendingPathComponent("audit.log"),
+            secrets: secrets
         )
 
         if settings.vault != nil {
@@ -908,9 +910,13 @@ final class AppState: ObservableObject {
         if biometricUnlock {
             storeBiometricKey(masterKey)
         }
-        try await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        let remaining = try await noteStore.encryptAllOnDisk(masterKey: masterKey)
         try? await recommendationLog.encryptOnDisk(masterKey: masterKey)
         await auditLog.record(.vaultEnabled)
+        // The vault is on either way; unlock finishes whatever is left.
+        if remaining > 0 {
+            throw VaultError.migrationIncomplete(remaining: remaining)
+        }
     }
 
     /// Recovers the master key, finishing any interrupted key rotation first
@@ -928,11 +934,49 @@ final class AppState: ObservableObject {
         return current
     }
 
+    /// The one door every password goes through — the lock screen and every
+    /// Settings sheet alike — so a single counter throttles them all. Without
+    /// it, "Turn Off Protection…" (reachable while locked) would be an
+    /// unthrottled password oracle.
+    private func verifiedMasterKey(password: String) async throws -> Data {
+        let remaining = lockoutRemaining
+        if remaining > 0 {
+            await auditLog.record(.unlockThrottled)
+            throw VaultError.throttled(seconds: remaining)
+        }
+        let masterKey: Data
+        do {
+            masterKey = try await resolveMasterKey(password: password)
+        } catch VaultError.wrongPassword {
+            registerFailedPassword()
+            await auditLog.record(.unlockFailure)
+            throw VaultError.wrongPassword
+        }
+        failedUnlockCount = 0
+        lockoutUntil = nil
+        // Vaults created before the key check existed gain it now, while the
+        // key is known to come from the password.
+        if var config = settings.vault, config.keyCheck == nil, config.previousWrappedMasterKey == nil {
+            config.keyCheck = VaultCrypto.keyCheck(for: masterKey)
+            settings.vault = config
+        }
+        return masterKey
+    }
+
+    private func registerFailedPassword() {
+        failedUnlockCount += 1
+        if failedUnlockCount >= 5 {
+            // 30s, 60s, 120s… capped at 5 minutes.
+            let delay = min(300.0, 30.0 * pow(2, Double(failedUnlockCount - 5)))
+            lockoutUntil = Date().addingTimeInterval(delay)
+        }
+    }
+
     /// Turns protection off after verifying the password; notes are rewritten
     /// as plaintext and the biometric key copy is removed.
     func disableProtection(password: String) async throws {
         guard settings.vault != nil else { return }
-        let masterKey = try await resolveMasterKey(password: password)
+        let masterKey = try await verifiedMasterKey(password: password)
         await flushEditorToStoreNow()
         try await noteStore.decryptAllOnDisk(masterKey: masterKey)
         try? await recommendationLog.decryptOnDisk(masterKey: masterKey)
@@ -951,7 +995,7 @@ final class AppState: ObservableObject {
     /// untouched — only the wrapping in settings.json changes.
     func changeVaultPassword(current: String, new: String) async throws {
         guard settings.vault != nil else { return }
-        let masterKey = try await resolveMasterKey(password: current)
+        let masterKey = try await verifiedMasterKey(password: current)
         guard let config = settings.vault else { return }
         settings.vault = try await Task.detached(priority: .userInitiated) {
             try VaultCrypto.rewrap(config: config, masterKey: masterKey, newPassword: new)
@@ -964,7 +1008,7 @@ final class AppState: ObservableObject {
     /// an interrupted rotation resumes on the next password unlock.
     func rotateMasterKey(password: String) async throws {
         guard settings.vault != nil else { return }
-        _ = try await resolveMasterKey(password: password)   // finish any pending rotation
+        _ = try await verifiedMasterKey(password: password)   // finishes any pending rotation
         guard let config = settings.vault else { return }
         let (oldKey, newKey, pending) = try await Task.detached(priority: .userInitiated) {
             try VaultCrypto.beginRotation(config: config, password: password)
@@ -987,19 +1031,16 @@ final class AppState: ObservableObject {
         guard var config = settings.vault else { return }
         if enabled {
             guard let password else { throw VaultError.wrongPassword }
-            let masterKey = try await Self.deriveMasterKey(config: config, password: password)
+            let masterKey = try await verifiedMasterKey(password: password)
+            // verifiedMasterKey may have finished a rotation or added the
+            // key check; build on the config as it is now.
+            config = settings.vault ?? config
             storeBiometricKey(masterKey)
         } else {
             removeBiometricKey()
         }
         config.biometricUnlock = enabled
         settings.vault = config
-    }
-
-    private static func deriveMasterKey(config: VaultConfig, password: String) async throws -> Data {
-        try await Task.detached(priority: .userInitiated) {
-            try VaultCrypto.unlock(config: config, password: password)
-        }.value
     }
 
     /// Seconds until another unlock attempt is allowed (0 = now).
@@ -1011,22 +1052,9 @@ final class AppState: ObservableObject {
     @discardableResult
     func unlock(password: String) async -> Bool {
         guard settings.vault != nil else { return true }
-        if lockoutRemaining > 0 {
-            await auditLog.record(.unlockThrottled)
+        guard let masterKey = try? await verifiedMasterKey(password: password) else {
             return false
         }
-        guard let masterKey = try? await resolveMasterKey(password: password) else {
-            failedUnlockCount += 1
-            if failedUnlockCount >= 5 {
-                // 30s, 60s, 120s… capped at 5 minutes.
-                let delay = min(300.0, 30.0 * pow(2, Double(failedUnlockCount - 5)))
-                lockoutUntil = Date().addingTimeInterval(delay)
-            }
-            await auditLog.record(.unlockFailure)
-            return false
-        }
-        failedUnlockCount = 0
-        lockoutUntil = nil
         await auditLog.record(.unlockSuccess)
         // Transparent KDF upgrade: legacy PBKDF2 vaults rewrap under Argon2id
         // the first time the password is available. Notes are untouched; a
@@ -1064,12 +1092,27 @@ final class AppState: ObservableObject {
             await auditLog.record(.biometricUnlockFailure)
             return false
         }
+        // A copy left over from before a key rotation (a crash between the
+        // rotation and refreshing this copy, or a restored settings.json)
+        // would open nothing and seal new edits under a key the password
+        // can't recover. Drop it and fall back to the password.
+        if var config = settings.vault, !VaultCrypto.keyMatches(config: config, masterKey: masterKey) {
+            removeBiometricKey()
+            config.biometricUnlock = false
+            settings.vault = config
+            await auditLog.record(.biometricUnlockFailure)
+            return false
+        }
         await auditLog.record(.biometricUnlockSuccess)
         await finishUnlock(masterKey: masterKey)
         return true
     }
 
     private func finishUnlock(masterKey: Data) async {
+        // Seal anything an interrupted migration left in plaintext, so
+        // "Notes are encrypted on disk" is true after every unlock.
+        _ = try? await noteStore.encryptAllOnDisk(masterKey: masterKey)
+        try? await recommendationLog.encryptOnDisk(masterKey: masterKey)
         let secured = SecureBytes(masterKey)
         vaultKey = secured
         await noteStore.setEncryptionKey(secured)
@@ -1133,7 +1176,6 @@ final class AppState: ObservableObject {
         panel.message = "Choose a folder for the markdown export. Files are written as plain text — store them somewhere you trust."
         guard panel.runModal() == .OK, let folder = panel.url else { return }
 
-        let formatter = ISO8601DateFormatter()
         for note in notes {
             let safeTitle = note.title
                 .components(separatedBy: CharacterSet(charactersIn: "/\\:?%*|\"<>"))
@@ -1141,9 +1183,8 @@ final class AppState: ObservableObject {
                 .trimmingCharacters(in: .whitespaces)
                 .prefix(60)
             let name = "\(safeTitle.isEmpty ? "Untitled" : String(safeTitle)) — \(note.id.uuidString.prefix(8)).md"
-            let header = "<!-- klart:id=\(note.id.uuidString) created=\(formatter.string(from: note.createdAt)) -->\n"
             let url = folder.appendingPathComponent(name)
-            try? (header + note.content).data(using: .utf8)?.write(to: url, options: .atomic)
+            try? MarkdownExport.fileContents(for: note).data(using: .utf8)?.write(to: url, options: .atomic)
         }
     }
 
@@ -1204,28 +1245,24 @@ final class AppState: ObservableObject {
         guard panel.runModal() == .OK else { return }
 
         for url in panel.urls {
-            guard var text = try? String(contentsOf: url, encoding: .utf8) else { continue }
-            var noteID = UUID()
-            var createdAt = Date()
-            // Recover identity from our own export header, if present.
-            if text.hasPrefix("<!-- klart:"), let headerEnd = text.range(of: "-->\n") {
-                let header = String(text[..<headerEnd.lowerBound])
-                if let idMatch = header.range(of: "id="),
-                   let id = UUID(uuidString: String(header[idMatch.upperBound...].prefix(36))) {
-                    noteID = id
-                }
-                if let createdMatch = header.range(of: "created=") {
-                    let stamp = String(header[createdMatch.upperBound...].prefix(25))
-                    createdAt = ISO8601DateFormatter().date(from: stamp) ?? createdAt
-                }
-                text.removeSubrange(..<headerEnd.upperBound)
-            }
-            let note = Note(id: noteID, content: text, createdAt: createdAt, updatedAt: Date())
-            notes.removeAll { $0.id == note.id }
-            notes.insert(note, at: 0)
-            persist(note)
+            guard let text = try? String(contentsOf: url, encoding: .utf8) else { continue }
+            importMarkdown(text)
         }
         if selectedNoteID == nil { selectedNoteID = notes.first?.id }
+    }
+
+    /// Stores one imported markdown file. A file carrying our export header
+    /// updates the note it came from, keeping that note's sensitive mark: a
+    /// restore from backup must never quietly open a local-only note to the
+    /// cloud.
+    func importMarkdown(_ text: String) {
+        guard !isLocked else { return }
+        let parsed = MarkdownExport.parse(text)
+        let existing = parsed.id.flatMap { id in notes.first { $0.id == id } }
+        let note = MarkdownExport.note(from: parsed, existing: existing)
+        notes.removeAll { $0.id == note.id }
+        notes.insert(note, at: 0)
+        persist(note)
     }
 }
 #endif
