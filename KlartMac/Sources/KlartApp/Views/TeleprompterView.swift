@@ -18,7 +18,7 @@ import KlartKit
 ///   the panel, ⌘E, or typing /editor — each aligned to the section of text
 ///   it refers to, wearing a glyph instead of a colored pill. Dismiss retires
 ///   a note for good; otherwise just keep writing and the whole rail fades
-///   away on its own.
+///   away: five seconds after your first keystroke, then over twenty.
 /// - The note's title stays pinned at the top; an optional word-count line
 ///   (Settings → Interface) sits at the bottom.
 ///
@@ -132,9 +132,10 @@ struct TeleprompterView: View {
         /// Dwell on the dots before the panel expands on its own — a click
         /// expands it immediately, without waiting.
         static let dwellSeconds: Double = 2.0
-        /// Continued writing for this long fades the rail…
-        static let railFadeDelay: Double = 5 * 60
-        /// …over this long, so focus returns gradually.
+        /// Writing for this long, from the first keystroke after the rail
+        /// appears, fades it…
+        static let railFadeDelay: Double = 5
+        /// …over this long, so focus returns without a jump.
         static let railFadeDuration: Double = 20
     }
 
@@ -765,8 +766,12 @@ struct TeleprompterView: View {
             typedSincePanelShown = true
             collapseEdge()
         }
-        if state.editorRailVisible {
+        // The first keystroke after the rail shows starts its countdown;
+        // later ones leave it running. Reaching for the rail or fresh notes
+        // (`wakeRail`) cancels it, and the next keystroke starts it again.
+        if state.editorRailVisible, !typedSinceRailShown {
             typedSinceRailShown = true
+            startRailFade()
         }
     }
 
@@ -859,14 +864,14 @@ struct TeleprompterView: View {
         railFadeTask?.cancel()
         withAnimation(.easeOut(duration: reduceMotion ? 0 : 0.2)) { railOpacity = 1 }
         typedSinceRailShown = false
+    }
+
+    /// Fades the whole rail out as one thing, then puts it away. Started by
+    /// the first keystroke after the rail shows; `wakeRail` cancels it.
+    private func startRailFade() {
+        railFadeTask?.cancel()
         railFadeTask = Task { @MainActor in
-            // Wait until five minutes have passed *with* writing in between;
-            // an untouched rail (user is reading it) stays.
-            while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(Metrics.railFadeDelay * 1_000_000_000))
-                guard !Task.isCancelled else { return }
-                if typedSinceRailShown { break }
-            }
+            try? await Task.sleep(nanoseconds: UInt64(Metrics.railFadeDelay * 1_000_000_000))
             guard !Task.isCancelled else { return }
             let duration = reduceMotion ? 0.25 : Metrics.railFadeDuration
             withAnimation(.linear(duration: duration)) { railOpacity = 0 }
@@ -874,6 +879,7 @@ struct TeleprompterView: View {
             guard !Task.isCancelled else { return }
             state.editorRailVisible = false
             railOpacity = 1
+            typedSinceRailShown = false
         }
     }
 
