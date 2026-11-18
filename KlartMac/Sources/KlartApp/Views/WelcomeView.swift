@@ -19,38 +19,38 @@ struct WelcomePage: Identifiable, Equatable {
     static let all: [WelcomePage] = [
         WelcomePage(
             id: 0, art: .column,
-            title: "Think in writing.",
-            body: "Klårt is one column of text and an editor who reads it. There is no toolbar and no sidebar; the page is the interface.\n\n⌘N starts a note. A line beginning with # is its title, ## starts a section. Markdown styles itself as you type and stays plain text on disk."
+            title: "Writing is thinking, made visible.",
+            body: "If the page is vague, so was the thought. Klårt is one column of text and an editor who reads it, built to sharpen your thinking. No toolbar, nothing to hide behind.\n\n⌘N begins. # is a title, ## a section. It stays plain markdown."
         ),
         WelcomePage(
             id: 1, art: .leftEdge,
-            title: "Your notes wait behind the left edge.",
-            body: "Move the pointer to the left edge and a spine of dots appears, one per note. Rest there a moment, or click, for the full panel with titles, dates and search. ⌘F opens it with search focused.\n\nStart typing and it all goes away again."
+            title: "Nothing between you and the page.",
+            body: "Your notes wait behind the left edge. The editor waits until you are done. Point at the edge for a dot per note, rest or click for the full panel. ⌘F searches."
         ),
         WelcomePage(
             id: 2, art: .editorReads,
-            title: "The editor reads when you finish a section.",
-            body: "Leave a section, start the next heading, or pause for twenty seconds, and the editor reads what you wrote with the whole document in mind. Its notes appear in the right margin beside the text they are about.\n\nType //editor to make it read now. ⌘E or //show shows and hides the notes. Two slashes, so a path or a fraction never summons it by accident."
+            title: "The editor speaks when you finish, not before.",
+            body: "Interruption is the enemy of a draft. Leave a section, start the next heading, or pause twenty seconds, and the editor reads it against the whole piece. Its notes appear in the margin beside the words they are about.\n\n//editor reads now. ⌘E shows or hides the notes."
         ),
         WelcomePage(
             id: 3, art: .anatomy,
-            title: "Opinionated on purpose. It never writes for you.",
-            body: "Every note quotes the words it is about, says what is wrong, and why that costs the argument. A ! marks a note that matters; ‼ one that undermines the piece.\n\nNine lenses: Gap ◇, MECE ⧉, Structure ≡, Clarity ◎, Evidence ❝, Assumption ⊢, Warrant ⇒, Counter ⇄, Question ?. Some checks run on this Mac with no model at all: uncited claims, hedging, undefined terms, thin sections."
+            title: "Agreeable feedback is useless.",
+            body: "The editor is here to develop your thinking, not to take it over. Every note quotes your words, names the flaw and what it costs your argument. No praise. No rewrites. ! matters; ‼ undermines the piece.\n\nNine lenses: Gap ◇, MECE ⧉, Structure ≡, Clarity ◎, Evidence ❝, Assumption ⊢, Warrant ⇒, Counter ⇄, Question ?. Some checks run on this Mac with no model."
         ),
         WelcomePage(
             id: 4, art: .respond,
-            title: "Answer it, or judge it.",
-            body: "Respond drops the note into your text as a ✎ prompt and puts the caret beneath it. The answer is yours to write.\n\n✓ says the editor was right. ✗ says it was wrong, and that note never returns for this note. Verdicts go to a local learning log so recurring blind spots become visible. Your writing stays out of it unless you opt in."
+            title: "Argue back.",
+            body: "Respond puts the editor's note in your text as a ✎ prompt, and the answer is yours to write. ✓ means the editor was right. ✗ means it was wrong, and it won't return.\n\nYour verdicts stay on this Mac and show you where you keep slipping."
         ),
         WelcomePage(
             id: 5, art: .privacy,
-            title: "Private by default.",
-            body: "Notes are markdown files on this Mac. The editor talks to Ollama or LM Studio locally, or to OpenRouter and other cloud endpoints; choose in Settings → AI Provider (⌘,).\n\nMark a note Sensitive and it never leaves the machine, whatever the provider. Encryption at rest, app lock and Touch ID live in Settings → Security."
+            title: "Private, so you can be honest.",
+            body: "Notes are plain files on this Mac. The editor runs on Ollama or LM Studio locally, or on a cloud model you choose (⌘,). Mark a note Sensitive and it never leaves the machine.\n\nEncryption, app lock and Touch ID: Settings → Security."
         ),
         WelcomePage(
             id: 6, art: .sample,
-            title: "Try it on a note with problems.",
-            body: "Nordbrot is deciding whether to open a second bakery: five hundred words with an uncited rule of thumb, overlapping customer groups, a hedged risk section and a decision that leans on one number.\n\nOpen it and the editor reads it straight away. Its local checks work before any model is set up; add a provider and it reads the argument too."
+            title: "Try it on a draft of yours.",
+            body: "Write or paste one in and the editor reads it. Or start with Nordbrot, a sample note with the gaps most first drafts have: an uncited rule of thumb, overlapping customer groups, a decision resting on one number.\n\nLocal checks work before any model is set up."
         ),
     ]
 }
