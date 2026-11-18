@@ -117,7 +117,7 @@ struct AppCommands: Commands {
                     state.showCoachPopover.toggle()
                 }
             }
-            .keyboardShortcut("e", modifiers: .command)
+            .keyboardShortcut("e", modifiers: [.command, .option])
             .disabled(state.selectedNoteID == nil)
             Divider()
             ForEach(CoachAction.allCases) { action in

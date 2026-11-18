@@ -30,7 +30,7 @@ struct WelcomePage: Identifiable, Equatable {
         WelcomePage(
             id: 2, art: .editorReads,
             title: "The editor speaks when you finish, not before.",
-            body: "Interruption is the enemy of a draft. Leave a section, start the next heading, or pause twenty seconds, and the editor reads it against the whole piece. Its notes appear in the margin beside the words they are about.\n\n//editor reads now. ⌘E shows or hides the notes."
+            body: "Interruption is the enemy of a draft. Leave a section, start the next heading, or pause twenty seconds, and the editor reads it against the whole piece. Its notes appear in the margin beside the words they are about.\n\n//editor reads now. ⌥⌘E shows or hides the notes."
         ),
         WelcomePage(
             id: 3, art: .anatomy,
@@ -302,7 +302,7 @@ private struct WelcomeArt: View {
                 Text("reads now")
                     .font(.system(size: 10.5))
                     .foregroundStyle(Theme.textSecondary)
-                Text("⌘E")
+                Text("⌥⌘E")
                     .font(.system(size: 11, design: .monospaced))
                     .foregroundStyle(Theme.textPrimary)
                     .padding(.horizontal, 7)

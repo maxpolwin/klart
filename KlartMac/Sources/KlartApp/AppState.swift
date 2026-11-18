@@ -75,7 +75,7 @@ final class AppState: ObservableObject {
     /// Teleprompter: whether the editor's margin rail (notes on the right)
     /// is on screen. Reading happens in the background either way; the rail
     /// only appears when the user summons the editor — via the icon in the
-    /// notes panel, ⌘E, or typing //show (//editor reads and shows) — and
+    /// notes panel, ⌥⌘E, or typing //show (//editor reads and shows) — and
     /// retires again when the notes fade out.
     @Published var editorRailVisible = false
 

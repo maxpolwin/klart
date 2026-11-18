@@ -15,7 +15,7 @@ import KlartKit
 ///   moment writing resumes.
 /// - The editor (the AI coach) works in the background. Its suggestions
 ///   appear in a right margin rail only when summoned — via the ¶ icon in
-///   the panel, ⌘E, or typing /editor — each aligned to the section of text
+///   the panel, ⌥⌘E, or typing /editor — each aligned to the section of text
 ///   it refers to, wearing a glyph instead of a colored pill. Dismiss retires
 ///   a note for good; otherwise just keep writing and the whole rail fades
 ///   away: five seconds after your first keystroke, then over twenty.
@@ -594,8 +594,8 @@ struct TeleprompterView: View {
             }
         }
         .help(state.editorRailVisible
-              ? "Hide the editor's notes (⌘E)"
-              : "Show editor — margin notes on this text (⌘E or type //show; //editor reads the section now)")
+              ? "Hide the editor's notes (⌥⌘E)"
+              : "Show editor — margin notes on this text (⌥⌘E or type //show; //editor reads the section now)")
         .accessibilityLabel(state.editorRailVisible ? "Hide editor" : "Show editor")
     }
 
@@ -815,7 +815,7 @@ struct TeleprompterView: View {
 
     /// Sits at the rail's near (left) edge, right where the writing column
     /// ends — the one spot on the rail itself that closes it, rather than
-    /// only ⌘E or the far-away notes panel.
+    /// only ⌥⌘E or the far-away notes panel.
     private var hideRailButton: some View {
         Button {
             state.editorRailVisible = false
@@ -830,7 +830,7 @@ struct TeleprompterView: View {
         .buttonStyle(.plain)
         .padding(.top, (Metrics.titleBarHeight - 22) / 2)
         .padding(.leading, 6)
-        .help("Hide the editor's notes (⌘E)")
+        .help("Hide the editor's notes (⌥⌘E)")
         .accessibilityLabel("Hide editor notes")
     }
 
