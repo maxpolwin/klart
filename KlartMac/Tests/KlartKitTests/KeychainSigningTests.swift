@@ -43,6 +43,19 @@ final class KeychainSigningTests: XCTestCase {
         }
     }
 
+    func testInMemoryStoreReportsSuccess() {
+        let store: SecretStore = InMemorySecretStore()
+        XCTAssertTrue(store.storeSecret("k", for: "a"))
+        XCTAssertEqual(store.secret(for: "a"), "k")
+    }
+
+    func testLegacyCleanupNeverThrowsOrPrompts() {
+        // Best-effort and silent whatever the signing state; nothing to assert
+        // beyond "returns".
+        KeychainSecretStore(service: service).deleteLegacyItems(for: ["none"])
+        SecureEnclaveWrap.deleteLegacyKey()
+    }
+
     /// The signed build depends on this file; a refactor must not drop either
     /// the sandbox or the keychain group, and make-app.sh must keep stripping
     /// the restricted one.

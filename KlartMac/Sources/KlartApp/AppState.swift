@@ -839,8 +839,14 @@ final class AppState: ObservableObject {
         secrets.secret(for: kind.keychainAccount) ?? ""
     }
 
+    /// True when the last key the writer typed could not be written to the
+    /// Keychain (an unsigned build, or a locked keychain) — the Settings field
+    /// says so instead of leaving them to find out on the first request.
+    @Published private(set) var apiKeySaveFailed = false
+
     func setAPIKey(_ key: String, for kind: ProviderKind) {
-        secrets.setSecret(key.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keychainAccount)
+        apiKeySaveFailed = !secrets.storeSecret(
+            key.trimmingCharacters(in: .whitespacesAndNewlines), for: kind.keychainAccount)
     }
 
     private func persistSettings() {
@@ -867,6 +873,10 @@ final class AppState: ObservableObject {
     @discardableResult
     private func storeBiometricKey(_ masterKey: Data) -> Bool {
         guard let keychain = secrets as? KeychainSecretStore else { return false }
+        // Clear both copies first: whichever path below fails, no copy of a
+        // previous master key survives to be mistaken for the current one.
+        keychain.setData(nil, for: Self.vaultSEKeychainAccount)
+        keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
         if let blob = SecureEnclaveWrap.wrap(masterKey) {
             guard keychain.setData(blob, for: Self.vaultSEKeychainAccount) else { return false }
             keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
@@ -880,6 +890,10 @@ final class AppState: ObservableObject {
         keychain.setData(nil, for: Self.vaultSEKeychainAccount)
         keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
         SecureEnclaveWrap.deleteKey()
+        // An older build may have left copies in the legacy file keychain,
+        // which the queries above no longer reach.
+        keychain.deleteLegacyItems(for: [Self.vaultSEKeychainAccount, Self.vaultKeychainAccount])
+        SecureEnclaveWrap.deleteLegacyKey()
     }
 
     /// Flushes the live editor buffer straight through the actor, awaiting the

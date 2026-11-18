@@ -130,6 +130,17 @@ private struct ProviderSettingsView: View {
                                 .padding(12)
                         }
                     }
+                    if state.apiKeySaveFailed {
+                        Label {
+                            Text("This key could not be saved to the Keychain, so it will be lost when you quit. Keychain access needs the signed Klårt build.")
+                                .font(.caption)
+                        } icon: {
+                            Image(systemName: "exclamationmark.triangle")
+                                .font(.caption)
+                        }
+                        .foregroundStyle(.secondary)
+                        .accessibilityElement(children: .combine)
+                    }
                 }
             } header: {
                 Text("Connection")

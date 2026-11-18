@@ -75,6 +75,18 @@ public enum SecureEnclaveWrap {
         return SecKeyCreateDecryptedData(privateKey, algorithm, blob as CFData, nil) as Data?
     }
 
+    /// Best-effort removal of a key an older build may have left in the
+    /// legacy file-based keychain. Never shows UI.
+    public static func deleteLegacyKey() {
+        let context = LAContext()
+        context.interactionNotAllowed = true
+        SecItemDelete([
+            kSecClass as String: kSecClassKey,
+            kSecAttrApplicationTag as String: keyTag,
+            kSecUseAuthenticationContext as String: context,
+        ] as CFDictionary)
+    }
+
     public static func deleteKey() {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,

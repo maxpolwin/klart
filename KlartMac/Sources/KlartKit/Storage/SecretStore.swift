@@ -9,6 +9,17 @@ import LocalAuthentication
 public protocol SecretStore: Sendable {
     func secret(for account: String) -> String?
     func setSecret(_ value: String?, for account: String)
+    /// Like `setSecret`, but says whether the value was stored.
+    @discardableResult
+    func storeSecret(_ value: String?, for account: String) -> Bool
+}
+
+public extension SecretStore {
+    @discardableResult
+    func storeSecret(_ value: String?, for account: String) -> Bool {
+        setSecret(value, for: account)
+        return true
+    }
 }
 
 /// In-memory store for tests and non-Apple platforms.
@@ -154,6 +165,22 @@ public final class KeychainSecretStore: SecretStore {
         let status = SecItemCopyMatching(query as CFDictionary, &result)
         guard status == errSecSuccess, let data = result as? Data else { return nil }
         return data
+    }
+
+    /// Best-effort removal of items an older build may have stored in the
+    /// legacy file-based keychain, which `baseQuery` no longer reaches. Never
+    /// shows UI: an item the system would prompt for is left alone.
+    public func deleteLegacyItems(for accounts: [String]) {
+        for account in accounts {
+            let context = LAContext()
+            context.interactionNotAllowed = true
+            SecItemDelete([
+                kSecClass as String: kSecClassGenericPassword,
+                kSecAttrService as String: service,
+                kSecAttrAccount as String: account,
+                kSecUseAuthenticationContext as String: context,
+            ] as CFDictionary)
+        }
     }
 
     public func hasProtectedData(for account: String) -> Bool {
