@@ -128,9 +128,9 @@ final class AppState: ObservableObject {
 
     /// Raw master key behind a user-presence Keychain ACL — the fallback
     /// biometric path on Macs without a Secure Enclave.
-    static let vaultKeychainAccount = "klart.vault.masterkey"
+    static let vaultKeychainAccount = StorageProfile.vaultAccount("klart.vault.masterkey")
     /// Master key encrypted to the Secure Enclave key — the preferred path.
-    static let vaultSEKeychainAccount = "klart.vault.masterkey.se"
+    static let vaultSEKeychainAccount = StorageProfile.vaultAccount("klart.vault.masterkey.se")
 
     let secrets: SecretStore
     private let noteStore: NoteStore

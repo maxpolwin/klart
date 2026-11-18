@@ -4,7 +4,7 @@
 
 Klårt is a minimal, native macOS app for structuring your thinking in markdown. As you write, a local or cloud LLM reads the section you're working on — in the context of your whole document — and coaches you: it points out gaps, overlapping categories, vague claims, and better structure, and it can ask you Socratic questions instead of giving answers.
 
-This is the native Swift/SwiftUI rebuild of the original Electron prototype. It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, and any OpenAI-compatible endpoint.
+This is the native Swift/SwiftUI rebuild of the original Electron prototype. It is faster, lighter (~5 MB app, no bundled browser), and integrates flexibly with **Ollama**, **LM Studio**, **OpenRouter**, **Mistral**, and any OpenAI-compatible endpoint.
 
 ---
 
@@ -13,7 +13,7 @@ This is the native Swift/SwiftUI rebuild of the original Electron prototype. It 
 - **Native SwiftUI, "Teleprompter" design** — the default surface is one centered, monochrome column and nothing else: no sidebar, no toolbar, no persistent AI chrome. Notes wait behind the left edge (move the pointer there for a spine of dots; dwell 0.8 s for the full panel with titles, dates, and search). The AI editor works in the background and appears only when summoned (`⌘E`, the ¶ icon in the panel, or typing `//show`; `//editor` reads the current section at once): margin notes on the right, matched to the text sections they refer to, marked with glyphs (◇ ⧉ ≡ ◎ ❝ ⊢ ⇒ ⇄ ?) instead of colored pills — and they fade back out while you keep writing; when they outgrow the window the rail scrolls rather than stacking them. The classic "Quiet" layout (sidebar, accent color, toolbar pill) is a toggle in Settings → Interface. No Electron, no web view.
 - **Markdown-ready editor** — headings resize live as you type (`#`, `##`, `###`), list markers are tinted and quote lines dimmed, `- [x]` items strike through, and `**bold**`, `*italic*`, `` `code` ``, and `~~strikethrough~~` style inline while the text stays plain markdown. The syntax markers are hidden on every line except the one you're editing, and Return continues a `- ` or `1. ` list — pressing it on an empty item ends the list instead.
 - **Local-first** — notes are plain JSON-wrapped markdown files in `~/Library/Application Support/Klart/Notes`. Nothing leaves your machine unless you choose a cloud provider.
-- **Any LLM** — Ollama (native API), LM Studio, OpenRouter, or any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, corporate gateways). Model lists are fetched live from the provider.
+- **Any LLM** — Ollama (native API), LM Studio, OpenRouter, Mistral, or any OpenAI-compatible server (llama.cpp, vLLM, LocalAI, corporate gateways). Model lists are fetched live from the provider.
 - **Coaching, not ghostwriting** — an opinionated editor: no praise, no hedging, no "consider". It reads a section when you *finish* it (you move on, open a new heading beneath it, or stop for a while — default 20 s), not on every pause in typing. Every note quotes the exact words it is about, states what is wrong, says what it costs the argument, and carries a severity (`!` weakens it, `‼` breaks it). Nine lenses, drawn from Paul–Elder's intellectual standards and Toulmin's anatomy of an argument: **Gap**, **MECE**, **Structure**, **Clarity**, **Evidence**, **Assumption**, **Warrant**, **Counter**, **Question**. Plus one-tap coach actions: *Ask me questions*, *Challenge my thinking*, *Mirror my argument*, *Suggest next steps* (streamed live).
 - **Offline checks first** — uncited empirical claims, hedge-word density, undefined acronyms, thin sections, and overlapping headings are caught locally in microseconds, with no model configured at all; each names the rule that fired. The model is told what they found and spends its budget on judgment instead.
 - **You write the fix** — **Respond** drops a note into the section it is about as a `> ✎` prompt block and puts the caret on the empty line beneath it; nothing the model wrote ever becomes your text. Or judge it with two glyphs, ✓ (fair) and ✗ (wrong — and it never comes back for those words in that note). A judged note stays put and greys out rather than vanishing, so the rail reads as a record of what you've dealt with; a fresh read replaces only its own section's notes. Tune tone, detail, language, notes-per-read, and add your own standing guidance.
@@ -142,6 +142,7 @@ Klårt's primary distribution channel is **TestFlight**, via the Mac App Store �
 | Ollama | `http://localhost:11434` | — | Native Ollama API, JSON mode enforced for reliable feedback |
 | LM Studio | `http://localhost:1234/v1` | — | OpenAI-compatible local server |
 | OpenRouter | `https://openrouter.ai/api/v1` | Keychain | HTTPS enforced; any OpenRouter model id works |
+| Mistral | `https://api.mistral.ai/v1` | Keychain | HTTPS enforced; cloud (never used for sensitive notes); default `mistral-small-latest` |
 | Custom | `http://localhost:8080/v1` | optional | Any OpenAI-compatible `/chat/completions` server — the default is a starting point, edit it to your own |
 
 **Test Connection** fetches the provider's live model list; pick a model from the dropdown or type any model id.
@@ -186,6 +187,8 @@ Design decisions worth knowing:
 | Telemetry | none — the learning log is local, and nothing is ever sent anywhere |
 
 The `…` base depends on how you run Klårt: the sandboxed packaged app resolves to its container (`~/Library/Containers/com.klart.mac/Data/Library/Application Support/…`), while an unsandboxed `swift run` dev build uses `~/Library/Application Support/…` directly. If you move from a dev build to the packaged app, copy the `Klart` folder across once.
+
+**Test builds without touching your real notes.** In a Debug build, set `KLART_PROFILE=test` (name: 1–32 of `a-z 0-9 -`) in the Xcode scheme's environment variables. Notes, settings and logs then live in `Klart-test/` beside `Klart/`, and the vault's Keychain items get a `.test` suffix, so the real vault is never read or changed. API keys stay shared. Release builds ignore the variable.
 
 **Reinstalls:** deleting the app does *not* delete your notes — the container (and the unsandboxed path) survive uninstall/reinstall, including App Store reinstalls, as long as the bundle ID stays `com.klart.mac`. Only manually deleting `~/Library/Containers/com.klart.mac` (or an "app cleaner" tool doing it for you) removes them. For belt-and-braces, File → Export Notes as Markdown… gives you a plaintext backup you can re-import on any machine.
 

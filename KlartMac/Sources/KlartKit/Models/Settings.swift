@@ -7,6 +7,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
     case ollama
     case lmstudio
     case openrouter
+    case mistral
     case custom
 
     public var id: String { rawValue }
@@ -16,6 +17,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
         case .ollama: return "Ollama"
         case .lmstudio: return "LM Studio"
         case .openrouter: return "OpenRouter"
+        case .mistral: return "Mistral"
         case .custom: return "Custom (OpenAI-compatible)"
         }
     }
@@ -25,6 +27,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
         case .ollama: return "http://localhost:11434"
         case .lmstudio: return "http://localhost:1234/v1"
         case .openrouter: return "https://openrouter.ai/api/v1"
+        case .mistral: return "https://api.mistral.ai/v1"
         case .custom: return "http://localhost:8080/v1"
         }
     }
@@ -34,6 +37,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
         case .ollama: return "llama3.2"
         case .lmstudio: return ""
         case .openrouter: return "anthropic/claude-haiku-4.5"
+        case .mistral: return "mistral-small-latest"
         case .custom: return ""
         }
     }
@@ -41,7 +45,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
     /// Whether this provider needs an API key (stored in the macOS Keychain).
     public var usesAPIKey: Bool {
         switch self {
-        case .openrouter, .custom: return true
+        case .openrouter, .mistral, .custom: return true
         case .ollama, .lmstudio: return false
         }
     }
@@ -53,7 +57,7 @@ public enum ProviderKind: String, Codable, CaseIterable, Sendable, Identifiable 
     public var allowsInsecureHTTP: Bool {
         switch self {
         case .ollama, .lmstudio, .custom: return true
-        case .openrouter: return false
+        case .openrouter, .mistral: return false
         }
     }
 }

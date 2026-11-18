@@ -7,7 +7,8 @@ public enum ProviderFactory {
     /// and the check is by resolved endpoint, not provider label — a "Custom"
     /// provider pointed at a remote host counts as cloud.
     public static func isLocal(kind: ProviderKind, config: ProviderConfig) -> Bool {
-        guard kind != .openrouter else { return false }
+        // Hosted gateways are cloud whatever URL they are pointed at.
+        guard kind != .openrouter, kind != .mistral else { return false }
         guard let url = URL(string: config.baseURL.trimmingCharacters(in: .whitespacesAndNewlines)),
               let host = url.host else { return false }
         return LLMHTTP.isLocalHost(host)
@@ -36,6 +37,13 @@ public enum ProviderFactory {
                     "HTTP-Referer": "https://github.com/maxpolwin/klart",
                     "X-Title": "Klårt",
                 ],
+                allowInsecure: false
+            )
+        case .mistral:
+            return try OpenAICompatClient(
+                providerName: "Mistral",
+                baseURL: config.baseURL,
+                apiKey: secrets.secret(for: kind.keychainAccount),
                 allowInsecure: false
             )
         case .custom:

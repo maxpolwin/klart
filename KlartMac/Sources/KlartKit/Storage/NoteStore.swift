@@ -51,10 +51,13 @@ public actor NoteStore {
     }
 
     /// Default notes directory: ~/Library/Application Support/Klart/Notes
-    public static func defaultDirectory() -> URL {
+    /// (`Klart-<profile>/Notes` for a debug build with `KLART_PROFILE` set).
+    public static func defaultDirectory(profile: String? = StorageProfile.current) -> URL {
         let base = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first
             ?? FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support")
-        return base.appendingPathComponent("Klart/Notes", isDirectory: true)
+        return base
+            .appendingPathComponent(StorageProfile.folderName(profile: profile), isDirectory: true)
+            .appendingPathComponent("Notes", isDirectory: true)
     }
 
     private func ensureDirectory() throws {

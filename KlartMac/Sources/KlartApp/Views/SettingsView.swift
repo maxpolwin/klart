@@ -205,6 +205,8 @@ private struct ProviderSettingsView: View {
             return "Local, private. In LM Studio, load a model and start the server (Developer → Start Server)."
         case .openrouter:
             return "Cloud gateway to hundreds of models (Claude, GPT, Llama, …). Create a key at openrouter.ai/keys. HTTPS enforced."
+        case .mistral:
+            return "Cloud models from Mistral AI (EU). Create a key at console.mistral.ai. HTTPS enforced. Your note text is sent to Mistral's servers; notes marked sensitive never are."
         case .custom:
             return "Any OpenAI-compatible endpoint: llama.cpp server, vLLM, LocalAI, a corporate gateway…"
         }
