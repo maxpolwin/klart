@@ -16,5 +16,15 @@
 	     explicitly picks in an open/save panel (powerbox). -->
 	<key>com.apple.security.files.user-selected.read-write</key>
 	<true/>
+	<!-- Data-protection keychain: the vault key, its Touch ID copy and the
+	     Secure Enclave key live in this one access group, bound to the app's
+	     signing identity. A restricted entitlement — it needs a provisioning
+	     profile (Xcode's automatic signing creates it). make-app.sh strips it,
+	     because a profile-less Developer ID / ad-hoc signature carrying it
+	     would be killed at launch; those builds have no Keychain or Touch ID. -->
+	<key>keychain-access-groups</key>
+	<array>
+		<string>$(AppIdentifierPrefix)com.klart.mac</string>
+	</array>
 </dict>
 </plist>

@@ -34,7 +34,18 @@ fi
 # Both paths sign with the Hardened Runtime and the App Sandbox entitlements
 # (sandbox + outgoing-network-only). The bundle is a single executable, so one
 # codesign invocation covers it — no --deep needed.
-ENTITLEMENTS="Scripts/Klart.entitlements"
+#
+# Scripts/Klart.entitlements also carries keychain-access-groups for the Xcode
+# build. That entitlement is restricted — it must be backed by a provisioning
+# profile, which this script never embeds — so sign with a copy that omits it
+# (a signature claiming it without a profile is killed at launch). The result
+# has no data-protection keychain: no stored API keys, no vault, no Touch ID.
+# Run the Xcode build (Scripts/generate-xcodeproj.sh) for those.
+ENT_DIR="$(mktemp -d)"
+trap 'rm -rf "$ENT_DIR"' EXIT
+ENTITLEMENTS="$ENT_DIR/Klart.entitlements"
+cp Scripts/Klart.entitlements "$ENTITLEMENTS"
+/usr/libexec/PlistBuddy -c "Delete :keychain-access-groups" "$ENTITLEMENTS"
 
 if [ "$SIGN_IDENTITY" = "-" ]; then
   # Ad-hoc signature: fine for running locally, not for handing to anyone else.

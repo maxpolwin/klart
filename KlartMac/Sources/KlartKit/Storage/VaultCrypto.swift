@@ -57,6 +57,7 @@ public enum VaultError: LocalizedError {
     case locked
     case kdfFailure
     case unsupportedPlatform
+    case biometricUnavailable
 
     public var errorDescription: String? {
         switch self {
@@ -65,6 +66,8 @@ public enum VaultError: LocalizedError {
         case .locked: return "Notes are locked."
         case .kdfFailure: return "Key derivation failed — is the system low on memory?"
         case .unsupportedPlatform: return "Note encryption requires macOS."
+        case .biometricUnavailable:
+            return "Touch ID could not be set up — no fingerprint is enrolled, or this build is not signed for Keychain access."
         }
     }
 }

@@ -38,6 +38,14 @@ public final class InMemorySecretStore: SecretStore, @unchecked Sendable {
 #if canImport(Security)
 /// macOS Keychain-backed secret store. Items are generic passwords scoped to
 /// the Klårt service, accessible only while the device is unlocked.
+///
+/// Every query targets the **data-protection keychain** (the same one iOS
+/// uses). It is the only macOS keychain that supports biometric access
+/// control and Secure Enclave keys, and it binds items to the app's signing
+/// identity instead of a per-binary ACL — so a rebuild neither re-prompts nor
+/// loses them. It needs a signed bundle with an application identifier; in an
+/// unsigned process (`swift run`, bare `swift test`) every call fails with
+/// `errSecMissingEntitlement` and the store behaves as empty.
 public final class KeychainSecretStore: SecretStore {
     private let service: String
 
@@ -50,6 +58,7 @@ public final class KeychainSecretStore: SecretStore {
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: service,
             kSecAttrAccount as String: account,
+            kSecUseDataProtectionKeychain as String: true,
         ]
     }
 
@@ -64,12 +73,19 @@ public final class KeychainSecretStore: SecretStore {
     }
 
     public func setSecret(_ value: String?, for account: String) {
+        _ = storeSecret(value, for: account)
+    }
+
+    /// Like `setSecret`, but says whether the item was stored. Removing an
+    /// item (`nil`/empty value) always reports success.
+    @discardableResult
+    public func storeSecret(_ value: String?, for account: String) -> Bool {
         SecItemDelete(baseQuery(account: account) as CFDictionary)
-        guard let value, !value.isEmpty else { return }
+        guard let value, !value.isEmpty else { return true }
         var attributes = baseQuery(account: account)
         attributes[kSecValueData as String] = Data(value.utf8)
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        SecItemAdd(attributes as CFDictionary, nil)
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 
     // MARK: - Raw data items (Secure-Enclave-wrapped key blob)
@@ -77,13 +93,14 @@ public final class KeychainSecretStore: SecretStore {
     /// Stores opaque data (e.g. the enclave-encrypted master key). No
     /// user-presence ACL: the blob is ciphertext whose decryption is itself
     /// gated by the Secure Enclave key's access control.
-    public func setData(_ value: Data?, for account: String) {
+    @discardableResult
+    public func setData(_ value: Data?, for account: String) -> Bool {
         SecItemDelete(baseQuery(account: account) as CFDictionary)
-        guard let value, !value.isEmpty else { return }
+        guard let value, !value.isEmpty else { return true }
         var attributes = baseQuery(account: account)
         attributes[kSecValueData as String] = value
         attributes[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
-        SecItemAdd(attributes as CFDictionary, nil)
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 
     public func data(for account: String) -> Data? {
@@ -99,22 +116,25 @@ public final class KeychainSecretStore: SecretStore {
     // MARK: - User-presence protected items (vault master key)
 
     /// Stores data behind a user-presence access control: reading it back
-    /// makes the system demand Touch ID / Apple Watch / the login password
-    /// first. Used for the vault master key so biometric unlock never
+    /// makes the system demand Touch ID first. Used for the vault master key so biometric unlock never
     /// weakens the encryption below "this user, present, on this Mac".
-    public func setProtectedData(_ value: Data?, for account: String) {
+    /// `.biometryCurrentSet`: only an enrolled fingerprint opens it (no login
+    /// password fallback), and enrolling or removing a fingerprint
+    /// invalidates the item — the vault password then unlocks and re-arms it.
+    @discardableResult
+    public func setProtectedData(_ value: Data?, for account: String) -> Bool {
         SecItemDelete(baseQuery(account: account) as CFDictionary)
-        guard let value, !value.isEmpty else { return }
+        guard let value, !value.isEmpty else { return true }
         guard let access = SecAccessControlCreateWithFlags(
             nil,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            .userPresence,
+            .biometryCurrentSet,
             nil
-        ) else { return }
+        ) else { return false }
         var attributes = baseQuery(account: account)
         attributes[kSecValueData as String] = value
         attributes[kSecAttrAccessControl as String] = access
-        SecItemAdd(attributes as CFDictionary, nil)
+        return SecItemAdd(attributes as CFDictionary, nil) == errSecSuccess
     }
 
     /// Reads a user-presence protected item. Blocks while the system runs

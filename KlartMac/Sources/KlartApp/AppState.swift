@@ -860,15 +860,19 @@ final class AppState: ObservableObject {
     }
 
     /// Stores the biometric-unlock copy of the master key: wrapped by the
-    /// Secure Enclave where available, else raw behind a user-presence ACL.
-    private func storeBiometricKey(_ masterKey: Data) {
-        guard let keychain = secrets as? KeychainSecretStore else { return }
+    /// Secure Enclave where available, else raw behind a biometric ACL.
+    /// Reports whether a copy now exists — it does not when no fingerprint is
+    /// enrolled or the build lacks Keychain access, and the caller must then
+    /// not claim Touch ID is on.
+    @discardableResult
+    private func storeBiometricKey(_ masterKey: Data) -> Bool {
+        guard let keychain = secrets as? KeychainSecretStore else { return false }
         if let blob = SecureEnclaveWrap.wrap(masterKey) {
-            keychain.setData(blob, for: Self.vaultSEKeychainAccount)
+            guard keychain.setData(blob, for: Self.vaultSEKeychainAccount) else { return false }
             keychain.setProtectedData(nil, for: Self.vaultKeychainAccount)
-        } else {
-            keychain.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
+            return true
         }
+        return keychain.setProtectedData(masterKey, for: Self.vaultKeychainAccount)
     }
 
     private func removeBiometricKey() {
@@ -905,8 +909,10 @@ final class AppState: ObservableObject {
         // reverse order would seal notes under a key persisted nowhere.
         vaultKey = SecureBytes(masterKey)
         settings.vault = config
-        if biometricUnlock {
-            storeBiometricKey(masterKey)
+        if biometricUnlock, !storeBiometricKey(masterKey) {
+            // Password-only protection beats a toggle that says Touch ID and
+            // does nothing: the setting reports what is actually stored.
+            settings.vault?.biometricUnlock = false
         }
         try await noteStore.encryptAllOnDisk(masterKey: masterKey)
         try? await recommendationLog.encryptOnDisk(masterKey: masterKey)
@@ -975,8 +981,8 @@ final class AppState: ObservableObject {
         try? await recommendationLog.rotateOnDisk(oldKey: oldKey, newKey: newKey)
         settings.vault = VaultCrypto.completeRotation(pending)
         vaultKey = SecureBytes(newKey)
-        if settings.vault?.biometricUnlock == true {
-            storeBiometricKey(newKey)
+        if settings.vault?.biometricUnlock == true, !storeBiometricKey(newKey) {
+            settings.vault?.biometricUnlock = false   // the old copy is gone; say so
         }
         await auditLog.record(.keyRotated)
     }
@@ -988,7 +994,7 @@ final class AppState: ObservableObject {
         if enabled {
             guard let password else { throw VaultError.wrongPassword }
             let masterKey = try await Self.deriveMasterKey(config: config, password: password)
-            storeBiometricKey(masterKey)
+            guard storeBiometricKey(masterKey) else { throw VaultError.biometricUnavailable }
         } else {
             removeBiometricKey()
         }

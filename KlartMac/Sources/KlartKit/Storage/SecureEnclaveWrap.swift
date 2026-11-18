@@ -5,8 +5,8 @@ import LocalAuthentication
 
 /// Wraps the vault master key with a P-256 key that lives inside the Secure
 /// Enclave (Apple Silicon / T2). The private key never leaves the hardware
-/// and its access control demands user presence, so decrypting the master
-/// key always runs the Touch ID / Apple Watch / login-password prompt inside
+/// and its access control demands a currently enrolled fingerprint, so
+/// decrypting the master key always runs the Touch ID prompt inside
 /// the enclave's policy — stronger than a software key behind a Keychain
 /// ACL. Macs without an enclave get `wrap` == nil and the caller falls back.
 public enum SecureEnclaveWrap {
@@ -19,6 +19,7 @@ public enum SecureEnclaveWrap {
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: keyTag,
             kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+            kSecUseDataProtectionKeychain as String: true,
             kSecReturnRef as String: true,
         ]
         if let prompt {
@@ -38,7 +39,7 @@ public enum SecureEnclaveWrap {
         guard let access = SecAccessControlCreateWithFlags(
             nil,
             kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            [.privateKeyUsage, .userPresence],
+            [.privateKeyUsage, .biometryCurrentSet],
             nil
         ) else { return nil }
         let attributes: [String: Any] = [
@@ -50,6 +51,7 @@ public enum SecureEnclaveWrap {
                 kSecAttrApplicationTag as String: keyTag,
                 kSecAttrAccessControl as String: access,
             ],
+            kSecUseDataProtectionKeychain as String: true,
         ]
         return SecKeyCreateRandomKey(attributes as CFDictionary, nil)
     }
@@ -77,6 +79,7 @@ public enum SecureEnclaveWrap {
         let query: [String: Any] = [
             kSecClass as String: kSecClassKey,
             kSecAttrApplicationTag as String: keyTag,
+            kSecUseDataProtectionKeychain as String: true,
         ]
         SecItemDelete(query as CFDictionary)
     }
